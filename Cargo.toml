@@ -1,14 +1,13 @@
 [workspace]
 members = [
   "models",
-  "retrieval"
+  "retrieval",
+  "cli"
 ]
+resolver = "2"
 
-[package]
-name = "gathers"
-version = "0.1.0"
-edition = "2021"
+[workspace.dependencies]
+reqwest = { version = "0.12.5", features = ["json"] }
+serde_json = "1.0.124"
+eyre = "0.6.12"
 
-[dependencies]
-retrieval = { path = "retrieval" }
-models = { path = "models" }

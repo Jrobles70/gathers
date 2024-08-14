@@ -1,0 +1,17 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cli"
+path = "src/main.rs"
+
+[dependencies]
+retrieval = { path = "../retrieval" }
+models = { path = "../models" }
+reqwest.workspace = true
+serde_json.workspace = true
+tokio = { version = "1", features = ["full"] }
+eyre.workspace = true
+clap = { version = "4.5.15", features = ["derive"] }

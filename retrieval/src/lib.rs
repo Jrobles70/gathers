@@ -1,21 +1,23 @@
 mod systems;
 
 pub use systems::dummy::DummyRetrievalSystem;
+pub use systems::scryfall::ScryfallRetrievalSystem;
 
 pub enum RetrievalSystem {
-    //Scryfall(ScryfallRetrievalSystem),
+    Scryfall(ScryfallRetrievalSystem),
     //Database(DatabaseRetrievalSystem),
     Dummy(DummyRetrievalSystem),
 }
 
 pub trait RetrievalSystemTrait {
-    fn get_card(&self) -> models::Card;
+    async fn get_card(&self, filters: models::filters::CardSearchFilters) -> eyre::Result<models::Card>;
 }
 
 impl RetrievalSystemTrait for RetrievalSystem {
-    fn get_card(&self) -> models::Card {
+    async fn get_card(&self, filters: models::filters::CardSearchFilters) -> eyre::Result<models::Card> {
         match self {
-            RetrievalSystem::Dummy(d) => d.get_card(),
+            RetrievalSystem::Dummy(d) => d.get_card(filters).await,
+            RetrievalSystem::Scryfall(d) => d.get_card(filters).await,
         }
     }
 }

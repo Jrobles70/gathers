@@ -1,13 +1,13 @@
-pub struct DummyRetrievalSystem {
+pub struct DummyRetrievalSystem { }
 
-}
+use models::filters::CardSearchFilters;
 
 use crate::RetrievalSystemTrait;
 
 impl RetrievalSystemTrait for DummyRetrievalSystem {
-    fn get_card(&self) -> models::Card {
+    async fn get_card(&self, filters: CardSearchFilters) -> eyre::Result<models::Card> {
         println!("Got request.");
 
-        models::Card { name: "Test".to_string() }
+        Ok(models::Card { name: filters.card_name.unwrap_or("Other".to_string()) })
     }
 }
