@@ -1,0 +1,14 @@
+[workspace]
+members = [
+  "models",
+  "retrieval"
+]
+
+[package]
+name = "gathers"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+retrieval = { path = "retrieval" }
+models = { path = "models" }

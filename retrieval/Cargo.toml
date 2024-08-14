@@ -1,0 +1,11 @@
+[package]
+name = "retrieval"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "retrieval"
+path = "src/lib.rs"
+
+[dependencies]
+models = { path = "../models/" }
