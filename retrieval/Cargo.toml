@@ -11,4 +11,5 @@ path = "src/lib.rs"
 eyre.workspace = true
 models = { path = "../models/" }
 reqwest.workspace = true
+rusqlite = "0.32.1"
 serde_json.workspace = true

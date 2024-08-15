@@ -6,7 +6,8 @@ use clap::{ValueEnum, Parser};
 #[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Systems {
     Scryfall,
-    Dummy
+    Dummy,
+    SQL,
 }
 
 impl fmt::Display for Systems {
@@ -31,6 +32,7 @@ async fn main() -> eyre::Result<()> {
 
     let retrieval = match args.system {
         Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
+        Systems::SQL => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem {  }),
         _ => RetrievalSystem::Dummy(retrieval::DummyRetrievalSystem {  }),
     };
     println!(
