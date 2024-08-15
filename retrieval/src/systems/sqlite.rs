@@ -5,6 +5,7 @@ use models::filters::CardSearchFilters;
 
 use crate::RetrievalSystemTrait;
 
+#[async_trait::async_trait]
 impl RetrievalSystemTrait for SQLiteRetrievalSystem {
     async fn get_card(&self, filters: CardSearchFilters) -> eyre::Result<models::Card> {
         let conn = Connection::open("/home/mihail/AllPrintings.sqlite")?;

@@ -7,7 +7,7 @@ use clap::{ValueEnum, Parser};
 enum Systems {
     Scryfall,
     Dummy,
-    SQL,
+    Sql,
 }
 
 impl fmt::Display for Systems {
@@ -19,7 +19,7 @@ impl fmt::Display for Systems {
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
-    #[clap(short, long, default_value_t = Systems::Scryfall)]
+    #[clap(short, long, default_value= "scryfall")]
     system: Systems,
 
     #[clap(short, long)]
@@ -32,7 +32,7 @@ async fn main() -> eyre::Result<()> {
 
     let retrieval = match args.system {
         Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
-        Systems::SQL => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem {  }),
+        Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem {  }),
         _ => RetrievalSystem::Dummy(retrieval::DummyRetrievalSystem {  }),
     };
     println!(

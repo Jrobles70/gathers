@@ -6,6 +6,7 @@ use models::filters::CardSearchFilters;
 
 use crate::RetrievalSystemTrait;
 
+#[async_trait::async_trait]
 impl RetrievalSystemTrait for ScryfallRetrievalSystem {
     async fn get_card(&self, filters: CardSearchFilters) -> eyre::Result<models::Card> {
         let url = format!("https://api.scryfall.com/cards/named?fuzzy={}", filters.card_name.unwrap_or("panharmonicon".to_string())).to_string();

@@ -10,10 +10,12 @@ pub enum RetrievalSystem {
     Dummy(DummyRetrievalSystem),
 }
 
+#[async_trait::async_trait]
 pub trait RetrievalSystemTrait {
     async fn get_card(&self, filters: models::filters::CardSearchFilters) -> eyre::Result<models::Card>;
 }
 
+#[async_trait::async_trait]
 impl RetrievalSystemTrait for RetrievalSystem {
     async fn get_card(&self, filters: models::filters::CardSearchFilters) -> eyre::Result<models::Card> {
         match self {

@@ -4,6 +4,7 @@ use models::filters::CardSearchFilters;
 
 use crate::RetrievalSystemTrait;
 
+#[async_trait::async_trait]
 impl RetrievalSystemTrait for DummyRetrievalSystem {
     async fn get_card(&self, filters: CardSearchFilters) -> eyre::Result<models::Card> {
         println!("Got request.");

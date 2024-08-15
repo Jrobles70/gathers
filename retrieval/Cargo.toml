@@ -8,6 +8,7 @@ name = "retrieval"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait = "0.1.81"
 eyre.workspace = true
 models = { path = "../models/" }
 reqwest.workspace = true
