@@ -4,6 +4,7 @@ pub use systems::dummy::DummyRetrievalSystem;
 pub use systems::scryfall::ScryfallRetrievalSystem;
 pub use systems::sqlite::SQLiteRetrievalSystem;
 
+#[derive(Debug, Clone)]
 pub enum RetrievalSystem {
     Scryfall(ScryfallRetrievalSystem),
     Database(SQLiteRetrievalSystem),
@@ -12,12 +13,18 @@ pub enum RetrievalSystem {
 
 #[async_trait::async_trait]
 pub trait RetrievalSystemTrait {
-    async fn get_card(&self, filters: models::filters::CardSearchFilters) -> eyre::Result<models::Card>;
+    async fn get_card(
+        &self,
+        filters: models::filters::CardSearchFilters,
+    ) -> eyre::Result<Option<models::Card>>;
 }
 
 #[async_trait::async_trait]
 impl RetrievalSystemTrait for RetrievalSystem {
-    async fn get_card(&self, filters: models::filters::CardSearchFilters) -> eyre::Result<models::Card> {
+    async fn get_card(
+        &self,
+        filters: models::filters::CardSearchFilters,
+    ) -> eyre::Result<Option<models::Card>> {
         match self {
             RetrievalSystem::Dummy(d) => d.get_card(filters).await,
             RetrievalSystem::Scryfall(d) => d.get_card(filters).await,
@@ -25,4 +32,3 @@ impl RetrievalSystemTrait for RetrievalSystem {
         }
     }
 }
-
