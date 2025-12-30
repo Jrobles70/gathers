@@ -1,10 +1,11 @@
 use axum::{error_handling::HandleErrorLayer, Router};
-use mtg_api::mtg_routes;
+use mtg_api::{collection_routes, mtg_routes};
 use retrieval::RetrievalSystem;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
+use tracing::debug;
 
 mod mtg_api;
 
@@ -16,13 +17,16 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> eyre::Result<()> {
+    let port = 3000;
+
     let state = Arc::new(Mutex::new(AppState {
-        retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new().unwrap()),
+        retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new()?),
     }));
 
     let app = Router::new()
         .nest("/mtg", mtg_routes())
+        .nest("/collection", collection_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -41,9 +45,11 @@ async fn main() {
         )
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
 
-    axum::serve(listener, app).await.unwrap();
+    debug!(port = ?port, "Started server" );
+
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }

@@ -87,7 +87,7 @@ mod tests {
             .await?;
 
         assert!(card.is_some());
-        let card = card.unwrap();
+        let card = card.ok_or_eyre("Card should be present")?;
         assert_eq!(card.name, "Panharmonicon");
         assert_eq!(card.color_identity, vec![]);
 

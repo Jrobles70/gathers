@@ -1,8 +1,8 @@
-use std::fmt::Display;
-
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use crate::{CardColour, Rarity};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CardSearchFilters {
     pub name: Option<String>,
     #[serde(alias = "colorIdentities")]
@@ -16,43 +16,9 @@ pub struct CardSearchFilters {
     pub rarity: Option<Rarity>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CardColour {
-    White,
-    Blue,
-    Black,
-    Red,
-    Green,
-    Colourless,
-    Multicoloured,
-}
-
-impl Display for CardColour {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CardColour::Red => write!(f, "R"),
-            CardColour::White => write!(f, "W"),
-            CardColour::Blue => write!(f, "U"),
-            CardColour::Green => write!(f, "G"),
-            CardColour::Black => write!(f, "B"),
-            CardColour::Multicoloured => write!(f, "_"),
-            CardColour::Colourless => write!(f, "C"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Rarity {
-    Common,
-    Uncommon,
-    Rare,
-    Mythic,
-    // TODO if others
-}
-
-impl Default for CardSearchFilters {
-    fn default() -> CardSearchFilters {
-        CardSearchFilters {
+impl CardSearchFilters {
+    pub fn new() -> Self {
+        Self {
             name: None,
             color_identities: None,
             set_code: None,
@@ -62,16 +28,14 @@ impl Default for CardSearchFilters {
             rarity: None,
         }
     }
-}
 
-impl From<String> for Rarity {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "Common" => Rarity::Common,
-            "Uncommon" => Rarity::Uncommon,
-            "Rare" => Rarity::Rare,
-            "Mythic" => Rarity::Mythic,
-            _ => Rarity::Common,
-        }
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    pub fn with_color_identities(mut self, identities: Vec<CardColour>) -> Self {
+        self.color_identities = Some(identities);
+        self
     }
 }

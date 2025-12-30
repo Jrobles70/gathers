@@ -1,6 +1,6 @@
 mod models;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use ::models::{filters::CardSearchFilters, Card};
 use models::{SqlCard, SqlCardIdentifiers};
@@ -26,41 +26,56 @@ impl SQLiteRetrievalSystem {
 
 #[async_trait::async_trait]
 impl RetrievalSystemTrait for SQLiteRetrievalSystem {
-    async fn get_card(&self, filters: CardSearchFilters) -> eyre::Result<Option<Card>> {
+    async fn search_cards(
+        &self,
+        filters: CardSearchFilters,
+        skip: Option<usize>,
+        limit: Option<usize>,
+    ) -> eyre::Result<Vec<Card>> {
         let conn = self.connection.lock().await;
         let mut query =
-            "SELECT uuid, name, setCode, rarity, artist, colorIdentity, text FROM cards"
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
                 .to_string();
         let mut conditions = Vec::new();
         let mut params = Vec::new();
 
         let mut i = 1;
         if let Some(name) = &filters.name {
-            conditions.push(format!("name LIKE ?{i}"));
+            conditions.push(format!("a.name LIKE ?{i}"));
             params.push(format!("%{}%", name.as_str()));
-            i = i + 1;
+            i += 1;
         }
         if let Some(colours) = &filters.color_identities {
             for colour in colours {
-                conditions.push(format!("colorIdentity LIKE ?{i}"));
+                conditions.push(format!("c.olorIdentity LIKE ?{i}"));
                 params.push(format!("%{colour}%"));
-                i = i + 1;
+                i += 1;
             }
         }
         if let Some(artist) = &filters.artist {
-            conditions.push(format!("artist LIKE ?{i}"));
+            conditions.push(format!("a.artist LIKE ?{i}"));
             params.push(format!("%{}%", artist.as_str()));
-            i = i + 1;
+            // i = i + 1;
+        }
+        if let Some(text) = &filters.text {
+            conditions.push(format!("a.text CONTAINS ?{i}"));
+            params.push(text.to_string());
         }
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
             query.push_str(&conditions.join(" AND "));
         }
-        query.push_str(" LIMIT 1 COLLATE NOCASE");
-        println!("{query}");
+        if let Some(limit) = limit {
+            query.push_str(format!(" LIMIT {limit} COLLATE NOCASE").as_str());
+        } else {
+            query.push_str(" LIMIT 1 COLLATE NOCASE");
+        }
+        if let Some(skip) = skip {
+            query.push_str(format!(" OFFSET {skip}").as_str())
+        }
+        println!("{}", query);
         let mut stmt = conn.prepare(&query)?;
-        let mut user_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
-            println!("Color: {:?}", row);
+        let user_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
             Ok(SqlCard {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -70,15 +85,43 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
                 rarity: row.get(3)?,
                 artist: row.get(4)?,
                 card_identifiers: SqlCardIdentifiers {
-                    scryfall_id: "".to_string(),
-                    id: "".to_string(),
+                    scryfall_id: row.get(7)?,
+                    id: row.get(0)?,
                 },
             })
         })?;
 
-        match user_iter.next() {
-            Some(u) => Ok(Some(u?.into())),
-            None => Ok(None),
-        }
+        Ok(user_iter
+            .filter(|c| c.is_ok())
+            .map(|c| c.unwrap().into())
+            .collect())
+    }
+
+    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, Card>> {
+        let conn = self.connection.lock().await;
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
+            );
+        let mut stmt = conn.prepare(&query)?;
+        let iter = stmt.query_map(rusqlite::params_from_iter(ids), |row| {
+            Ok(SqlCard {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                set_code: row.get(2)?,
+                color_identity: row.get(5)?,
+                text: row.get(6)?,
+                rarity: row.get(3)?,
+                artist: row.get(4)?,
+                card_identifiers: SqlCardIdentifiers {
+                    scryfall_id: row.get(7)?,
+                    id: row.get(0)?,
+                },
+            })
+        })?;
+        Ok(iter
+            .flatten()
+            .map(|c| (c.clone().id, c.clone().into()))
+            .collect())
     }
 }

@@ -3,8 +3,8 @@ use retrieval::{RetrievalSystem, RetrievalSystemTrait};
 
 #[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Systems {
-    Scryfall,
-    Dummy,
+    // Scryfall,
+    // Dummy,
     Sql,
 }
 
@@ -23,18 +23,22 @@ async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
     let retrieval = match args.system {
-        Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
+        // Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
         Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new()?),
-        _ => RetrievalSystem::Dummy(retrieval::DummyRetrievalSystem {}),
+        // _ => RetrievalSystem::Dummy(retrieval::DummyRetrievalSystem {}),
     };
     println!(
         "{:?}",
         retrieval
-            .get_card(models::filters::CardSearchFilters {
-                name: Some(args.card_name),
-                // color_identities: Some(vec![models::filters::CardColour::White]),
-                ..Default::default()
-            })
+            .search_cards(
+                models::filters::CardSearchFilters {
+                    name: Some(args.card_name),
+                    // color_identities: Some(vec![models::filters::CardColour::White]),
+                    ..Default::default()
+                },
+                Some(0),
+                Some(2)
+            )
             .await?
     );
     Ok(())
