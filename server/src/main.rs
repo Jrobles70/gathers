@@ -1,5 +1,4 @@
 use axum::{error_handling::HandleErrorLayer, Router};
-use mtg_api::{collection_routes, mtg_routes};
 use retrieval::RetrievalSystem;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
@@ -7,6 +6,10 @@ use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing::debug;
 
+use crate::collections::collection_routes;
+use crate::mtg_api::mtg_routes;
+
+mod collections;
 mod mtg_api;
 
 type GathersState = Arc<Mutex<AppState>>;
@@ -18,7 +21,7 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    let port = 3000;
+    let port = 5234;
 
     let state = Arc::new(Mutex::new(AppState {
         retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new()?),

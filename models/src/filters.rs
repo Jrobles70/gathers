@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{CardColour, Rarity};
 
@@ -13,6 +13,7 @@ pub struct CardSearchFilters {
     pub collector_number: Option<String>,
     pub artist: Option<String>,
     pub text: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_to_none")]
     pub rarity: Option<Rarity>,
 }
 
@@ -38,4 +39,17 @@ impl CardSearchFilters {
         self.color_identities = Some(identities);
         self
     }
+}
+
+fn empty_string_to_none<'de, D>(deserializer: D) -> Result<Option<Rarity>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(match opt.as_deref() {
+        Some("") | None => None,
+        Some(s) => {
+            Some(serde_json::from_str(&format!("\"{}\"", s)).map_err(serde::de::Error::custom)?)
+        }
+    })
 }

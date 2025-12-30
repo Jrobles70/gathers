@@ -3,7 +3,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 pub mod filters;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Card {
     pub id: String,
     pub name: String,
@@ -15,8 +15,9 @@ pub struct Card {
     pub card_identifiers: CardIdentifiers,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum Rarity {
+    #[default]
     Common,
     Uncommon,
     Rare,
@@ -25,7 +26,7 @@ pub enum Rarity {
     // TODO if others
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct CardIdentifiers {
     pub id: String,
     pub scryfall_id: String,
@@ -74,12 +75,6 @@ impl Display for CardColour {
     }
 }
 
-// impl Display for Vec<CardColour> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         self.iter().for_each(|c| write!(f, c))
-//     }
-// }
-
 impl From<String> for Rarity {
     fn from(value: String) -> Self {
         match value.as_str() {
@@ -87,6 +82,7 @@ impl From<String> for Rarity {
             "Uncommon" => Rarity::Uncommon,
             "Rare" => Rarity::Rare,
             "Mythic" => Rarity::Mythic,
+            "Special" => Rarity::Special,
             _ => Rarity::Common,
         }
     }

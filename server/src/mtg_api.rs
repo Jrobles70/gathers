@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use axum::{
     extract::State,
-    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
@@ -80,13 +79,4 @@ pub fn mtg_routes() -> Router<GathersState> {
     Router::new()
         .route("/cards/search", post(search_mtg_cards))
         .route("/cards", get(retrieve_cards))
-}
-
-pub fn collection_routes() -> Router<GathersState> {
-    async fn list(State(_state): State<GathersState>) -> impl IntoResponse {
-        // Return an empty JSON array for now
-        Json(Vec::<String>::new())
-    }
-
-    Router::new().route("/list", get(list))
 }

@@ -41,25 +41,39 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
 
         let mut i = 1;
         if let Some(name) = &filters.name {
-            conditions.push(format!("a.name LIKE ?{i}"));
-            params.push(format!("%{}%", name.as_str()));
-            i += 1;
+            if !name.is_empty() {
+                conditions.push(format!("a.name LIKE ?{i}"));
+                params.push(format!("%{}%", name.as_str()));
+                i += 1;
+            }
         }
         if let Some(colours) = &filters.color_identities {
             for colour in colours {
-                conditions.push(format!("c.olorIdentity LIKE ?{i}"));
+                conditions.push(format!("a.colorIdentity LIKE ?{i}"));
                 params.push(format!("%{colour}%"));
                 i += 1;
             }
         }
         if let Some(artist) = &filters.artist {
-            conditions.push(format!("a.artist LIKE ?{i}"));
-            params.push(format!("%{}%", artist.as_str()));
-            // i = i + 1;
+            if !artist.is_empty() {
+                conditions.push(format!("a.artist LIKE ?{i}"));
+                params.push(format!("%{}%", artist.as_str()));
+                i += 1;
+            }
         }
         if let Some(text) = &filters.text {
-            conditions.push(format!("a.text CONTAINS ?{i}"));
-            params.push(text.to_string());
+            if !text.is_empty() {
+                conditions.push(format!("a.text LIKE ?{i}"));
+                params.push(text.to_string());
+                i += 1;
+            }
+        }
+        if let Some(set_code) = &filters.set_code {
+            if !set_code.is_empty() {
+                conditions.push(format!("a.setCode LIKE ?{i}"));
+                params.push(set_code.to_string());
+                i += 1;
+            }
         }
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
