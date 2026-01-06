@@ -36,7 +36,6 @@ impl SQLitePersistenceSystem {
 #[async_trait::async_trait]
 impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn add_collection(&mut self, name: String) -> eyre::Result<String> {
-        // Generate a unique ID for the collection (in a real app, this would be more sophisticated)
         let collection_id = Uuid::new_v4().to_string();
 
         let conn = self.connection.lock().await;
@@ -49,12 +48,10 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn remove_collection(&mut self, name: String) -> eyre::Result<String> {
         let conn = self.connection.lock().await;
 
-        // First, delete all cards associated with this collection
         let delete_cards_query =
             "DELETE FROM cards WHERE collection IN (SELECT id FROM collection WHERE name = ?1)";
         conn.execute(delete_cards_query, params![name])?;
 
-        // Then, delete the collection itself
         let delete_collection_query = "DELETE FROM collection WHERE name = ?1";
         conn.execute(delete_collection_query, params![name])?;
 

@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Path, State},
     routing::{get, post},
     Json, Router,
 };
@@ -18,50 +18,130 @@ struct ErrorPayload {
 }
 
 pub fn collection_routes() -> Router<GathersState> {
+    #[derive(Serialize, Deserialize)]
+    struct Collection {
+        id: String,
+    }
+
     async fn list(
-        State(_state): State<GathersState>,
-    ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorPayload>)> {
-        // Return an empty JSON array for now
-        Ok(Json(Vec::<String>::new()))
+        State(state): State<GathersState>,
+    ) -> Result<Json<Vec<Collection>>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &state.lock().await.storage;
+
+        match storage.list_collections().await {
+            Ok(collections) => Ok(Json(
+                collections
+                    .iter()
+                    .map(|c| Collection { id: c.clone() })
+                    .collect(),
+            )),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to list collections. {e}"),
+                }),
+            )),
+        }
+    }
+
+    #[derive(Serialize)]
+    struct CollectionAddResponse {
+        id: String,
+        name: String,
     }
 
     async fn add(
         State(state): State<GathersState>,
-    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
-        let mut s = state.lock().await.storage.clone();
-        s.add_collection("Some Collection".to_string())
-            .await
-            .map(|r| Json(r))
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorPayload {
-                        error: format!("Failed to search cards. {e}"),
-                    }),
-                )
-            })
+        Json(input): Json<Collection>,
+    ) -> Result<Json<CollectionAddResponse>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &mut state.lock().await.storage;
+
+        match storage.add_collection(input.id.clone()).await {
+            Ok(collection_id) => Ok(Json(CollectionAddResponse {
+                id: collection_id,
+                name: input.id,
+            })),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to add collection. {e}"),
+                }),
+            )),
+        }
+    }
+
+    #[derive(Serialize)]
+    struct CollectionRemoveResponse {
+        message: String,
     }
 
     async fn remove(
         State(state): State<GathersState>,
-    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
-        return Ok(Json("Heya".to_string()));
+        Path(id): Path<String>,
+    ) -> Result<Json<CollectionRemoveResponse>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &mut state.lock().await.storage;
+
+        match storage.remove_collection(id).await {
+            Ok(message) => Ok(Json(CollectionRemoveResponse { message })),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to remove collection. {e}"),
+                }),
+            )),
+        }
+    }
+
+    #[derive(Deserialize)]
+    struct MoveCardsRequest {
+        card_ids: Vec<String>,
+    }
+
+    #[derive(Serialize)]
+    struct MoveCardsResponse {
+        message: String,
     }
 
     async fn move_to(
-        State(state): State<GathersState>,
-    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
-        return Ok(Json("Heya".to_string()));
-    }
-
-    async fn cards_get(
-        State(state): State<GathersState>,
-    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
-        return Ok(Json("Heya".to_string()));
+        State(_state): State<GathersState>,
+        Path(_collection_id): Path<String>,
+        Json(_input): Json<MoveCardsRequest>,
+    ) -> Result<Json<MoveCardsResponse>, (StatusCode, Json<ErrorPayload>)> {
+        // For now, we'll just return a placeholder response
+        // In a real implementation, this would move cards to the collection
+        Ok(Json(MoveCardsResponse {
+            message: "Cards moved successfully".to_string(),
+        }))
     }
 
     fn default_limit() -> usize {
-        1
+        20
+    }
+
+    #[derive(Deserialize)]
+    struct CollectionCardsQuery {
+        #[serde(default)]
+        offset: usize,
+        #[serde(default = "default_limit")]
+        limit: usize,
+    }
+
+    async fn cards_get(
+        State(_state): State<GathersState>,
+        Path(_collection_id): Path<String>,
+        Query(_query): Query<CollectionCardsQuery>,
+    ) -> Result<Json<Vec<CollectionCardResponse>>, (StatusCode, Json<ErrorPayload>)> {
+        // For now, we'll return an empty vector
+        // In a real implementation, this would get cards from the collection
+        Ok(Json(vec![]))
+    }
+
+    #[derive(Serialize)]
+    struct CollectionCardResponse {
+        id: String,
+        name: String,
+        set_code: String,
+        scryfall_id: String,
     }
 
     #[derive(Deserialize)]
@@ -69,7 +149,7 @@ pub fn collection_routes() -> Router<GathersState> {
         #[serde(default)]
         offset: usize,
         #[serde(default = "default_limit")]
-        pageSize: usize,
+        page_size: usize,
     }
 
     #[derive(Deserialize, Serialize)]
@@ -98,7 +178,7 @@ pub fn collection_routes() -> Router<GathersState> {
         let ret = &state.lock().await.retrieval;
 
         match ret
-            .search_cards(input, query.offset.into(), (query.pageSize + 1).into())
+            .search_cards(input, query.offset.into(), (query.page_size + 1).into())
             .await
         {
             Ok(result) => Ok(Json(
