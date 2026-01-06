@@ -1,17 +1,20 @@
 [package]
-name = "retrieval"
+name = "persistence"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "retrieval"
+name = "persistence"
 path = "src/lib.rs"
 
 [dependencies]
 async-trait = "0.1.89"
 eyre.workspace = true
 models = { path = "../models/" }
+include_dir = "0.7.4"
 reqwest.workspace = true
 rusqlite = "0.37.0"
+rusqlite_migration = { version = "2.3.0", features = ["from-directory"] }
 serde_json.workspace = true
 tokio.workspace = true
+uuid = { version = "1.0", features = ["v4"] }

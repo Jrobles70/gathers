@@ -5,6 +5,7 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use models::filters::CardSearchFilters;
+use persistence::PersistenceSystemTrait;
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,41 @@ pub fn collection_routes() -> Router<GathersState> {
     ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorPayload>)> {
         // Return an empty JSON array for now
         Ok(Json(Vec::<String>::new()))
+    }
+
+    async fn add(
+        State(state): State<GathersState>,
+    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+        let mut s = state.lock().await.storage.clone();
+        s.add_collection("Some Collection".to_string())
+            .await
+            .map(|r| Json(r))
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to search cards. {e}"),
+                    }),
+                )
+            })
+    }
+
+    async fn remove(
+        State(state): State<GathersState>,
+    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+        return Ok(Json("Heya".to_string()));
+    }
+
+    async fn move_to(
+        State(state): State<GathersState>,
+    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+        return Ok(Json("Heya".to_string()));
+    }
+
+    async fn cards_get(
+        State(state): State<GathersState>,
+    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+        return Ok(Json("Heya".to_string()));
     }
 
     fn default_limit() -> usize {
@@ -91,5 +127,9 @@ pub fn collection_routes() -> Router<GathersState> {
 
     Router::new()
         .route("/list", get(list))
+        .route("/add", post(add))
+        .route("/remove/{id}", post(remove))
+        .route("/move/{id}", post(move_to))
+        .route("/cards/{id}/get", get(cards_get))
         .route("/search", post(search_temp))
 }

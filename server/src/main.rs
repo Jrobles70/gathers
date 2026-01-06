@@ -1,4 +1,5 @@
 use axum::{error_handling::HandleErrorLayer, Router};
+use persistence::PersistenceSystem;
 use retrieval::RetrievalSystem;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
@@ -17,6 +18,7 @@ type GathersState = Arc<Mutex<AppState>>;
 #[derive(Debug, Clone)]
 struct AppState {
     retrieval: RetrievalSystem,
+    storage: PersistenceSystem,
 }
 
 #[tokio::main]
@@ -25,6 +27,7 @@ async fn main() -> eyre::Result<()> {
 
     let state = Arc::new(Mutex::new(AppState {
         retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new()?),
+        storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(false)?),
     }));
 
     let app = Router::new()
