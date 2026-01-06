@@ -154,20 +154,24 @@ pub fn collection_routes() -> Router<GathersState> {
 
     #[derive(Deserialize, Serialize)]
     struct CardIdentInner {
-        scryfallId: String,
+        #[serde(rename = "scryfallId")]
+        scryfall_id: String,
     }
 
     #[derive(Deserialize, Serialize)]
     struct ResultCardInner {
         id: String,
         name: String,
-        setCode: String,
-        cardIdentifiers: CardIdentInner,
+        #[serde(rename = "setCode")]
+        set_code: String,
+        #[serde(rename = "cardIdentifiers")]
+        card_identifiers: CardIdentInner,
     }
 
     #[derive(Deserialize, Serialize)]
     struct ResultCard {
-        mtGCard: ResultCardInner,
+        #[serde(rename = "mtGCard")]
+        mtg_card: ResultCardInner,
     }
 
     async fn search_temp(
@@ -185,12 +189,12 @@ pub fn collection_routes() -> Router<GathersState> {
                 result
                     .iter()
                     .map(|c| ResultCard {
-                        mtGCard: ResultCardInner {
+                        mtg_card: ResultCardInner {
                             id: c.id.clone(),
                             name: c.name.clone(),
-                            setCode: c.set_code.clone(),
-                            cardIdentifiers: CardIdentInner {
-                                scryfallId: c.card_identifiers.scryfall_id.clone(),
+                            set_code: c.set_code.clone(),
+                            card_identifiers: CardIdentInner {
+                                scryfall_id: c.card_identifiers.scryfall_id.clone(),
                             },
                         },
                     })

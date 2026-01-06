@@ -2,7 +2,7 @@ mod models;
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::models::{filters::CardSearchFilters, Card};
+use ::models::{filters::CardSearchFilters, Card, Set};
 use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
 use tokio::sync::Mutex;
@@ -72,7 +72,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
             if !set_code.is_empty() {
                 conditions.push(format!("a.setCode LIKE ?{i}"));
                 params.push(set_code.to_string());
-                i += 1;
+                // i += 1;
             }
         }
         if !conditions.is_empty() {
@@ -137,5 +137,18 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
             .flatten()
             .map(|c| (c.clone().id, c.clone().into()))
             .collect())
+    }
+
+    async fn get_sets(&self) -> eyre::Result<Vec<Set>> {
+        let conn = self.connection.lock().await;
+        let query = "SELECT DISTINCT setCode FROM cards LIMIT 20".to_string();
+        let mut stmt = conn.prepare(&query)?;
+        let iter = stmt.query_map([], |row| {
+            Ok(Set {
+                code: row.get(0)?,
+                name: "".to_string(),
+            })
+        })?;
+        Ok(iter.flatten().collect())
     }
 }

@@ -26,6 +26,8 @@ pub trait RetrievalSystemTrait {
         &self,
         ids: Vec<String>,
     ) -> eyre::Result<HashMap<String, models::Card>>;
+
+    async fn get_sets(&self) -> eyre::Result<Vec<models::Set>>;
 }
 
 #[async_trait::async_trait]
@@ -40,7 +42,6 @@ impl RetrievalSystemTrait for RetrievalSystem {
             // RetrievalSystem::Dummy(d) => d.get_card(filters).await,
             // RetrievalSystem::Scryfall(d) => d.get_card(filters).await,
             RetrievalSystem::Database(d) => d.search_cards(filters, skip, limit).await,
-            _ => todo!(),
         }
     }
 
@@ -52,6 +53,12 @@ impl RetrievalSystemTrait for RetrievalSystem {
             // RetrievalSystem::Dummy(_) => todo!(),
             // RetrievalSystem::Scryfall(_) => todo!(),
             RetrievalSystem::Database(d) => d.get_cards_by_ids(ids).await,
+        }
+    }
+
+    async fn get_sets(&self) -> eyre::Result<Vec<models::Set>> {
+        match self {
+            RetrievalSystem::Database(d) => d.get_sets().await,
         }
     }
 }

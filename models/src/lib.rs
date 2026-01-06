@@ -43,6 +43,12 @@ pub enum CardColour {
     Multicoloured,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Set {
+    pub name: String,
+    pub code: String,
+}
+
 impl Default for Card {
     fn default() -> Card {
         Card {

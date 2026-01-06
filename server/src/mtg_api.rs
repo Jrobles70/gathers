@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::Query;
-use models::{filters::CardSearchFilters, Card};
+use models::{filters::CardSearchFilters, Card, Set};
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use serde::{Deserialize, Serialize};
@@ -76,7 +76,26 @@ pub fn mtg_routes() -> Router<GathersState> {
             .map(Json)
     }
 
+    async fn get_sets(
+        State(state): State<GathersState>,
+    ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorPayload>)> {
+        let ret = &state.lock().await.retrieval;
+
+        ret.get_sets()
+            .await
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: "Oof".into(),
+                    }),
+                )
+            })
+            .map(|s| Json(s.iter().map(|s| s.code.clone()).collect()))
+    }
+
     Router::new()
         .route("/cards/search", post(search_mtg_cards))
         .route("/cards", get(retrieve_cards))
+        .route("/sets", get(get_sets))
 }
