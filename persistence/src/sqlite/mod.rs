@@ -17,11 +17,13 @@ pub struct SQLitePersistenceSystem {
 }
 
 impl SQLitePersistenceSystem {
-    pub fn new(in_memory: bool) -> eyre::Result<Self> {
+    pub fn new(in_memory: bool, db_path: Option<String>) -> eyre::Result<Self> {
         let mut conn = if in_memory {
             Connection::open(":memory:")?
         } else {
-            Connection::open("/home/mihail/.local/share/hometg/DB/storage.db")?
+            let path = db_path
+                .unwrap_or_else(|| "/home/mihail/.local/share/hometg/DB/storage.db".to_string());
+            Connection::open(path)?
         };
         MIGRATIONS.to_latest(&mut conn)?;
         println!("Ran migrations!");
@@ -88,7 +90,7 @@ mod tests {
     #[tokio::test]
     async fn test_collection_management() {
         // Create a new persistence system
-        let mut persistence = SQLitePersistenceSystem::new(true).unwrap();
+        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a collection
         let collection_id = persistence

@@ -24,7 +24,7 @@ async fn main() -> eyre::Result<()> {
 
     let retrieval = match args.system {
         // Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
-        Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new()?),
+        Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(None)?),
         // _ => RetrievalSystem::Dummy(retrieval::DummyRetrievalSystem {}),
     };
     println!(

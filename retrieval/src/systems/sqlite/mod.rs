@@ -15,11 +15,11 @@ pub struct SQLiteRetrievalSystem {
 }
 
 impl SQLiteRetrievalSystem {
-    pub fn new() -> eyre::Result<Self> {
+    pub fn new(db_path: Option<String>) -> eyre::Result<Self> {
+        let path = db_path
+            .unwrap_or_else(|| "/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string());
         Ok(Self {
-            connection: Arc::new(Mutex::new(Connection::open(
-                "/home/mihail/.local/share/hometg/DB/AllPrintings.db",
-            )?)),
+            connection: Arc::new(Mutex::new(Connection::open(path)?)),
         })
     }
 }

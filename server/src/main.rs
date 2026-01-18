@@ -25,9 +25,23 @@ struct AppState {
 async fn main() -> eyre::Result<()> {
     let port = 5234;
 
+    // Use default paths but make them configurable
+    let storage_db_path = std::env::var("STORAGE_DB_PATH")
+        .ok()
+        .or_else(|| Some("/home/mihail/.local/share/hometg/DB/storage.db".to_string()));
+
+    let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH")
+        .ok()
+        .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
+
     let state = Arc::new(Mutex::new(AppState {
-        retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new()?),
-        storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(false)?),
+        retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(
+            retrieval_db_path,
+        )?),
+        storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(
+            false,
+            storage_db_path,
+        )?),
     }));
 
     let app = Router::new()
