@@ -76,6 +76,101 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         Ok(collections)
     }
+
+    async fn get_cards_in_collection(
+        &self,
+        collection_id: String,
+    ) -> eyre::Result<Vec<CollectionCard>> {
+        let conn = self.connection.lock().await;
+
+        let mut stmt = conn.prepare(
+            "SELECT uuid, quantity, foilquantity, timeadded FROM cards WHERE collection = ?1",
+        )?;
+        let card_iter = stmt.query_map(params![collection_id], |row| {
+            let uuid: i64 = row.get(0)?;
+            let quantity: u32 = row.get(1)?;
+            let foil_quantity: u32 = row.get(2)?;
+            let time_added: String = row.get(3)?;
+            Ok(CollectionCard {
+                uuid,
+                quantity,
+                foil_quantity,
+                time_added,
+            })
+        })?;
+
+        let mut cards = Vec::new();
+        for card in card_iter {
+            cards.push(card?);
+        }
+
+        Ok(cards)
+    }
+
+    async fn add_card_to_collection(
+        &mut self,
+        collection_id: String,
+        card_uuid: i64,
+        quantity: u32,
+        foil_quantity: u32,
+        time_added: String,
+    ) -> eyre::Result<()> {
+        let conn = self.connection.lock().await;
+
+        let query = "INSERT OR REPLACE INTO cards (uuid, collection, quantity, foilquantity, timeadded) VALUES (?1, ?2, ?3, ?4, ?5)";
+        conn.execute(
+            query,
+            params![
+                card_uuid,
+                collection_id,
+                quantity,
+                foil_quantity,
+                time_added
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    async fn get_cards_in_collection_paginated(
+        &self,
+        collection_id: String,
+        offset: usize,
+        limit: usize,
+    ) -> eyre::Result<Vec<CollectionCard>> {
+        let conn = self.connection.lock().await;
+
+        let mut stmt = conn.prepare(
+            "SELECT uuid, quantity, foilquantity, timeadded FROM cards WHERE collection = ?1 LIMIT ?2 OFFSET ?3",
+        )?;
+        let card_iter = stmt.query_map(params![collection_id, limit, offset], |row| {
+            let uuid: i64 = row.get(0)?;
+            let quantity: u32 = row.get(1)?;
+            let foil_quantity: u32 = row.get(2)?;
+            let time_added: String = row.get(3)?;
+            Ok(CollectionCard {
+                uuid,
+                quantity,
+                foil_quantity,
+                time_added,
+            })
+        })?;
+
+        let mut cards = Vec::new();
+        for card in card_iter {
+            cards.push(card?);
+        }
+
+        Ok(cards)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CollectionCard {
+    pub uuid: i64,
+    pub quantity: u32,
+    pub foil_quantity: u32,
+    pub time_added: String,
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::Query;
+use chrono::{DateTime, Utc};
 use models::filters::CardSearchFilters;
 use persistence::PersistenceSystemTrait;
 use reqwest::StatusCode;
@@ -75,6 +76,15 @@ pub fn collection_routes() -> Router<GathersState> {
         message: String,
     }
 
+    #[derive(Serialize)]
+    struct CollectionCardResponse {
+        id: String,
+        quantity: u32,
+        foil_quantity: u32,
+        collection_id: String,
+        time_added: DateTime<Utc>,
+    }
+
     async fn remove(
         State(state): State<GathersState>,
         Path(id): Path<String>,
@@ -119,6 +129,108 @@ pub fn collection_routes() -> Router<GathersState> {
     }
 
     #[derive(Deserialize)]
+    struct CardToAdd {
+        card_id: String,
+        quantity: u32,
+        foil_quantity: u32,
+    }
+
+    async fn cards_add(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+        Json(input): Json<CardToAdd>,
+    ) -> Result<Json<Vec<CollectionCardResponse>>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &mut state.lock().await.storage;
+
+        // First, let's verify that the collection exists
+        let collections = match storage.list_collections().await {
+            Ok(collections) => collections,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to verify collection. {e}"),
+                    }),
+                ));
+            }
+        };
+
+        if !collections.contains(&collection_id) {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorPayload {
+                    error: "Collection not found".to_string(),
+                }),
+            ));
+        }
+
+        // Add the card to the collection
+        let uuid = input.card_id.parse::<i64>().map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: format!("Invalid card ID format. {e}"),
+                }),
+            )
+        })?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+
+        match storage
+            .add_card_to_collection(
+                collection_id.clone(),
+                uuid,
+                input.quantity,
+                input.foil_quantity,
+                now,
+            )
+            .await
+        {
+            Ok(_) => {
+                // Return the added card
+                let cards = match storage.get_cards_in_collection(collection_id.clone()).await {
+                    Ok(cards) => cards,
+                    Err(e) => {
+                        return Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorPayload {
+                                error: format!("Failed to fetch added card. {e}"),
+                            }),
+                        ));
+                    }
+                };
+
+                // Find the last added card (the one we just added)
+                if let Some(last_card) = cards.last() {
+                    let response_card = CollectionCardResponse {
+                        id: last_card.uuid.to_string(),
+                        quantity: last_card.quantity,
+                        foil_quantity: last_card.foil_quantity,
+                        collection_id,
+                        time_added: chrono::DateTime::parse_from_rfc3339(&last_card.time_added)
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                            .unwrap_or_else(|_| chrono::Utc::now()),
+                    };
+                    Ok(Json(vec![response_card]))
+                } else {
+                    Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: "Failed to retrieve added card".to_string(),
+                        }),
+                    ))
+                }
+            }
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to add card to collection. {e}"),
+                }),
+            )),
+        }
+    }
+
+    #[derive(Deserialize)]
     struct CollectionCardsQuery {
         #[serde(default)]
         offset: usize,
@@ -127,21 +239,50 @@ pub fn collection_routes() -> Router<GathersState> {
     }
 
     async fn cards_get(
-        State(_state): State<GathersState>,
-        Path(_collection_id): Path<String>,
-        Query(_query): Query<CollectionCardsQuery>,
-    ) -> Result<Json<Vec<CollectionCardResponse>>, (StatusCode, Json<ErrorPayload>)> {
-        // For now, we'll return an empty vector
-        // In a real implementation, this would get cards from the collection
-        Ok(Json(vec![]))
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+        Query(query): Query<CollectionCardsQuery>,
+    ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &state.lock().await.storage;
+
+        match storage
+            .get_cards_in_collection_paginated(collection_id.clone(), query.offset, query.limit)
+            .await
+        {
+            Ok(cards) => {
+                // Convert CollectionCard to CollectionCardResponse
+                let mut response_cards = Vec::new();
+
+                for card in cards {
+                    response_cards.push(CollectionCard {
+                        id: card.uuid.to_string(), // uuid is the card ID from retrieval system
+                        quantity: card.quantity,
+                        foil_quantity: card.foil_quantity,
+                        collection_id: collection_id.clone(), // This should be the collection ID passed in
+                        time_added: DateTime::parse_from_rfc3339(&card.time_added)
+                            .map(|dt| dt.with_timezone(&Utc))
+                            .unwrap_or_else(|_| Utc::now()),
+                    });
+                }
+
+                Ok(Json(response_cards))
+            }
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to get cards from collection. {e}"),
+                }),
+            )),
+        }
     }
 
     #[derive(Serialize)]
-    struct CollectionCardResponse {
+    struct CollectionCard {
         id: String,
-        name: String,
-        set_code: String,
-        scryfall_id: String,
+        quantity: u32,
+        foil_quantity: u32,
+        collection_id: String,
+        time_added: DateTime<Utc>,
     }
 
     #[derive(Deserialize)]
@@ -214,6 +355,7 @@ pub fn collection_routes() -> Router<GathersState> {
         .route("/add", post(add))
         .route("/remove/{id}", post(remove))
         .route("/move/{id}", post(move_to))
-        .route("/cards/{id}/get", get(cards_get))
+        .route("/cards/{id}/list", get(cards_get))
         .route("/search", post(search_temp))
+        .route("/cards/{id}/add", post(cards_add))
 }
