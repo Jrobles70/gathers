@@ -76,15 +76,6 @@ pub fn collection_routes() -> Router<GathersState> {
         message: String,
     }
 
-    #[derive(Serialize)]
-    struct CollectionCardResponse {
-        id: String,
-        quantity: u32,
-        foil_quantity: u32,
-        collection_id: String,
-        time_added: DateTime<Utc>,
-    }
-
     async fn remove(
         State(state): State<GathersState>,
         Path(id): Path<String>,
@@ -112,6 +103,13 @@ pub fn collection_routes() -> Router<GathersState> {
         message: String,
     }
 
+    #[derive(Deserialize)]
+    struct CardToAdd {
+        card_id: String,
+        quantity: i32,
+        foil_quantity: i32,
+    }
+
     async fn move_to(
         State(_state): State<GathersState>,
         Path(_collection_id): Path<String>,
@@ -128,18 +126,11 @@ pub fn collection_routes() -> Router<GathersState> {
         20
     }
 
-    #[derive(Deserialize)]
-    struct CardToAdd {
-        card_id: String,
-        quantity: u32,
-        foil_quantity: u32,
-    }
-
     async fn cards_add(
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
         Json(input): Json<CardToAdd>,
-    ) -> Result<Json<Vec<CollectionCardResponse>>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
         let storage = &mut state.lock().await.storage;
 
         // First, let's verify that the collection exists
@@ -202,7 +193,7 @@ pub fn collection_routes() -> Router<GathersState> {
 
                 // Find the last added card (the one we just added)
                 if let Some(last_card) = cards.last() {
-                    let response_card = CollectionCardResponse {
+                    let response_card = CollectionCard {
                         id: last_card.uuid.to_string(),
                         quantity: last_card.quantity,
                         foil_quantity: last_card.foil_quantity,
@@ -250,7 +241,6 @@ pub fn collection_routes() -> Router<GathersState> {
             .await
         {
             Ok(cards) => {
-                // Convert CollectionCard to CollectionCardResponse
                 let mut response_cards = Vec::new();
 
                 for card in cards {

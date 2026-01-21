@@ -24,8 +24,8 @@ pub trait PersistenceSystemTrait {
         &mut self,
         collection_id: String,
         card_uuid: i64,
-        quantity: u32,
-        foil_quantity: u32,
+        quantity: i32,
+        foil_quantity: i32,
         time_added: String,
     ) -> eyre::Result<()>;
 
@@ -84,8 +84,8 @@ impl PersistenceSystemTrait for PersistenceSystem {
         &mut self,
         collection_id: String,
         card_uuid: i64,
-        quantity: u32,
-        foil_quantity: u32,
+        quantity: i32,
+        foil_quantity: i32,
         time_added: String,
     ) -> eyre::Result<()> {
         match self {
