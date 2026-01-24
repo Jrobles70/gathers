@@ -4,7 +4,7 @@ CREATE TABLE collection(
 );
 
 CREATE TABLE cards(
-  uuid INTEGER NOT NULL,
+  uuid TEXT NOT NULL,
   collection TEXT NOT NULL,
   quantity INTEGER NOT NULL,
   foilquantity INTEGER NOT NULL,
