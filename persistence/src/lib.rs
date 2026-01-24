@@ -15,19 +15,16 @@ pub trait PersistenceSystemTrait {
 
     async fn list_collections(&self) -> eyre::Result<Vec<String>>;
 
-    async fn get_cards_in_collection(
-        &self,
-        collection_id: String,
-    ) -> eyre::Result<Vec<CollectionCard>>;
+    async fn get_cards_in_collection_count(&self, collection_id: String) -> eyre::Result<usize>;
 
     async fn add_card_to_collection(
         &mut self,
         collection_id: String,
-        card_uuid: i64,
+        card_uuid: String,
         quantity: i32,
         foil_quantity: i32,
         time_added: String,
-    ) -> eyre::Result<()>;
+    ) -> eyre::Result<CollectionCard>;
 
     async fn get_cards_in_collection_paginated(
         &self,
@@ -57,12 +54,9 @@ impl PersistenceSystemTrait for PersistenceSystem {
         }
     }
 
-    async fn get_cards_in_collection(
-        &self,
-        collection_id: String,
-    ) -> eyre::Result<Vec<CollectionCard>> {
+    async fn get_cards_in_collection_count(&self, collection_id: String) -> eyre::Result<usize> {
         match self {
-            PersistenceSystem::Database(d) => d.get_cards_in_collection(collection_id).await,
+            PersistenceSystem::Database(d) => d.get_cards_in_collection_count(collection_id).await,
         }
     }
 
@@ -83,11 +77,11 @@ impl PersistenceSystemTrait for PersistenceSystem {
     async fn add_card_to_collection(
         &mut self,
         collection_id: String,
-        card_uuid: i64,
+        card_uuid: String,
         quantity: i32,
         foil_quantity: i32,
         time_added: String,
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<CollectionCard> {
         match self {
             PersistenceSystem::Database(d) => {
                 d.add_card_to_collection(

@@ -105,9 +105,12 @@ pub fn collection_routes() -> Router<GathersState> {
 
     #[derive(Deserialize)]
     struct CardToAdd {
-        card_id: String,
+        id: String,
         quantity: i32,
+        #[serde(rename = "foilQuantity")]
         foil_quantity: i32,
+        #[serde(rename = "collectionId")]
+        collection_id: String,
     }
 
     async fn move_to(
@@ -156,16 +159,9 @@ pub fn collection_routes() -> Router<GathersState> {
         }
 
         // Add the card to the collection
-        let uuid = input.card_id.parse::<i64>().map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorPayload {
-                    error: format!("Invalid card ID format. {e}"),
-                }),
-            )
-        })?;
-
-        let now = chrono::Utc::now().to_rfc3339();
+        let uuid = input.id;
+        let now = chrono::Utc::now();
+        let now_str = now.to_rfc3339();
 
         match storage
             .add_card_to_collection(
@@ -173,45 +169,19 @@ pub fn collection_routes() -> Router<GathersState> {
                 uuid,
                 input.quantity,
                 input.foil_quantity,
-                now,
+                now_str,
             )
             .await
         {
-            Ok(_) => {
-                // Return the added card
-                let cards = match storage.get_cards_in_collection(collection_id.clone()).await {
-                    Ok(cards) => cards,
-                    Err(e) => {
-                        return Err((
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorPayload {
-                                error: format!("Failed to fetch added card. {e}"),
-                            }),
-                        ));
-                    }
-                };
-
-                // Find the last added card (the one we just added)
-                if let Some(last_card) = cards.last() {
-                    let response_card = CollectionCard {
-                        id: last_card.uuid.to_string(),
-                        quantity: last_card.quantity,
-                        foil_quantity: last_card.foil_quantity,
-                        collection_id,
-                        time_added: chrono::DateTime::parse_from_rfc3339(&last_card.time_added)
-                            .map(|dt| dt.with_timezone(&chrono::Utc))
-                            .unwrap_or_else(|_| chrono::Utc::now()),
-                    };
-                    Ok(Json(vec![response_card]))
-                } else {
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorPayload {
-                            error: "Failed to retrieve added card".to_string(),
-                        }),
-                    ))
-                }
-            }
+            Ok(card) => Ok(Json(vec![CollectionCard {
+                id: card.uuid.to_string(),
+                quantity: card.quantity,
+                foil_quantity: card.foil_quantity,
+                collection_id,
+                time_added: DateTime::parse_from_rfc3339(&card.time_added)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
+            }])),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
@@ -261,6 +231,23 @@ pub fn collection_routes() -> Router<GathersState> {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
                     error: format!("Failed to get cards from collection. {e}"),
+                }),
+            )),
+        }
+    }
+
+    async fn collection_cards_count(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+    ) -> Result<Json<usize>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &state.lock().await.storage;
+
+        match storage.get_cards_in_collection_count(collection_id).await {
+            Ok(count) => Ok(Json(count)),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to get card count for collection. {e}"),
                 }),
             )),
         }
@@ -346,6 +333,7 @@ pub fn collection_routes() -> Router<GathersState> {
         .route("/remove/{id}", post(remove))
         .route("/move/{id}", post(move_to))
         .route("/cards/{id}/list", get(cards_get))
+        .route("/cards/{id}/count", get(collection_cards_count))
         .route("/search", post(search_temp))
         .route("/cards/{id}/add", post(cards_add))
 }
