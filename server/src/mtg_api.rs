@@ -94,8 +94,16 @@ pub fn mtg_routes() -> Router<GathersState> {
             .map(|s| Json(s.iter().map(|s| s.code.clone()).collect()))
     }
 
+    async fn update(
+        State(_state): State<GathersState>,
+    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+        // Placeholder implementation for update
+        Ok(Json("Update successful".to_string()))
+    }
+
     Router::new()
         .route("/cards/search", post(search_mtg_cards))
         .route("/cards", get(retrieve_cards))
         .route("/sets", get(get_sets))
+        .route("/update", get(update))
 }
