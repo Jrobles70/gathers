@@ -76,7 +76,8 @@ pub fn collection_routes() -> Router<GathersState> {
     ) -> Result<Json<CollectionRemoveResponse>, (StatusCode, Json<ErrorPayload>)> {
         let storage = &mut state.lock().await.storage;
 
-        match storage.remove_collection(id).await {
+        // TODO: allow setting the "move to collection" instead of None
+        match storage.remove_collection(id, None).await {
             Ok(message) => Ok(Json(CollectionRemoveResponse { message })),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,

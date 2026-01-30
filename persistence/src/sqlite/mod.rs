@@ -1,6 +1,9 @@
+use crate::CollectionCard;
 use crate::PersistenceSystemTrait;
 use eyre::eyre;
 use include_dir::{include_dir, Dir};
+use models::CardID;
+use models::CollectionID;
 use rusqlite::{params, Connection};
 use rusqlite_migration::Migrations;
 use std::sync::Arc;
@@ -39,30 +42,39 @@ impl SQLitePersistenceSystem {
 
 #[async_trait::async_trait]
 impl PersistenceSystemTrait for SQLitePersistenceSystem {
-    async fn add_collection(&mut self, name: String) -> eyre::Result<String> {
-        let collection_id = Uuid::new_v4().to_string();
-
+    async fn add_collection(&mut self, name: CollectionID) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
-        let query = "INSERT INTO collection (id, name) VALUES (?1, ?2)";
-        conn.execute(query, params![collection_id, name])?;
+        let query = "INSERT INTO collection (name, can_remove) VALUES (?1, ?2)";
+        conn.execute(query, params![name, true])?;
 
-        Ok(collection_id)
+        Ok(name)
     }
 
-    async fn remove_collection(&mut self, name: String) -> eyre::Result<String> {
+    async fn remove_collection(
+        &mut self,
+        name: CollectionID,
+        move_to: Option<CollectionID>,
+    ) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
 
+        if let Some(target_collection_id) = move_to {
+
+            // get cards from name
+            // add cards to move_to
+        }
+
         let delete_cards_query =
-            "DELETE FROM cards WHERE collection IN (SELECT id FROM collection WHERE name = ?1)";
+            "DELETE FROM cards WHERE collection IN (SELECT name FROM collection WHERE name = ?1 AND can_remove = TRUE)";
         conn.execute(delete_cards_query, params![name])?;
 
-        let delete_collection_query = "DELETE FROM collection WHERE name = ?1";
+        let delete_collection_query =
+            "DELETE FROM collection WHERE name = ?1 AND can_remove = TRUE";
         conn.execute(delete_collection_query, params![name])?;
 
         Ok("Collection removed successfully".to_string())
     }
 
-    async fn list_collections(&self) -> eyre::Result<Vec<String>> {
+    async fn list_collections(&self) -> eyre::Result<Vec<CollectionID>> {
         let conn = self.connection.lock().await;
 
         // TODO: handle pagination in case of collection count > 1000
@@ -80,7 +92,10 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         Ok(collections)
     }
 
-    async fn get_cards_in_collection_count(&self, collection_id: String) -> eyre::Result<usize> {
+    async fn get_cards_in_collection_count(
+        &self,
+        collection_id: CollectionID,
+    ) -> eyre::Result<usize> {
         let conn = self.connection.lock().await;
 
         let mut stmt = conn.prepare("SELECT COUNT(ALL uuid) FROM cards WHERE collection = ?1")?;
@@ -100,15 +115,14 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
     async fn add_card_to_collection(
         &mut self,
-        collection_id: String,
-        card_uuid: String,
+        collection_id: CollectionID,
+        card_uuid: CardID,
         quantity: i32,
         foil_quantity: i32,
         time_added: String,
     ) -> eyre::Result<CollectionCard> {
         let conn = self.connection.lock().await;
 
-        // First check if card already exists in collection
         let mut stmt = conn.prepare(
             "SELECT quantity, foilquantity, timeadded FROM cards WHERE uuid = ?1 AND collection = ?2",
         )?;
@@ -121,6 +135,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         match existing_card {
             Ok((existing_quantity, existing_foil_quantity, time_added)) => {
+                println!("CARD EXISTS");
                 // Card exists, update quantities
                 let new_quantity = (existing_quantity as i32 + quantity).max(0) as u32;
                 let new_foil_quantity =
@@ -154,6 +169,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 }
             }
             Err(_) => {
+                println!("CARD not EXISTS {collection_id}");
                 // Card doesn't exist, insert new one
                 if quantity > 0 || foil_quantity > 0 {
                     conn.execute(
@@ -173,16 +189,18 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
     async fn get_cards_in_collection_paginated(
         &self,
-        collection_id: String,
+        collection_id: CollectionID,
         offset: usize,
         limit: usize,
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
 
+        println!("LIMIT: {limit} OFFSET: {offset}");
         let mut stmt = conn.prepare(
             "SELECT uuid, quantity, foilquantity, timeadded FROM cards WHERE collection = ?1 LIMIT ?2 OFFSET ?3",
         )?;
         let card_iter = stmt.query_map(params![collection_id, limit, offset], |row| {
+            println!("AAH");
             let uuid: String = row.get(0)?;
             let quantity: u32 = row.get(1)?;
             let foil_quantity: u32 = row.get(2)?;
@@ -197,19 +215,12 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         let mut cards = Vec::new();
         for card in card_iter {
+            println!("{card:?}");
             cards.push(card?);
         }
 
         Ok(cards)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct CollectionCard {
-    pub uuid: String,
-    pub quantity: u32,
-    pub foil_quantity: u32,
-    pub time_added: String,
 }
 
 #[cfg(test)]
@@ -235,8 +246,9 @@ mod tests {
 
         // List collections
         let collections = persistence.list_collections().await.unwrap();
-        assert_eq!(collections.len(), 1);
-        assert_eq!(collections[0], "Test Collection");
+        assert_eq!(collections.len(), 2);
+        assert!(collections.contains(&"Test Collection".to_string()));
+        assert!(collections.contains(&"Default".to_string()));
 
         // Add another collection
         let collection_id2 = persistence
@@ -247,21 +259,22 @@ mod tests {
 
         // List collections again
         let collections = persistence.list_collections().await.unwrap();
-        assert_eq!(collections.len(), 2);
+        assert_eq!(collections.len(), 3);
         assert!(collections.contains(&"Test Collection".to_string()));
         assert!(collections.contains(&"Another Collection".to_string()));
 
         // Remove a collection
         let result = persistence
-            .remove_collection("Test Collection".to_string())
+            .remove_collection("Test Collection".to_string(), None)
             .await
             .unwrap();
         assert!(!result.is_empty());
 
         // List collections after removal
         let collections = persistence.list_collections().await.unwrap();
-        assert_eq!(collections.len(), 1);
-        assert_eq!(collections[0], "Another Collection");
+        assert_eq!(collections.len(), 2);
+        assert!(collections.contains(&"Default".to_string()));
+        assert!(collections.contains(&"Another Collection".to_string()));
     }
 
     #[tokio::test]
@@ -423,6 +436,61 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_remove_collection_that_cant_be_removed() {
+        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let collection_id = persistence
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+        // persistence
+        //     .add_card_to_collection(
+        //         collection_id.clone(),
+        //         "12345".to_string(),
+        //         5,
+        //         3,
+        //         "2023-01-01T00:00:00Z".to_string(),
+        //     )
+        //     .await
+        //     .unwrap();
+        let c = persistence
+            .get_cards_in_collection_count("Default".to_string())
+            .await
+            .unwrap();
+        assert_eq!(c, 0);
+        let k = persistence
+            .add_card_to_collection(
+                "Default".to_string(),
+                "12346".to_string(),
+                2,
+                8,
+                "2023-01-01T00:00:00Z".to_string(),
+            )
+            .await
+            .unwrap();
+        let c = persistence
+            .get_cards_in_collection_count("Default".to_string())
+            .await
+            .unwrap();
+        assert_eq!(c, 1);
+        let cards = persistence
+            .get_cards_in_collection_paginated("Default".to_string(), 8, 5)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(persistence.list_collections().await.unwrap().len(), 2);
+        persistence
+            .remove_collection("Default".to_string(), None)
+            .await
+            .unwrap();
+        assert_eq!(persistence.list_collections().await.unwrap().len(), 2);
+        persistence
+            .remove_collection(collection_id, None)
+            .await
+            .unwrap();
+        assert_eq!(persistence.list_collections().await.unwrap().len(), 1);
     }
 
     #[tokio::test]

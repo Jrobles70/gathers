@@ -1,6 +1,6 @@
 CREATE TABLE collection(
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
+  name TEXT PRIMARY KEY,
+  can_remove BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE cards(
@@ -11,3 +11,5 @@ CREATE TABLE cards(
   timeadded TEXT NULL,
   PRIMARY KEY (uuid, collection)
 );
+
+INSERT INTO collection (name, can_remove) VALUES ("Default", FALSE);

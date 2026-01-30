@@ -3,15 +3,23 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 pub mod filters;
 
+pub type Artist = String;
+pub type CardID = String;
+pub type SetCode = String;
+pub type CardText = String;
+pub type CardName = String;
+pub type SetName = String;
+pub type CollectionID = String;
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Card {
-    pub id: String,
-    pub name: String,
-    pub set_code: String,
+    pub id: CardID,
+    pub name: CardName,
+    pub set_code: SetCode,
     pub rarity: Rarity,
-    pub artist: String,
+    pub artist: Artist,
     pub color_identity: Vec<CardColour>,
-    pub text: String,
+    pub text: CardText,
     pub card_identifiers: CardIdentifiers,
 }
 
@@ -45,8 +53,8 @@ pub enum CardColour {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Set {
-    pub name: String,
-    pub code: String,
+    pub name: SetName,
+    pub code: SetCode,
 }
 
 impl Default for Card {
