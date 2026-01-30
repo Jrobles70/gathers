@@ -12,4 +12,6 @@ CREATE TABLE cards(
   PRIMARY KEY (uuid, collection)
 );
 
+CREATE UNIQUE INDEX idx_cards_uuid_collection ON cards(uuid, collection);
+
 INSERT INTO collection (name, can_remove) VALUES ("Default", FALSE);

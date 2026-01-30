@@ -12,6 +12,6 @@ async-trait = "0.1.89"
 eyre.workspace = true
 models = { path = "../models/" }
 reqwest.workspace = true
-rusqlite = "0.37.0"
+rusqlite.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

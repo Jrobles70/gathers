@@ -13,7 +13,7 @@ eyre.workspace = true
 models = { path = "../models/" }
 include_dir = "0.7.4"
 reqwest.workspace = true
-rusqlite = "0.37.0"
+rusqlite.workspace = true
 rusqlite_migration = { version = "2.3.0", features = ["from-directory"] }
 serde_json.workspace = true
 tokio.workspace = true
