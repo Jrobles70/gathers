@@ -6,15 +6,15 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::Query;
-use models::{filters::CardSearchFilters, Card, Set};
+use models::filters::CardSearchFilters;
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
-use crate::GathersState;
+use crate::{mtg_api::mtg_api_models::APICard, GathersState};
+mod mtg_api_models;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct ErrorPayload {
     error: String,
 }
@@ -32,15 +32,14 @@ pub fn mtg_routes() -> Router<GathersState> {
         State(state): State<GathersState>,
         Query(query): Query<SearchQuery>,
         Json(input): Json<CardSearchFilters>,
-    ) -> Result<Json<Vec<Card>>, (StatusCode, Json<ErrorPayload>)> {
-        debug!("{:?}", input);
+    ) -> Result<Json<Vec<APICard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.lock().await.retrieval;
 
         match ret
             .search_cards(input, query.skip.into(), query.limit.into())
             .await
         {
-            Ok(result) => Ok(Json(result)),
+            Ok(result) => Ok(Json(result.iter().map(|c| c.clone().into()).collect())),
             Err(_) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
@@ -59,8 +58,7 @@ pub fn mtg_routes() -> Router<GathersState> {
     async fn retrieve_cards(
         State(state): State<GathersState>,
         axum_extra::extract::Query(query): axum_extra::extract::Query<RetrieveQuery>,
-    ) -> Result<Json<HashMap<String, Card>>, (StatusCode, Json<ErrorPayload>)> {
-        println!("{:?}", query.ids);
+    ) -> Result<Json<HashMap<String, APICard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.lock().await.retrieval;
 
         ret.get_cards_by_ids(query.ids)
@@ -73,6 +71,7 @@ pub fn mtg_routes() -> Router<GathersState> {
                     }),
                 )
             })
+            .map(|d| d.into_iter().map(|(k, v)| (k, v.into())).collect())
             .map(Json)
     }
 
