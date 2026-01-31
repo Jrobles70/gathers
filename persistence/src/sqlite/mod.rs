@@ -30,7 +30,6 @@ impl SQLitePersistenceSystem {
             Connection::open(path)?
         };
         MIGRATIONS.to_latest(&mut conn)?;
-        println!("Ran migrations!");
         conn.pragma_update(None, "journal_mode", "WAL").unwrap();
         conn.pragma_update(None, "foreign_keys", "ON").unwrap();
         Ok(Self {
@@ -56,7 +55,16 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     ) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
 
-        // TODO: actually select collection first and check can_remove
+        // let mut stmt = conn.prepare("SELECT can_remove FROM collection WHERE name = ?1")?;
+        // let mut collection_iter = stmt.query_map(params![name], |row| {
+        //     let can_remove: bool = row.get(0)?;
+        //     Ok(can_remove)
+        // })?;
+        // let mut can_remove_collection = match collection_iter.next() {
+        //     Some(Ok(b)) => b,
+        //     _ => false,
+        // };
+
         if let Some(target_collection_id) = move_to {
             // TODO: add tests
             let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded)
@@ -66,7 +74,6 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             DO UPDATE SET
                 quantity = cards.quantity + EXCLUDED.quantity,
                 foilquantity = cards.foilquantity + EXCLUDED.foilquantity;";
-            println!("{query}");
             conn.execute(query, params![target_collection_id, name])?;
         }
 
@@ -142,7 +149,6 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         match existing_card {
             Ok((existing_quantity, existing_foil_quantity, time_added)) => {
-                println!("CARD EXISTS");
                 // Card exists, update quantities
                 let new_quantity = (existing_quantity as i32 + quantity).max(0) as u32;
                 let new_foil_quantity =
@@ -176,7 +182,6 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 }
             }
             Err(_) => {
-                println!("CARD not EXISTS {collection_id}");
                 // Card doesn't exist, insert new one
                 if quantity > 0 || foil_quantity > 0 {
                     conn.execute(
@@ -202,7 +207,6 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
 
-        println!("LIMIT: {limit} OFFSET: {offset}");
         let mut stmt = conn.prepare(
             "SELECT uuid, quantity, foilquantity, timeadded FROM cards WHERE collection = ?1 LIMIT ?2 OFFSET ?3",
         )?;
@@ -222,7 +226,6 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         let mut cards = Vec::new();
         for card in card_iter {
-            println!("{card:?}");
             cards.push(card?);
         }
 
@@ -237,6 +240,137 @@ mod tests {
     #[test]
     fn migrations_test() {
         assert!(MIGRATIONS.validate().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_remove_collection_can_be_removed() {
+        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        // Add a collection that can be removed
+        let collection_id = persistence
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        // Add cards to the collection
+        persistence
+            .add_card_to_collection(
+                collection_id.clone(),
+                "card1".to_string(),
+                5,
+                2,
+                "2023-01-01T00:00:00Z".to_string(),
+            )
+            .await
+            .unwrap();
+
+        // Try to remove the collection (should be removed because can_remove is true by default)
+        persistence
+            .remove_collection(collection_id.clone(), None)
+            .await
+            .unwrap();
+
+        // Verify collection was removed (because it can be removed)
+        let collections = persistence.list_collections().await.unwrap();
+        assert!(!collections.contains(&collection_id));
+    }
+
+    #[tokio::test]
+    async fn test_remove_default_collection_with_move_to() {
+        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        // Add a regular collection
+        let collection_id = persistence
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        // Add cards to the regular collection
+        persistence
+            .add_card_to_collection(
+                collection_id.clone(),
+                "card1".to_string(),
+                5,
+                2,
+                "2023-01-01T00:00:00Z".to_string(),
+            )
+            .await
+            .unwrap();
+
+        // Add a card to the Default collection
+        persistence
+            .add_card_to_collection(
+                "Default".to_string(),
+                "default_card".to_string(),
+                3,
+                1,
+                "2023-01-01T00:00:00Z".to_string(),
+            )
+            .await
+            .unwrap();
+
+        // Try to remove the Default collection (should not be removed because can_remove is false)
+        // But cards should still be moved to the test collection
+        persistence
+            .remove_collection("Default".to_string(), Some(collection_id.clone()))
+            .await
+            .unwrap();
+
+        // Verify Default collection still exists
+        let collections = persistence.list_collections().await.unwrap();
+        assert!(collections.contains(&"Default".to_string()));
+
+        // Verify cards were moved to collection 1
+        let cards1 = persistence
+            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .await
+            .unwrap();
+        assert_eq!(cards1.len(), 2); // Should have both cards now
+
+        // Verify that card quantities are correct (default_card should have been added to existing card)
+        let default_card = cards1.iter().find(|c| c.uuid == "default_card").unwrap();
+        assert_eq!(default_card.quantity, 3);
+        assert_eq!(default_card.foil_quantity, 1);
+    }
+
+    #[tokio::test]
+    async fn test_remove_collection_with_none_move_to() {
+        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        // Add a collection
+        let collection_id = persistence
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        // Add cards to the collection
+        persistence
+            .add_card_to_collection(
+                collection_id.clone(),
+                "card1".to_string(),
+                5,
+                2,
+                "2023-01-01T00:00:00Z".to_string(),
+            )
+            .await
+            .unwrap();
+
+        // Remove collection with move_to = None (should delete cards and collection)
+        persistence
+            .remove_collection(collection_id.clone(), None)
+            .await
+            .unwrap();
+
+        // Verify collection was removed
+        let collections = persistence.list_collections().await.unwrap();
+        assert!(!collections.contains(&collection_id));
+
+        // Verify no cards remain in the collection
+        let cards = persistence
+            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 0);
     }
 
     #[tokio::test]
