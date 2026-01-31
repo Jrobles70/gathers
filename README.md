@@ -26,3 +26,11 @@ For better or worse (the API is not the cleanest).
 ## cli
 
 Toy application to leverage the `retrieval` crates.
+
+# Codeberg vs Github
+
+This repo is both on Codeberg and on Github. 
+
+I will read issues from Github, but Github is only a mirror.
+Main development happens on Codeberg.
+Support small tech!
