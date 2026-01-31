@@ -1,5 +1,6 @@
 mod sqlite;
 use models::CardID;
+use models::CollectionCard;
 use models::CollectionID;
 
 pub use crate::sqlite::SQLitePersistenceSystem;
@@ -7,20 +8,6 @@ pub use crate::sqlite::SQLitePersistenceSystem;
 #[derive(Debug, Clone)]
 pub enum PersistenceSystem {
     Database(SQLitePersistenceSystem),
-}
-
-#[derive(Debug, Clone)]
-pub struct CollectionCard {
-    pub uuid: CardID,
-    pub quantity: u32,
-    pub foil_quantity: u32,
-    pub time_added: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct Collection {
-    pub id: CollectionID,
-    pub can_remove: bool,
 }
 
 #[async_trait::async_trait]
@@ -55,6 +42,12 @@ pub trait PersistenceSystemTrait {
         offset: usize,
         limit: usize,
     ) -> eyre::Result<Vec<CollectionCard>>;
+
+    async fn move_cards_between_collections(
+        &mut self,
+        cards: Vec<CollectionCard>,
+        to_collection_id: CollectionID,
+    ) -> eyre::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -119,6 +112,19 @@ impl PersistenceSystemTrait for PersistenceSystem {
                     time_added,
                 )
                 .await
+            }
+        }
+    }
+
+    async fn move_cards_between_collections(
+        &mut self,
+        cards: Vec<CollectionCard>,
+        to_collection_id: CollectionID,
+    ) -> eyre::Result<()> {
+        match self {
+            PersistenceSystem::Database(d) => {
+                d.move_cards_between_collections(cards, to_collection_id)
+                    .await
             }
         }
     }

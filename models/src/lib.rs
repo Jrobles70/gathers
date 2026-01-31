@@ -101,3 +101,18 @@ impl From<String> for Rarity {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct CollectionCard {
+    pub uuid: CardID,
+    pub quantity: u32,
+    pub foil_quantity: u32,
+    pub time_added: String,
+    pub collection: CollectionID,
+}
+
+#[derive(Debug, Clone)]
+pub struct Collection {
+    pub id: CollectionID,
+    pub can_remove: bool,
+}

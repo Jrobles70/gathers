@@ -17,11 +17,6 @@ pub struct CollectionRemoveResponse {
     pub message: String,
 }
 
-#[derive(Deserialize)]
-pub struct MoveCardsRequest {
-    pub card_ids: Vec<String>,
-}
-
 #[derive(Serialize)]
 pub struct MoveCardsResponse {
     pub message: String,
@@ -45,7 +40,7 @@ pub struct CollectionCardsQuery {
     pub limit: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CollectionCard {
     pub id: String,
     pub quantity: u32,
@@ -55,6 +50,18 @@ pub struct CollectionCard {
     pub collection_id: String,
     #[serde(rename = "timeAdded")]
     pub time_added: DateTime<Utc>,
+}
+
+impl From<&CollectionCard> for models::CollectionCard {
+    fn from(value: &CollectionCard) -> Self {
+        models::CollectionCard {
+            uuid: value.id.to_string(),
+            quantity: value.quantity,
+            foil_quantity: value.foil_quantity,
+            collection: value.collection_id.to_string(),
+            time_added: value.time_added.to_string(),
+        }
+    }
 }
 
 fn default_limit() -> usize {

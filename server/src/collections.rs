@@ -14,8 +14,7 @@ use serde::Serialize;
 use crate::{
     collections::collections_models::{
         CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard, CollectionCardsQuery,
-        CollectionRemoveResponse, MoveCardsRequest, MoveCardsResponse, ResultCard, ResultCardInner,
-        SearchQuery,
+        CollectionRemoveResponse, ResultCard, ResultCardInner, SearchQuery,
     },
     GathersState,
 };
@@ -88,15 +87,29 @@ pub fn collection_routes() -> Router<GathersState> {
         }
     }
 
+    #[axum::debug_handler]
     async fn move_to(
-        State(_state): State<GathersState>,
-        Path(_collection_id): Path<String>,
-        Json(_input): Json<MoveCardsRequest>,
-    ) -> Result<Json<MoveCardsResponse>, (StatusCode, Json<ErrorPayload>)> {
-        // For now, we'll just return a placeholder response
-        Ok(Json(MoveCardsResponse {
-            message: "Cards moved successfully".to_string(),
-        }))
+        State(state): State<GathersState>,
+        Path(to_collection_id): Path<String>,
+        Json(input): Json<Vec<CollectionCard>>,
+    ) -> Result<Json<()>, (StatusCode, Json<ErrorPayload>)> {
+        let storage = &mut state.lock().await.storage;
+
+        match storage
+            .move_cards_between_collections(
+                input.iter().map(|card| card.into()).collect(),
+                to_collection_id,
+            )
+            .await
+        {
+            Ok(_) => Ok(Json(())),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to move cards. {e}"),
+                }),
+            )),
+        }
     }
 
     async fn validate_collection(
@@ -122,7 +135,7 @@ pub fn collection_routes() -> Router<GathersState> {
 
     async fn mutate_card_quantities(
         storage: &mut PersistenceSystem,
-        collection_id: &String,
+        collection_id: &str,
         uuid: String,
         quantity: i32,
         foil_quantity: i32,
@@ -132,7 +145,7 @@ pub fn collection_routes() -> Router<GathersState> {
 
         match storage
             .add_card_to_collection(
-                collection_id.clone(),
+                collection_id.to_string(),
                 uuid,
                 quantity,
                 foil_quantity,
@@ -144,7 +157,7 @@ pub fn collection_routes() -> Router<GathersState> {
                 id: card.uuid.to_string(),
                 quantity: card.quantity,
                 foil_quantity: card.foil_quantity,
-                collection_id: collection_id.clone(),
+                collection_id: collection_id.to_string(),
                 time_added: DateTime::parse_from_rfc3339(&card.time_added)
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now()),
