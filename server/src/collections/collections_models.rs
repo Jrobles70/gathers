@@ -17,19 +17,14 @@ pub struct CollectionRemoveResponse {
     pub message: String,
 }
 
-#[derive(Serialize)]
-pub struct MoveCardsResponse {
-    pub message: String,
-}
-
 #[derive(Deserialize, Debug)]
 pub struct CardToAdd {
     pub id: String,
     pub quantity: i32,
     #[serde(rename = "foilQuantity")]
     pub foil_quantity: i32,
-    #[serde(rename = "collectionId")]
-    pub collection_id: String,
+    // #[serde(rename = "collectionId")]
+    // pub collection_id: String,
 }
 
 #[derive(Deserialize)]

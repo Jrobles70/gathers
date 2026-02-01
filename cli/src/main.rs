@@ -3,8 +3,7 @@ use retrieval::{RetrievalSystem, RetrievalSystemTrait};
 
 #[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Systems {
-    // Scryfall,
-    // Dummy,
+    Scryfall,
     Sql,
 }
 
@@ -23,9 +22,8 @@ async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
     let retrieval = match args.system {
-        // Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
+        Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
         Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(None)?),
-        // _ => RetrievalSystem::Dummy(retrieval::DummyRetrievalSystem {}),
     };
     println!(
         "{:?}",

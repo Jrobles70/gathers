@@ -301,6 +301,13 @@ pub fn collection_routes() -> Router<GathersState> {
             )),
         }
     }
+    async fn search(
+        State(state): State<GathersState>,
+        Query(query): Query<SearchQuery>,
+        Json(input): Json<CardSearchFilters>,
+    ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
+        Ok(Json(vec![]))
+    }
 
     Router::new()
         .route("/list", get(list))

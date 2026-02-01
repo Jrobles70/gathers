@@ -35,9 +35,10 @@ async fn main() -> eyre::Result<()> {
         .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
 
     let state = Arc::new(Mutex::new(AppState {
-        retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(
-            retrieval_db_path,
-        )?),
+        // retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(
+        //     retrieval_db_path,
+        // )?),
+        retrieval: RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?),
         storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(
             false,
             storage_db_path,

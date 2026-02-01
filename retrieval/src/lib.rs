@@ -2,15 +2,13 @@ mod systems;
 
 use std::collections::HashMap;
 
-// pub use systems::dummy::DummyRetrievalSystem;
-// pub use systems::scryfall::ScryfallRetrievalSystem;
+pub use systems::scryfall::ScryfallRetrievalSystem;
 pub use systems::sqlite::SQLiteRetrievalSystem;
 
 #[derive(Debug, Clone)]
 pub enum RetrievalSystem {
-    // Scryfall(ScryfallRetrievalSystem),
+    Scryfall(ScryfallRetrievalSystem),
     Database(SQLiteRetrievalSystem),
-    // Dummy(DummyRetrievalSystem),
 }
 
 #[async_trait::async_trait]
@@ -39,8 +37,7 @@ impl RetrievalSystemTrait for RetrievalSystem {
         limit: Option<usize>,
     ) -> eyre::Result<Vec<models::Card>> {
         match self {
-            // RetrievalSystem::Dummy(d) => d.get_card(filters).await,
-            // RetrievalSystem::Scryfall(d) => d.get_card(filters).await,
+            RetrievalSystem::Scryfall(d) => d.search_cards(filters, skip, limit).await,
             RetrievalSystem::Database(d) => d.search_cards(filters, skip, limit).await,
         }
     }
@@ -50,14 +47,14 @@ impl RetrievalSystemTrait for RetrievalSystem {
         ids: Vec<String>,
     ) -> eyre::Result<HashMap<String, models::Card>> {
         match self {
-            // RetrievalSystem::Dummy(_) => todo!(),
-            // RetrievalSystem::Scryfall(_) => todo!(),
+            RetrievalSystem::Scryfall(d) => d.get_cards_by_ids(ids).await,
             RetrievalSystem::Database(d) => d.get_cards_by_ids(ids).await,
         }
     }
 
     async fn get_sets(&self) -> eyre::Result<Vec<models::Set>> {
         match self {
+            RetrievalSystem::Scryfall(d) => d.get_sets().await,
             RetrievalSystem::Database(d) => d.get_sets().await,
         }
     }

@@ -1,19 +1,29 @@
+use std::collections::HashMap;
+
 use eyre::OptionExt;
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub struct ScryfallRetrievalSystem {}
 
-use models::{
-    filters::{CardColour, CardSearchFilters},
-    CardIdentifiers,
-};
+use models::{filters::CardSearchFilters, Card, CardColour, CardIdentifiers, Rarity};
 
 use crate::RetrievalSystemTrait;
 
+impl ScryfallRetrievalSystem {
+    pub fn new() -> eyre::Result<Self> {
+        Ok(Self {})
+    }
+}
+
 #[async_trait::async_trait]
 impl RetrievalSystemTrait for ScryfallRetrievalSystem {
-    async fn get_card(&self, filters: CardSearchFilters) -> eyre::Result<Option<models::Card>> {
+    async fn search_cards(
+        &self,
+        filters: CardSearchFilters,
+        skip: Option<usize>,
+        limit: Option<usize>,
+    ) -> eyre::Result<Vec<Card>> {
         let url = format!(
             "https://api.scryfall.com/cards/named?fuzzy={}",
             filters.name.unwrap_or("panharmonicon".to_string())
@@ -33,7 +43,12 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
             .get("name")
             .and_then(Value::as_str)
             .ok_or_eyre("Could not retrieve name")?;
-        Ok(Some(models::Card {
+        let card_id = json
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_eyre("Could not retrieve id")?
+            .to_string();
+        Ok(vec![models::Card {
             name: card_name.to_string(),
             set_code: json
                 .get("set")
@@ -62,13 +77,26 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                 })
                 .collect::<Vec<CardColour>>(),
             id: "a".to_string(),
-            rarity: models::filters::Rarity::Common,
+            rarity: Rarity::Common,
             text: "a".to_string(),
             card_identifiers: CardIdentifiers {
-                scryfall_id: "a".to_string(),
-                id: "a".to_string(),
+                scryfall_id: card_id.clone(),
+                id: card_id.clone(),
             },
-        }))
+        }])
+    }
+
+    async fn get_cards_by_ids(
+        &self,
+        ids: Vec<String>,
+    ) -> eyre::Result<HashMap<String, models::Card>> {
+        // TODO: implement this
+        Ok(HashMap::new())
+    }
+
+    async fn get_sets(&self) -> eyre::Result<Vec<models::Set>> {
+        // TODO: implement this
+        Ok(vec![])
     }
 }
 
@@ -80,14 +108,18 @@ mod tests {
     async fn get_basic_card() -> eyre::Result<()> {
         let r = ScryfallRetrievalSystem {};
         let card = r
-            .get_card(CardSearchFilters {
-                name: Some("Panharmonicon".to_string()),
-                ..Default::default()
-            })
+            .search_cards(
+                CardSearchFilters {
+                    name: Some("Panharmonicon".to_string()),
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
             .await?;
 
-        assert!(card.is_some());
-        let card = card.ok_or_eyre("Card should be present")?;
+        assert_eq!(card.len(), 1);
+        let card = card.first().expect("No card?");
         assert_eq!(card.name, "Panharmonicon");
         assert_eq!(card.color_identity, vec![]);
 
