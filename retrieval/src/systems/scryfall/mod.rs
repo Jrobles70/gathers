@@ -38,7 +38,6 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         let client = reqwest::Client::new();
         let response = client.get(url).headers(headers).send().await?;
         let json: Value = response.json().await?;
-        println!("{:?}", json);
         let card_name = json
             .get("name")
             .and_then(Value::as_str)

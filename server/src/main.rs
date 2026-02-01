@@ -1,4 +1,5 @@
 use axum::{error_handling::HandleErrorLayer, Router};
+use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
 use retrieval::RetrievalSystem;
 use std::{sync::Arc, time::Duration};
@@ -21,9 +22,27 @@ struct AppState {
     storage: PersistenceSystem,
 }
 
+#[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
+enum Systems {
+    Scryfall,
+    Sql,
+}
+
+#[derive(Parser, Debug)]
+#[command(version, about)]
+struct Args {
+    #[clap(short, long, default_value = "scryfall")]
+    system: Systems,
+
+    #[clap(short, long)]
+    port: usize,
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    let port = 5234;
+    let args = Args::parse();
+
+    let port = args.port;
 
     // Use default paths but make them configurable
     let storage_db_path = std::env::var("STORAGE_DB_PATH")
@@ -35,10 +54,14 @@ async fn main() -> eyre::Result<()> {
         .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
 
     let state = Arc::new(Mutex::new(AppState {
-        // retrieval: RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(
-        //     retrieval_db_path,
-        // )?),
-        retrieval: RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?),
+        retrieval: match args.system {
+            Systems::Scryfall => {
+                RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?)
+            }
+            Systems::Sql => {
+                RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(retrieval_db_path)?)
+            }
+        },
         storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(
             false,
             storage_db_path,
