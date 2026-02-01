@@ -38,6 +38,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         let client = reqwest::Client::new();
         let response = client.get(url).headers(headers).send().await?;
         let json: Value = response.json().await?;
+        println!("{json:?}");
         let card_name = json
             .get("name")
             .and_then(Value::as_str)
@@ -59,9 +60,6 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                 .and_then(Value::as_str)
                 .ok_or_eyre("Could not retrieve artist")?
                 .to_string(),
-            // card_identifiers: json
-            //     .get("card_identifiers")
-            //     .ok_or_eyre("Could not retrive card identifiers")?,
             color_identity: json
                 .get("color_identity")
                 .and_then(Value::as_array)
@@ -72,12 +70,26 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                 .iter()
                 .map(|c| match *c {
                     "B" => CardColour::Black,
+                    "U" => CardColour::Blue,
+                    "W" => CardColour::White,
+                    "G" => CardColour::Green,
+                    "R" => CardColour::Red,
+                    "C" => CardColour::Colourless,
                     _ => CardColour::Colourless,
                 })
                 .collect::<Vec<CardColour>>(),
-            id: "a".to_string(),
-            rarity: Rarity::Common,
-            text: "a".to_string(),
+            id: card_id.clone(),
+            rarity: json
+                .get("rarity")
+                .and_then(Value::as_str)
+                .ok_or_eyre("Oh no")?
+                .to_string()
+                .into(),
+            text: json
+                .get("oracle_text")
+                .and_then(Value::as_str)
+                .ok_or_eyre("Oh no")?
+                .to_string(),
             card_identifiers: CardIdentifiers {
                 scryfall_id: card_id.clone(),
                 id: card_id.clone(),

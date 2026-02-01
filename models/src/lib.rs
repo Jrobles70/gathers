@@ -92,10 +92,10 @@ impl Display for CardColour {
 impl From<String> for Rarity {
     fn from(value: String) -> Self {
         match value.as_str() {
-            "Common" => Rarity::Common,
-            "Uncommon" => Rarity::Uncommon,
-            "Rare" => Rarity::Rare,
-            "Mythic" => Rarity::Mythic,
+            "Common" | "common" | "c" => Rarity::Common,
+            "Uncommon" | "uncommon" | "u" => Rarity::Uncommon,
+            "Rare" | "rare" | "r" => Rarity::Rare,
+            "Mythic" | "mythic" | "m" => Rarity::Mythic,
             "Special" => Rarity::Special,
             _ => Rarity::Common,
         }
