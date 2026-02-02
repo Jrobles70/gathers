@@ -1,9 +1,15 @@
 mod sqlite;
+use std::io;
+
 use models::CardID;
 use models::CollectionCard;
 use models::CollectionID;
+use retrieval::RetrievalSystem;
+use retrieval::RetrievalSystemTrait;
 
 pub use crate::sqlite::SQLitePersistenceSystem;
+
+mod csv_models;
 
 #[derive(Debug, Clone)]
 pub enum PersistenceSystem {
@@ -127,5 +133,54 @@ impl PersistenceSystemTrait for PersistenceSystem {
                     .await
             }
         }
+    }
+}
+
+impl PersistenceSystem {
+    pub async fn import_csv(
+        &self,
+        content: String,
+        retrieval: RetrievalSystem,
+        progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+    ) -> eyre::Result<()> {
+        // Get all cards
+        let mut rdr = csv::Reader::from_path("/home/mihail/repos/gathers/test.csv")?;
+        let mut cards = vec![];
+        for result in rdr.deserialize() {
+            // Notice that we need to provide a type hint for automatic
+            // deserialization.
+            let record: csv_models::CSVCard = result?;
+            cards.push(record);
+        }
+        let cards = retrieval
+            .bulk_search_cards(
+                cards
+                    .iter()
+                    .map(|c| (c.set_code.clone(), c.collector_number.clone()))
+                    .collect(),
+            )
+            .await?;
+        println!("{cards:?}");
+        // retrieval.get_cards_by_ids(cards.iter().map(|c| c))
+        // retrieve actual cards from retrieval
+        // self.add_collection(new_based_on_filename)
+        // for card in cards {
+        // self.add_card_to_collection(cards)
+        // sender.send(progress)
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use retrieval::SQLiteRetrievalSystem;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn migrations_csv_import() {
+        let mut s = PersistenceSystem::Database(SQLitePersistenceSystem::new(true, None).unwrap());
+        let r = RetrievalSystem::Database(SQLiteRetrievalSystem::new(None).unwrap());
+        let cards = s.import_csv("".to_string(), r, None).await.unwrap();
     }
 }

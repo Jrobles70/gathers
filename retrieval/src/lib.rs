@@ -2,6 +2,7 @@ mod systems;
 
 use std::collections::HashMap;
 
+use models::{CardID, CollectorNumber, SetCode};
 pub use systems::scryfall::ScryfallRetrievalSystem;
 pub use systems::sqlite::SQLiteRetrievalSystem;
 
@@ -26,6 +27,10 @@ pub trait RetrievalSystemTrait {
     ) -> eyre::Result<HashMap<String, models::Card>>;
 
     async fn get_sets(&self) -> eyre::Result<Vec<models::Set>>;
+    async fn bulk_search_cards(
+        &self,
+        cards: Vec<(SetCode, CollectorNumber)>,
+    ) -> eyre::Result<Vec<CardID>>;
 }
 
 #[async_trait::async_trait]
@@ -56,6 +61,16 @@ impl RetrievalSystemTrait for RetrievalSystem {
         match self {
             RetrievalSystem::Scryfall(d) => d.get_sets().await,
             RetrievalSystem::Database(d) => d.get_sets().await,
+        }
+    }
+
+    async fn bulk_search_cards(
+        &self,
+        cards: Vec<(SetCode, CollectorNumber)>,
+    ) -> eyre::Result<Vec<CardID>> {
+        match self {
+            RetrievalSystem::Scryfall(d) => d.bulk_search_cards(cards).await,
+            RetrievalSystem::Database(d) => d.bulk_search_cards(cards).await,
         }
     }
 }

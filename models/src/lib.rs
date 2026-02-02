@@ -10,12 +10,14 @@ pub type CardText = String;
 pub type CardName = String;
 pub type SetName = String;
 pub type CollectionID = String;
+pub type CollectorNumber = String;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Card {
     pub id: CardID,
     pub name: CardName,
     pub set_code: SetCode,
+    pub collector_number: CollectorNumber,
     pub rarity: Rarity,
     pub artist: Artist,
     pub color_identity: Vec<CardColour>,
@@ -71,6 +73,7 @@ impl Default for Card {
                 id: "-1".to_string(),
                 scryfall_id: "".to_string(),
             },
+            collector_number: "".to_string(),
         }
     }
 }

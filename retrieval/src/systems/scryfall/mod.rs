@@ -6,7 +6,10 @@ use serde_json::Value;
 #[derive(Debug, Clone)]
 pub struct ScryfallRetrievalSystem {}
 
-use models::{filters::CardSearchFilters, Card, CardColour, CardIdentifiers, Rarity};
+use models::{
+    filters::CardSearchFilters, Card, CardColour, CardID, CardIdentifiers, CollectorNumber, Rarity,
+    SetCode,
+};
 
 use crate::RetrievalSystemTrait;
 
@@ -94,6 +97,11 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                 scryfall_id: card_id.clone(),
                 id: card_id.clone(),
             },
+            collector_number: json
+                .get("collector_number")
+                .and_then(Value::as_str)
+                .ok_or_eyre("Oh no")?
+                .to_string(),
         }])
     }
 
@@ -107,6 +115,12 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
 
     async fn get_sets(&self) -> eyre::Result<Vec<models::Set>> {
         // TODO: implement this
+        Ok(vec![])
+    }
+    async fn bulk_search_cards(
+        &self,
+        cards: Vec<(SetCode, CollectorNumber)>,
+    ) -> eyre::Result<Vec<CardID>> {
         Ok(vec![])
     }
 }

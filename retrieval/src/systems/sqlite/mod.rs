@@ -2,7 +2,7 @@ mod models;
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::models::{filters::CardSearchFilters, Card, Set};
+use ::models::{filters::CardSearchFilters, Card, CardID, CollectorNumber, Set, SetCode};
 use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
 use tokio::sync::Mutex;
@@ -34,7 +34,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
     ) -> eyre::Result<Vec<Card>> {
         let conn = self.connection.lock().await;
         let mut query =
-            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
                 .to_string();
         let mut conditions = Vec::new();
         let mut params = Vec::new();
@@ -102,6 +102,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
                     scryfall_id: row.get(7)?,
                     id: row.get(0)?,
                 },
+                collector_number: row.get(8)?,
             })
         })?;
 
@@ -115,7 +116,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
-            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
             );
         let mut stmt = conn.prepare(&query)?;
         let iter = stmt.query_map(rusqlite::params_from_iter(ids), |row| {
@@ -131,6 +132,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
                     scryfall_id: row.get(7)?,
                     id: row.get(0)?,
                 },
+                collector_number: row.get(8)?,
             })
         })?;
         Ok(iter
@@ -150,5 +152,26 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
             })
         })?;
         Ok(iter.flatten().collect())
+    }
+
+    async fn bulk_search_cards(
+        &self,
+        cards: Vec<(SetCode, CollectorNumber)>,
+    ) -> eyre::Result<Vec<CardID>> {
+        let conn = self.connection.lock().await;
+        // TODO: sanitise inputs
+        let placeholders = cards
+            .iter()
+            .map(|c| format!("('{}', '{}')", c.0, c.1))
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT uuid FROM cards WHERE (setCode, number) IN (VALUES {});",
+            placeholders
+        );
+        println!("{query}");
+        let mut stmt = conn.prepare(&query)?;
+        let iter = stmt.query_map([], |row| row.get(0))?;
+        Ok(iter.flatten().map(|c: String| c).collect())
     }
 }

@@ -16,6 +16,7 @@ pub struct SqlCard {
     pub color_identity: String,
     pub text: String,
     pub card_identifiers: SqlCardIdentifiers,
+    pub collector_number: String,
 }
 
 impl From<SqlCard> for Card {
@@ -51,6 +52,7 @@ impl From<SqlCard> for Card {
                 id: value.card_identifiers.id,
                 scryfall_id: value.card_identifiers.scryfall_id,
             },
+            collector_number: value.collector_number,
         }
     }
 }
