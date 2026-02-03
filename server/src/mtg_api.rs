@@ -94,10 +94,21 @@ pub fn mtg_routes() -> Router<GathersState> {
     }
 
     async fn update(
-        State(_state): State<GathersState>,
+        State(state): State<GathersState>,
     ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
-        // Placeholder implementation for update
-        Ok(Json("Update successful".to_string()))
+        // Get hash of latest version
+        // Compare hash with existing saved hash, if any
+        // Download new version if hashes don't match
+        // Reload state
+        match state.lock().await.reload_retrieval() {
+            Ok(()) => Ok(Json("Update successful".to_string())),
+            _ => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: "Oof".into(),
+                }),
+            )),
+        }
     }
 
     Router::new()

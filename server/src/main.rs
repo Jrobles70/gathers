@@ -20,6 +20,47 @@ type GathersState = Arc<Mutex<AppState>>;
 struct AppState {
     retrieval: RetrievalSystem,
     storage: PersistenceSystem,
+    system: Systems,
+    retrieval_db_path: Option<String>,
+    storage_db_path: Option<String>,
+}
+
+impl AppState {
+    pub fn new(
+        system: Systems,
+        retrieval_db_path: Option<String>,
+        storage_db_path: Option<String>,
+    ) -> eyre::Result<Self> {
+        Ok(AppState {
+            retrieval: AppState::new_retrieval(system, retrieval_db_path.clone())?,
+            storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(
+                false,
+                storage_db_path.clone(),
+            )?),
+            system,
+            retrieval_db_path,
+            storage_db_path,
+        })
+    }
+
+    pub fn new_retrieval(
+        system: Systems,
+        retrieval_db_path: Option<String>,
+    ) -> eyre::Result<RetrievalSystem> {
+        Ok(match system {
+            Systems::Scryfall => {
+                RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?)
+            }
+            Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(
+                retrieval_db_path.clone(),
+            )?),
+        })
+    }
+
+    pub fn reload_retrieval(&mut self) -> eyre::Result<()> {
+        self.retrieval = AppState::new_retrieval(self.system, self.retrieval_db_path.clone())?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -53,20 +94,11 @@ async fn main() -> eyre::Result<()> {
         .ok()
         .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
 
-    let state = Arc::new(Mutex::new(AppState {
-        retrieval: match args.system {
-            Systems::Scryfall => {
-                RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?)
-            }
-            Systems::Sql => {
-                RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(retrieval_db_path)?)
-            }
-        },
-        storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(
-            false,
-            storage_db_path,
-        )?),
-    }));
+    let state = Arc::new(Mutex::new(AppState::new(
+        args.system,
+        retrieval_db_path,
+        storage_db_path,
+    )?));
 
     let app = Router::new()
         .nest("/mtg", mtg_routes())

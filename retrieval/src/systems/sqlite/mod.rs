@@ -143,7 +143,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
 
     async fn get_sets(&self) -> eyre::Result<Vec<Set>> {
         let conn = self.connection.lock().await;
-        let query = "SELECT DISTINCT setCode FROM cards LIMIT 20".to_string();
+        let query = "SELECT DISTINCT setCode FROM cards".to_string();
         let mut stmt = conn.prepare(&query)?;
         let iter = stmt.query_map([], |row| {
             Ok(Set {
