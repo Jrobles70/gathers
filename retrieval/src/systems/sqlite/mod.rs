@@ -157,7 +157,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
     async fn bulk_search_cards(
         &self,
         cards: Vec<(SetCode, CollectorNumber)>,
-    ) -> eyre::Result<Vec<CardID>> {
+    ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>> {
         let conn = self.connection.lock().await;
         // TODO: sanitise inputs
         let placeholders = cards
@@ -166,12 +166,15 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
             .collect::<Vec<_>>()
             .join(",");
         let query = format!(
-            "SELECT uuid FROM cards WHERE (setCode, number) IN (VALUES {});",
+            "SELECT uuid, setCode, number FROM cards WHERE (setCode, number) IN (VALUES {});",
             placeholders
         );
         println!("{query}");
         let mut stmt = conn.prepare(&query)?;
-        let iter = stmt.query_map([], |row| row.get(0))?;
-        Ok(iter.flatten().map(|c: String| c).collect())
+        let iter = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        Ok(iter
+            .flatten()
+            .map(|c: (String, String, String)| c)
+            .collect())
     }
 }

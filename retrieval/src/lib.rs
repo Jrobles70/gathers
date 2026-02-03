@@ -30,7 +30,7 @@ pub trait RetrievalSystemTrait {
     async fn bulk_search_cards(
         &self,
         cards: Vec<(SetCode, CollectorNumber)>,
-    ) -> eyre::Result<Vec<CardID>>;
+    ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>>;
 }
 
 #[async_trait::async_trait]
@@ -67,7 +67,7 @@ impl RetrievalSystemTrait for RetrievalSystem {
     async fn bulk_search_cards(
         &self,
         cards: Vec<(SetCode, CollectorNumber)>,
-    ) -> eyre::Result<Vec<CardID>> {
+    ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>> {
         match self {
             RetrievalSystem::Scryfall(d) => d.bulk_search_cards(cards).await,
             RetrievalSystem::Database(d) => d.bulk_search_cards(cards).await,

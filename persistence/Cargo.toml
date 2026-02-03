@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 async-trait = "0.1.89"
+chrono.workspace = true
 csv = "1.4.0"
 eyre.workspace = true
 models = { path = "../models/" }

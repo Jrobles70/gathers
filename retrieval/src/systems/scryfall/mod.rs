@@ -117,10 +117,11 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         // TODO: implement this
         Ok(vec![])
     }
+
     async fn bulk_search_cards(
         &self,
         cards: Vec<(SetCode, CollectorNumber)>,
-    ) -> eyre::Result<Vec<CardID>> {
+    ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>> {
         Ok(vec![])
     }
 }
