@@ -2,7 +2,7 @@ mod models;
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::models::{filters::CardSearchFilters, Card, CardID, CollectorNumber, Set, SetCode};
+use ::models::{filters::CardSearchFilters, CardID, CollectorNumber, MagicCard, Set, SetCode};
 use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
 use tokio::sync::Mutex;
@@ -10,11 +10,11 @@ use tokio::sync::Mutex;
 use crate::RetrievalSystemTrait;
 
 #[derive(Debug, Clone)]
-pub struct SQLiteRetrievalSystem {
+pub struct MagicSQLiteRetrievalSystem {
     connection: Arc<tokio::sync::Mutex<Connection>>,
 }
 
-impl SQLiteRetrievalSystem {
+impl MagicSQLiteRetrievalSystem {
     pub fn new(db_path: Option<String>) -> eyre::Result<Self> {
         let path = db_path
             .unwrap_or_else(|| "/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string());
@@ -25,13 +25,13 @@ impl SQLiteRetrievalSystem {
 }
 
 #[async_trait::async_trait]
-impl RetrievalSystemTrait for SQLiteRetrievalSystem {
+impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
     async fn search_cards(
         &self,
         filters: CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<Card>> {
+    ) -> eyre::Result<Vec<MagicCard>> {
         let conn = self.connection.lock().await;
         let mut query =
             "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
@@ -112,7 +112,7 @@ impl RetrievalSystemTrait for SQLiteRetrievalSystem {
             .collect())
     }
 
-    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, Card>> {
+    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, MagicCard>> {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(

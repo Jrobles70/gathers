@@ -1,4 +1,4 @@
-use models::{Card, CardColour};
+use models::{CardColour, MagicCard};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqlCardIdentifiers {
@@ -19,7 +19,7 @@ pub struct SqlCard {
     pub collector_number: String,
 }
 
-impl From<SqlCard> for Card {
+impl From<SqlCard> for MagicCard {
     fn from(value: SqlCard) -> Self {
         let colours: Vec<CardColour> = value
             .color_identity
@@ -40,7 +40,7 @@ impl From<SqlCard> for Card {
         } else {
             colours
         };
-        Card {
+        MagicCard {
             id: value.id,
             name: value.name,
             set_code: value.set_code,

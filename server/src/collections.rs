@@ -139,6 +139,7 @@ pub fn collection_routes() -> Router<GathersState> {
         uuid: String,
         quantity: i32,
         foil_quantity: i32,
+        provider: String,
     ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
         let now = chrono::Utc::now();
         let now_str = now.to_rfc3339();
@@ -150,6 +151,7 @@ pub fn collection_routes() -> Router<GathersState> {
                 quantity,
                 foil_quantity,
                 now_str,
+                provider,
             )
             .await
         {
@@ -188,6 +190,8 @@ pub fn collection_routes() -> Router<GathersState> {
             input.id,
             input.quantity,
             input.foil_quantity,
+            // TODO: actually set provider
+            "".to_string(),
         )
         .await
     }
@@ -209,6 +213,7 @@ pub fn collection_routes() -> Router<GathersState> {
             input.id,
             -input.quantity,
             -input.foil_quantity,
+            "".to_string(),
         )
         .await
     }

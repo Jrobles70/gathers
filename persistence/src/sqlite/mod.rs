@@ -91,6 +91,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 -(c.quantity as i32),
                 -(c.foil_quantity as i32),
                 c.time_added.clone(),
+                "".to_string(),
             )
             .await?;
 
@@ -100,6 +101,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 c.quantity as i32,
                 c.foil_quantity as i32,
                 c.time_added,
+                c.provider,
             )
             .await?;
         }
@@ -152,6 +154,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         quantity: i32,
         foil_quantity: i32,
         time_added: String,
+        provider: String,
     ) -> eyre::Result<CollectionCard> {
         let conn = self.connection.lock().await;
 
@@ -184,6 +187,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                         foil_quantity: 0,
                         time_added: "".to_string(),
                         collection: "".to_string(),
+                        provider,
                     });
                 } else {
                     // Update the existing card
@@ -198,6 +202,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                         foil_quantity: new_foil_quantity,
                         time_added,
                         collection: collection_id,
+                        provider,
                     });
                 }
             }
@@ -215,6 +220,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                     foil_quantity: foil_quantity.max(0) as u32,
                     time_added,
                     collection: collection_id,
+                    provider,
                 });
             }
         }
@@ -243,6 +249,8 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                     foil_quantity,
                     time_added,
                     collection: collection_id.clone(),
+                    // TODO: actually return value
+                    provider: "".to_string(),
                 })
             })?;
 
@@ -282,6 +290,7 @@ mod tests {
                 5,
                 2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -315,6 +324,7 @@ mod tests {
                 5,
                 2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -327,6 +337,7 @@ mod tests {
                 3,
                 1,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -380,6 +391,7 @@ mod tests {
                 5,
                 2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -465,6 +477,7 @@ mod tests {
                 2,
                 1,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -487,6 +500,7 @@ mod tests {
                 3,
                 2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -509,6 +523,7 @@ mod tests {
                 -3,
                 -1,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -531,6 +546,7 @@ mod tests {
                 -2,
                 -2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -562,6 +578,7 @@ mod tests {
                     1,
                     0,
                     "2023-01-01T00:00:00Z".to_string(),
+                    "".to_string(),
                 )
                 .await
                 .unwrap();
@@ -622,6 +639,7 @@ mod tests {
                 5,
                 3,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -637,6 +655,7 @@ mod tests {
                 2,
                 8,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -686,6 +705,7 @@ mod tests {
                 5,
                 3,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -708,6 +728,7 @@ mod tests {
                 -2,
                 -8,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -729,6 +750,7 @@ mod tests {
                 -10,
                 -10,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -763,6 +785,7 @@ mod tests {
                 5,
                 2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -773,6 +796,7 @@ mod tests {
                 3,
                 1,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -831,6 +855,7 @@ mod tests {
                 5,
                 2,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -842,6 +867,7 @@ mod tests {
                 3,
                 1,
                 "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
             )
             .await
             .unwrap();
@@ -861,6 +887,7 @@ mod tests {
                     foil_quantity: 0,
                     time_added: "".to_string(),
                     collection: collection_id.clone(),
+                    provider: "".to_string(),
                 }]
                 .to_vec(),
                 "Default".to_string(),

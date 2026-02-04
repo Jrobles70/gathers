@@ -4,12 +4,12 @@ use std::collections::HashMap;
 
 use models::{CardID, CollectorNumber, SetCode};
 pub use systems::scryfall::ScryfallRetrievalSystem;
-pub use systems::sqlite::SQLiteRetrievalSystem;
+pub use systems::sqlite::MagicSQLiteRetrievalSystem;
 
 #[derive(Debug, Clone)]
 pub enum RetrievalSystem {
     Scryfall(ScryfallRetrievalSystem),
-    Database(SQLiteRetrievalSystem),
+    Database(MagicSQLiteRetrievalSystem),
 }
 
 #[async_trait::async_trait]
@@ -19,12 +19,12 @@ pub trait RetrievalSystemTrait {
         filters: models::filters::CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<models::Card>>;
+    ) -> eyre::Result<Vec<models::MagicCard>>;
 
     async fn get_cards_by_ids(
         &self,
         ids: Vec<String>,
-    ) -> eyre::Result<HashMap<String, models::Card>>;
+    ) -> eyre::Result<HashMap<String, models::MagicCard>>;
 
     async fn get_sets(&self) -> eyre::Result<Vec<models::Set>>;
     async fn bulk_search_cards(
@@ -40,7 +40,7 @@ impl RetrievalSystemTrait for RetrievalSystem {
         filters: models::filters::CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<models::Card>> {
+    ) -> eyre::Result<Vec<models::MagicCard>> {
         match self {
             RetrievalSystem::Scryfall(d) => d.search_cards(filters, skip, limit).await,
             RetrievalSystem::Database(d) => d.search_cards(filters, skip, limit).await,
@@ -50,7 +50,7 @@ impl RetrievalSystemTrait for RetrievalSystem {
     async fn get_cards_by_ids(
         &self,
         ids: Vec<String>,
-    ) -> eyre::Result<HashMap<String, models::Card>> {
+    ) -> eyre::Result<HashMap<String, models::MagicCard>> {
         match self {
             RetrievalSystem::Scryfall(d) => d.get_cards_by_ids(ids).await,
             RetrievalSystem::Database(d) => d.get_cards_by_ids(ids).await,

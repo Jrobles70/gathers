@@ -13,7 +13,7 @@ pub type CollectionID = String;
 pub type CollectorNumber = String;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct Card {
+pub struct MagicCard {
     pub id: CardID,
     pub name: CardName,
     pub set_code: SetCode,
@@ -59,9 +59,9 @@ pub struct Set {
     pub code: SetCode,
 }
 
-impl Default for Card {
-    fn default() -> Card {
-        Card {
+impl Default for MagicCard {
+    fn default() -> MagicCard {
+        MagicCard {
             id: "".to_string(),
             name: "".to_string(),
             set_code: "".to_string(),
@@ -112,6 +112,7 @@ pub struct CollectionCard {
     pub foil_quantity: u32,
     pub time_added: String,
     pub collection: CollectionID,
+    pub provider: String,
 }
 
 #[derive(Debug, Clone)]

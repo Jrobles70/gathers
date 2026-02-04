@@ -7,8 +7,8 @@ use serde_json::Value;
 pub struct ScryfallRetrievalSystem {}
 
 use models::{
-    filters::CardSearchFilters, Card, CardColour, CardID, CardIdentifiers, CollectorNumber, Rarity,
-    SetCode,
+    filters::CardSearchFilters, CardColour, CardID, CardIdentifiers, CollectorNumber, MagicCard,
+    Rarity, SetCode,
 };
 
 use crate::RetrievalSystemTrait;
@@ -26,7 +26,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         filters: CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<Card>> {
+    ) -> eyre::Result<Vec<MagicCard>> {
         let url = format!(
             "https://api.scryfall.com/cards/named?fuzzy={}",
             filters.name.unwrap_or("panharmonicon".to_string())
@@ -51,7 +51,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
             .and_then(Value::as_str)
             .ok_or_eyre("Could not retrieve id")?
             .to_string();
-        Ok(vec![models::Card {
+        Ok(vec![models::MagicCard {
             name: card_name.to_string(),
             set_code: json
                 .get("set")
@@ -108,7 +108,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
     async fn get_cards_by_ids(
         &self,
         ids: Vec<String>,
-    ) -> eyre::Result<HashMap<String, models::Card>> {
+    ) -> eyre::Result<HashMap<String, models::MagicCard>> {
         // TODO: implement this
         Ok(HashMap::new())
     }

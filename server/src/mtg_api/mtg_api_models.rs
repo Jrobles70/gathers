@@ -1,4 +1,4 @@
-use models::{Card, CardColour, CardIdentifiers, Rarity};
+use models::{CardColour, CardIdentifiers, MagicCard, Rarity};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -23,8 +23,8 @@ pub struct APICardIdentifiers {
     pub scryfall_id: String,
 }
 
-impl From<Card> for APICard {
-    fn from(value: Card) -> Self {
+impl From<MagicCard> for APICard {
+    fn from(value: MagicCard) -> Self {
         APICard {
             id: value.id,
             name: value.name,

@@ -39,6 +39,7 @@ pub trait PersistenceSystemTrait {
         quantity: i32,
         foil_quantity: i32,
         time_added: String,
+        provider: String,
     ) -> eyre::Result<CollectionCard>;
 
     async fn get_cards_in_collection_paginated(
@@ -106,6 +107,7 @@ impl PersistenceSystemTrait for PersistenceSystem {
         quantity: i32,
         foil_quantity: i32,
         time_added: String,
+        provider: String,
     ) -> eyre::Result<CollectionCard> {
         match self {
             PersistenceSystem::Database(d) => {
@@ -115,6 +117,7 @@ impl PersistenceSystemTrait for PersistenceSystem {
                     quantity,
                     foil_quantity,
                     time_added,
+                    provider,
                 )
                 .await
             }
@@ -183,6 +186,8 @@ impl PersistenceSystem {
                 c.1 as i32,
                 c.2 as i32,
                 time_added.clone(),
+                // TODO: retrieval.something
+                "".to_string(),
             )
             .await?;
 
@@ -197,7 +202,7 @@ impl PersistenceSystem {
 
 #[cfg(test)]
 mod tests {
-    use retrieval::SQLiteRetrievalSystem;
+    use retrieval::MagicSQLiteRetrievalSystem;
 
     use super::*;
 
@@ -211,7 +216,7 @@ mod tests {
         let (sender, receiver) = tokio::sync::watch::channel(0.0);
 
         let mut s = PersistenceSystem::Database(SQLitePersistenceSystem::new(true, None).unwrap());
-        let r = RetrievalSystem::Database(SQLiteRetrievalSystem::new(None).unwrap());
+        let r = RetrievalSystem::Database(MagicSQLiteRetrievalSystem::new(None).unwrap());
         s.import_csv(
             "/home/mihail/repos/gathers/test.csv".to_string(),
             r,

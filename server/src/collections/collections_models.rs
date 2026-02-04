@@ -55,6 +55,8 @@ impl From<&CollectionCard> for models::CollectionCard {
             foil_quantity: value.foil_quantity,
             collection: value.collection_id.to_string(),
             time_added: value.time_added.to_string(),
+            // TODO: add?
+            provider: "".to_string(),
         }
     }
 }

@@ -51,7 +51,7 @@ impl AppState {
             Systems::Scryfall => {
                 RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?)
             }
-            Systems::Sql => RetrievalSystem::Database(retrieval::SQLiteRetrievalSystem::new(
+            Systems::Sql => RetrievalSystem::Database(retrieval::MagicSQLiteRetrievalSystem::new(
                 retrieval_db_path.clone(),
             )?),
         })
