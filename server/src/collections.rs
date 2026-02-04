@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use models::filters::CardSearchFilters;
 use persistence::{PersistenceSystem, PersistenceSystemTrait};
 use reqwest::StatusCode;
-use retrieval::RetrievalSystemTrait;
+use retrieval::{NamedRetrievalSystem as _, RetrievalSystemTrait};
 use serde::Serialize;
 
 use crate::{
@@ -31,7 +31,7 @@ pub fn collection_routes() -> Router<GathersState> {
     async fn list(
         State(state): State<GathersState>,
     ) -> Result<Json<Vec<Collection>>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &state.lock().await.storage;
+        let storage = &state.1.lock().await.storage;
 
         match storage.list_collections().await {
             Ok(collections) => Ok(Json(
@@ -53,7 +53,7 @@ pub fn collection_routes() -> Router<GathersState> {
         State(state): State<GathersState>,
         Json(input): Json<Collection>,
     ) -> Result<Json<CollectionAddResponse>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &mut state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
 
         match storage.add_collection(input.id.clone()).await {
             Ok(collection_id) => Ok(Json(CollectionAddResponse {
@@ -73,7 +73,7 @@ pub fn collection_routes() -> Router<GathersState> {
         State(state): State<GathersState>,
         Path(id): Path<String>,
     ) -> Result<Json<CollectionRemoveResponse>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &mut state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
 
         // TODO: allow setting the "move to collection" instead of None
         match storage.remove_collection(id, None).await {
@@ -93,7 +93,7 @@ pub fn collection_routes() -> Router<GathersState> {
         Path(to_collection_id): Path<String>,
         Json(input): Json<Vec<CollectionCard>>,
     ) -> Result<Json<()>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &mut state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
 
         match storage
             .move_cards_between_collections(
@@ -178,7 +178,9 @@ pub fn collection_routes() -> Router<GathersState> {
         Path(collection_id): Path<String>,
         Json(input): Json<CardToAdd>,
     ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &mut state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
+        let ret = &state.0.lock().await.retrieval;
+        let provider = ret.name().to_string();
 
         if let Err(e) = validate_collection(storage, &collection_id).await {
             return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
@@ -191,7 +193,8 @@ pub fn collection_routes() -> Router<GathersState> {
             input.quantity,
             input.foil_quantity,
             // TODO: actually set provider
-            "".to_string(),
+            // "MagicSQLiteRetrievalSystem".to_string(),
+            provider,
         )
         .await
     }
@@ -201,7 +204,7 @@ pub fn collection_routes() -> Router<GathersState> {
         Path(collection_id): Path<String>,
         Json(input): Json<CardToAdd>,
     ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &mut state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
 
         if let Err(e) = validate_collection(storage, &collection_id).await {
             return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
@@ -223,7 +226,7 @@ pub fn collection_routes() -> Router<GathersState> {
         Path(collection_id): Path<String>,
         Query(query): Query<CollectionCardsQuery>,
     ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
 
         match storage
             .get_cards_in_collection_paginated(collection_id.clone(), query.offset, query.limit)
@@ -259,7 +262,7 @@ pub fn collection_routes() -> Router<GathersState> {
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
     ) -> Result<Json<usize>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &state.lock().await.storage;
+        let storage = &mut state.1.lock().await.storage;
 
         match storage.get_cards_in_collection_count(collection_id).await {
             Ok(count) => Ok(Json(count)),
@@ -277,7 +280,7 @@ pub fn collection_routes() -> Router<GathersState> {
         Query(query): Query<SearchQuery>,
         Json(input): Json<CardSearchFilters>,
     ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.lock().await.retrieval;
+        let ret = &state.0.lock().await.retrieval;
 
         match ret
             .search_cards(input, query.offset.into(), (query.page_size + 1).into())
@@ -306,13 +309,14 @@ pub fn collection_routes() -> Router<GathersState> {
             )),
         }
     }
-    async fn search(
-        State(state): State<GathersState>,
-        Query(query): Query<SearchQuery>,
-        Json(input): Json<CardSearchFilters>,
-    ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
-        Ok(Json(vec![]))
-    }
+
+    // async fn search(
+    //     State(state): State<GathersState>,
+    //     Query(query): Query<SearchQuery>,
+    //     Json(input): Json<CardSearchFilters>,
+    // ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
+    //     Ok(Json(vec![]))
+    // }
 
     Router::new()
         .route("/list", get(list))

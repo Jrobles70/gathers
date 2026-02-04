@@ -53,9 +53,9 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         let conn = self.connection.lock().await;
 
         if let Some(target_collection_id) = move_to {
-            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded)
-            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded FROM
-	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded FROM cards WHERE collection = ?2) WHERE true
+            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, provider)
+            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, provider FROM
+	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded, provider FROM cards WHERE collection = ?2) WHERE true
             ON CONFLICT (uuid, collection)
             DO UPDATE SET
                 quantity = cards.quantity + EXCLUDED.quantity,
@@ -87,18 +87,18 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             self.add_card_to_collection(
                 c.collection.clone(),
                 c.uuid.clone(),
-                -(c.quantity as i32),
-                -(c.foil_quantity as i32),
+                -c.quantity,
+                -c.foil_quantity,
                 c.time_added.clone(),
-                "".to_string(),
+                c.provider.clone(),
             )
             .await?;
 
             self.add_card_to_collection(
                 to_collection_id.clone(),
                 c.uuid,
-                c.quantity as i32,
-                c.foil_quantity as i32,
+                c.quantity,
+                c.foil_quantity,
                 c.time_added,
                 c.provider,
             )
@@ -178,10 +178,10 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         cards: Vec<CollectionCard>,
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
-        // Upsert with max(val, 0) for each quantity
+
         let placeholders = cards
             .iter()
-            .map(|_| "(?, ?, ?, ?, ?)")
+            .map(|_| "(?, ?, ?, ?, ?, ?)")
             .collect::<Vec<_>>()
             .join(",");
         let mut params = vec![];
@@ -191,15 +191,16 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             params.push(c.quantity.to_string());
             params.push(c.foil_quantity.to_string());
             params.push(c.time_added.clone());
+            params.push(c.provider.clone());
         });
         let query = format!(
             "
-INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded) 
+INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, provider) 
 VALUES {}
 ON CONFLICT (uuid, collection) DO UPDATE SET 
  quantity = max(cards.quantity + EXCLUDED.quantity, 0),
  foilquantity = max(cards.foilquantity + EXCLUDED.foilquantity, 0)
-RETURNING uuid, collection, quantity, foilquantity, timeadded
+RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
 ",
             placeholders
         );
@@ -211,7 +212,7 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded
                 foil_quantity: row.get(3)?,
                 time_added: row.get(4)?,
                 collection: row.get(1)?,
-                provider: "".to_string(),
+                provider: row.get(5)?,
             })
         })?;
         let mut cards = Vec::new();
@@ -235,7 +236,7 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded
         let conn = self.connection.lock().await;
 
         let mut stmt = conn.prepare(
-            "SELECT uuid, quantity, foilquantity, timeadded FROM cards WHERE collection = ?1 LIMIT ?2 OFFSET ?3",
+            "SELECT uuid, quantity, foilquantity, timeadded, provider FROM cards WHERE collection = ?1 LIMIT ?2 OFFSET ?3",
         )?;
         let card_iter =
             stmt.query_map(params![collection_id, limit as u32, offset as u32], |row| {
@@ -249,8 +250,7 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded
                     foil_quantity,
                     time_added,
                     collection: collection_id.clone(),
-                    // TODO: actually return value
-                    provider: "".to_string(),
+                    provider: row.get(4)?,
                 })
             })?;
 

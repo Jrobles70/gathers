@@ -33,7 +33,7 @@ pub fn mtg_routes() -> Router<GathersState> {
         Query(query): Query<SearchQuery>,
         Json(input): Json<CardSearchFilters>,
     ) -> Result<Json<Vec<APICard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.lock().await.retrieval;
+        let ret = &state.0.lock().await.retrieval;
 
         match ret
             .search_cards(input, query.skip.into(), query.limit.into())
@@ -59,7 +59,7 @@ pub fn mtg_routes() -> Router<GathersState> {
         State(state): State<GathersState>,
         axum_extra::extract::Query(query): axum_extra::extract::Query<RetrieveQuery>,
     ) -> Result<Json<HashMap<String, APICard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.lock().await.retrieval;
+        let ret = &state.0.lock().await.retrieval;
 
         ret.get_cards_by_ids(query.ids)
             .await
@@ -78,7 +78,7 @@ pub fn mtg_routes() -> Router<GathersState> {
     async fn get_sets(
         State(state): State<GathersState>,
     ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.lock().await.retrieval;
+        let ret = &state.0.lock().await.retrieval;
 
         ret.get_sets()
             .await
@@ -100,7 +100,7 @@ pub fn mtg_routes() -> Router<GathersState> {
         // Compare hash with existing saved hash, if any
         // Download new version if hashes don't match
         // Reload state
-        match state.lock().await.reload_retrieval() {
+        match state.0.lock().await.reload_retrieval() {
             Ok(()) => Ok(Json("Update successful".to_string())),
             _ => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,

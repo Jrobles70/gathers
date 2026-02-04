@@ -1,5 +1,6 @@
 mod systems;
 
+use std::any::type_name;
 use std::collections::HashMap;
 
 use enum_dispatch::enum_dispatch;
@@ -34,3 +35,11 @@ pub trait RetrievalSystemTrait {
         cards: Vec<(SetCode, CollectorNumber)>,
     ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>>;
 }
+
+pub trait NamedRetrievalSystem {
+    fn name(&self) -> &str {
+        type_name::<Self>()
+    }
+}
+
+impl NamedRetrievalSystem for RetrievalSystem {}

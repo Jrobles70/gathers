@@ -7,7 +7,9 @@ use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
 use tokio::sync::Mutex;
 
-use crate::RetrievalSystemTrait;
+use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
+
+impl NamedRetrievalSystem for MagicSQLiteRetrievalSystem {}
 
 #[derive(Debug, Clone)]
 pub struct MagicSQLiteRetrievalSystem {

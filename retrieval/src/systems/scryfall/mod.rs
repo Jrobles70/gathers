@@ -1,17 +1,18 @@
 use std::collections::HashMap;
 
 use eyre::OptionExt;
-use serde_json::Value;
-
-#[derive(Debug, Clone)]
-pub struct ScryfallRetrievalSystem {}
-
 use models::{
     filters::CardSearchFilters, CardColour, CardID, CardIdentifiers, CollectorNumber, MagicCard,
     SetCode,
 };
+use serde_json::Value;
 
-use crate::RetrievalSystemTrait;
+use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
+
+#[derive(Debug, Clone)]
+pub struct ScryfallRetrievalSystem {}
+
+impl NamedRetrievalSystem for ScryfallRetrievalSystem {}
 
 impl ScryfallRetrievalSystem {
     pub fn new() -> eyre::Result<Self> {

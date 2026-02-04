@@ -9,6 +9,7 @@ CREATE TABLE cards(
   quantity INTEGER NOT NULL,
   foilquantity INTEGER NOT NULL,
   timeadded TEXT NULL,
+  provider TEXT NOT NULL,
   PRIMARY KEY (uuid, collection)
 );
 

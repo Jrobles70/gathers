@@ -14,31 +14,27 @@ use crate::mtg_api::mtg_routes;
 mod collections;
 mod mtg_api;
 
-type GathersState = Arc<Mutex<AppState>>;
+type GathersState = (Arc<Mutex<RetrievalState>>, Arc<Mutex<StorageState>>);
 
 #[derive(Debug, Clone)]
-struct AppState {
+pub struct RetrievalState {
     retrieval: RetrievalSystem,
-    storage: PersistenceSystem,
     system: Systems,
     retrieval_db_path: Option<String>,
-    storage_db_path: Option<String>,
 }
 
-impl AppState {
-    pub fn new(
-        system: Systems,
-        retrieval_db_path: Option<String>,
-        storage_db_path: Option<String>,
-    ) -> eyre::Result<Self> {
-        Ok(AppState {
-            retrieval: AppState::new_retrieval(system, retrieval_db_path.clone())?,
-            storage: PersistenceSystem::SQLitePersistenceSystem(
-                persistence::SQLitePersistenceSystem::new(false, storage_db_path.clone())?,
-            ),
+#[derive(Debug, Clone)]
+pub struct StorageState {
+    storage: PersistenceSystem,
+    _storage_db_path: Option<String>,
+}
+
+impl RetrievalState {
+    pub fn new(system: Systems, retrieval_db_path: Option<String>) -> eyre::Result<RetrievalState> {
+        Ok(RetrievalState {
+            retrieval: RetrievalState::new_retrieval(system, retrieval_db_path.clone())?,
             system,
             retrieval_db_path,
-            storage_db_path,
         })
     }
 
@@ -57,13 +53,25 @@ impl AppState {
     }
 
     pub fn reload_retrieval(&mut self) -> eyre::Result<()> {
-        self.retrieval = AppState::new_retrieval(self.system, self.retrieval_db_path.clone())?;
+        self.retrieval =
+            RetrievalState::new_retrieval(self.system, self.retrieval_db_path.clone())?;
         Ok(())
     }
 }
 
+impl StorageState {
+    pub fn new(storage_db_path: Option<String>) -> eyre::Result<StorageState> {
+        Ok(StorageState {
+            storage: PersistenceSystem::SQLitePersistenceSystem(
+                persistence::SQLitePersistenceSystem::new(false, storage_db_path.clone())?,
+            ),
+            _storage_db_path: storage_db_path,
+        })
+    }
+}
+
 #[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
-enum Systems {
+pub enum Systems {
     Scryfall,
     Sql,
 }
@@ -93,11 +101,11 @@ async fn main() -> eyre::Result<()> {
         .ok()
         .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
 
-    let state = Arc::new(Mutex::new(AppState::new(
+    let retrieval = Arc::new(Mutex::new(RetrievalState::new(
         args.system,
         retrieval_db_path,
-        storage_db_path,
     )?));
+    let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
 
     let app = Router::new()
         .nest("/mtg", mtg_routes())
@@ -118,7 +126,7 @@ async fn main() -> eyre::Result<()> {
                 .layer(TraceLayer::new_for_http())
                 .into_inner(),
         )
-        .with_state(state);
+        .with_state((retrieval, storage));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
 
