@@ -95,11 +95,9 @@ pub fn collection_routes() -> Router<GathersState> {
     ) -> Result<Json<()>, (StatusCode, Json<ErrorPayload>)> {
         let storage = &mut state.1.lock().await.storage;
 
+        let cards: Vec<models::CollectionCard> = input.iter().map(|card| card.into()).collect();
         match storage
-            .move_cards_between_collections(
-                input.iter().map(|card| card.into()).collect(),
-                to_collection_id,
-            )
+            .move_cards_between_collections(&cards, to_collection_id)
             .await
         {
             Ok(_) => Ok(Json(())),
@@ -146,12 +144,12 @@ pub fn collection_routes() -> Router<GathersState> {
 
         match storage
             .add_card_to_collection(
-                collection_id.to_string(),
-                uuid,
+                &collection_id.to_string(),
+                &uuid,
                 quantity,
                 foil_quantity,
-                now_str,
-                provider,
+                &now_str,
+                &provider,
             )
             .await
         {
@@ -192,8 +190,6 @@ pub fn collection_routes() -> Router<GathersState> {
             input.id,
             input.quantity,
             input.foil_quantity,
-            // TODO: actually set provider
-            // "MagicSQLiteRetrievalSystem".to_string(),
             provider,
         )
         .await
@@ -229,7 +225,7 @@ pub fn collection_routes() -> Router<GathersState> {
         let storage = &mut state.1.lock().await.storage;
 
         match storage
-            .get_cards_in_collection_paginated(collection_id.clone(), query.offset, query.limit)
+            .get_cards_in_collection_paginated(&collection_id, query.offset, query.limit)
             .await
         {
             Ok(cards) => {

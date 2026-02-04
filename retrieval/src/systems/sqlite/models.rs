@@ -25,11 +25,11 @@ impl From<SqlCard> for MagicCard {
             .color_identity
             .chars()
             .filter_map(|c| match c {
-                'W' => Some(CardColour::White),
-                'U' => Some(CardColour::Blue),
-                'B' => Some(CardColour::Black),
-                'R' => Some(CardColour::Red),
-                'G' => Some(CardColour::Green),
+                'W' | 'w' => Some(CardColour::White),
+                'U' | 'u' => Some(CardColour::Blue),
+                'B' | 'b' => Some(CardColour::Black),
+                'R' | 'r' => Some(CardColour::Red),
+                'G' | 'g' => Some(CardColour::Green),
                 ' ' => None,
                 ',' => None,
                 _ => None,

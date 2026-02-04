@@ -4,6 +4,7 @@ use enum_dispatch::enum_dispatch;
 use models::CardID;
 use models::CollectionCard;
 use models::CollectionID;
+use retrieval::NamedRetrievalSystem as _;
 use retrieval::RetrievalSystem;
 use retrieval::RetrievalSystemTrait;
 
@@ -41,30 +42,30 @@ pub trait PersistenceSystemTrait {
 
     fn add_card_to_collection(
         &mut self,
-        collection_id: CollectionID,
-        card_uuid: CardID,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
         quantity: i32,
         foil_quantity: i32,
-        time_added: String,
-        provider: String,
+        time_added: &String,
+        provider: &String,
     ) -> impl std::future::Future<Output = eyre::Result<CollectionCard>>;
 
     fn add_cards_to_collection(
         &mut self,
         collection_id: CollectionID,
-        cards: Vec<CollectionCard>,
+        cards: &[CollectionCard],
     ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionCard>>>;
 
     fn get_cards_in_collection_paginated(
         &self,
-        collection_id: CollectionID,
+        collection_id: &CollectionID,
         offset: usize,
         limit: usize,
     ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionCard>>>;
 
     fn move_cards_between_collections(
         &mut self,
-        cards: Vec<CollectionCard>,
+        cards: &[CollectionCard],
         to_collection_id: CollectionID,
     ) -> impl std::future::Future<Output = eyre::Result<()>>;
 }
@@ -105,28 +106,33 @@ impl PersistenceSystem {
             })
             .collect();
 
+        let provider = retrieval.name().to_string();
         let mut i: f32 = 0.0;
         let total: f32 = cta.len() as f32;
         let now = chrono::Utc::now();
         let time_added = now.to_rfc3339();
         let collection_id = self.add_collection("New Collection".to_string()).await?;
-        for c in cta {
-            self.add_card_to_collection(
-                collection_id.clone(),
-                c.0,
-                c.1 as i32,
-                c.2 as i32,
-                time_added.clone(),
-                // TODO: retrieval.something
-                "".to_string(),
-            )
-            .await?;
+        for g in cta.chunks(50) {
+            let cards: Vec<CollectionCard> = g
+                .iter()
+                .map(|c| CollectionCard {
+                    uuid: c.0.clone(),
+                    quantity: c.1 as i32,
+                    foil_quantity: c.2 as i32,
+                    collection: collection_id.clone(),
+                    time_added: time_added.clone(),
+                    provider: provider.clone(),
+                })
+                .collect();
+            self.add_cards_to_collection(collection_id.clone(), &cards)
+                .await?;
 
-            i += 1.0;
+            i += cards.len() as f32;
             if let Some(ref sender) = progress_sender {
                 sender.send(i / total)?;
             }
         }
+
         Ok(())
     }
 }
@@ -171,11 +177,10 @@ mod tests {
         assert_eq!(card_count, 2);
 
         let cards = s
-            .get_cards_in_collection_paginated(new_collection.clone(), 0, 10)
+            .get_cards_in_collection_paginated(new_collection, 0, 10)
             .await
             .unwrap();
 
-        println!("{cards:?}");
         let card = cards
             .iter()
             .find(|c| c.uuid == "d68306e2-9877-5987-84b3-12b8234c8eec")

@@ -76,31 +76,32 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
     async fn move_cards_between_collections(
         &mut self,
-        cards: Vec<CollectionCard>,
+        cards: &[CollectionCard],
         to_collection_id: CollectionID,
     ) -> eyre::Result<()> {
+        // TODO: use add_cards_ instead
         for c in cards {
             if c.quantity == 0 && c.foil_quantity == 0 {
                 continue;
             }
 
             self.add_card_to_collection(
-                c.collection.clone(),
-                c.uuid.clone(),
+                &c.collection,
+                &c.uuid,
                 -c.quantity,
                 -c.foil_quantity,
-                c.time_added.clone(),
-                c.provider.clone(),
+                &c.time_added,
+                &c.provider,
             )
             .await?;
 
             self.add_card_to_collection(
-                to_collection_id.clone(),
-                c.uuid,
+                &to_collection_id,
+                &c.uuid,
                 c.quantity,
                 c.foil_quantity,
-                c.time_added,
-                c.provider,
+                &c.time_added,
+                &c.provider,
             )
             .await?;
         }
@@ -148,23 +149,23 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
     async fn add_card_to_collection(
         &mut self,
-        collection_id: CollectionID,
-        card_uuid: CardID,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
         quantity: i32,
         foil_quantity: i32,
-        time_added: String,
-        provider: String,
+        time_added: &String,
+        provider: &String,
     ) -> eyre::Result<CollectionCard> {
         let cards = self
             .add_cards_to_collection(
                 collection_id.clone(),
-                vec![CollectionCard {
-                    uuid: card_uuid,
-                    collection: collection_id,
+                &[CollectionCard {
+                    uuid: card_uuid.clone(),
+                    collection: collection_id.clone(),
                     quantity,
                     foil_quantity,
-                    time_added,
-                    provider,
+                    time_added: time_added.clone(),
+                    provider: provider.clone(),
                 }],
             )
             .await?;
@@ -175,7 +176,8 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn add_cards_to_collection(
         &mut self,
         collection_id: CollectionID,
-        cards: Vec<CollectionCard>,
+        // cards: Vec<CollectionCard>,
+        cards: &[CollectionCard],
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
 
@@ -229,7 +231,7 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
 
     async fn get_cards_in_collection_paginated(
         &self,
-        collection_id: CollectionID,
+        collection_id: &CollectionID,
         offset: usize,
         limit: usize,
     ) -> eyre::Result<Vec<CollectionCard>> {
@@ -285,12 +287,12 @@ mod tests {
         // Add cards to the collection
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "card1".to_string(),
+                &collection_id,
+                &"card1".to_string(),
                 5,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
@@ -319,12 +321,12 @@ mod tests {
         // Add cards to the regular collection
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "card1".to_string(),
+                &collection_id,
+                &"card1".to_string(),
                 5,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
@@ -332,12 +334,12 @@ mod tests {
         // Add a card to the Default collection
         persistence
             .add_card_to_collection(
-                "Default".to_string(),
-                "default_card".to_string(),
+                &"Default".to_string(),
+                &"default_card".to_string(),
                 3,
                 1,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
@@ -355,7 +357,7 @@ mod tests {
 
         // Verify cards were moved to collection 1
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2); // Should have both cards now
@@ -367,7 +369,7 @@ mod tests {
 
         // Verify cards were moved away from Default
         let cards = persistence
-            .get_cards_in_collection_paginated("Default".to_string(), 0, 100)
+            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -386,12 +388,12 @@ mod tests {
         // Add cards to the collection
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "card1".to_string(),
+                &collection_id,
+                &"card1".to_string(),
                 5,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
@@ -408,7 +410,7 @@ mod tests {
 
         // Verify no cards remain in the collection
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -472,19 +474,19 @@ mod tests {
         // Add a card to the collection
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 2,
                 1,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify the card was added
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -495,19 +497,19 @@ mod tests {
         // Add more of the same card
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 3,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify the quantities were updated
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -518,19 +520,19 @@ mod tests {
         // Add negative quantities to reduce card amounts
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 -3,
                 -1,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify the quantities were updated
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -541,19 +543,19 @@ mod tests {
         // Remove all quantities of a card (both regular and foil)
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 -2,
                 -2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify the card was removed from collection (both quantities are 0)
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         println!("{cards:?}");
@@ -574,12 +576,12 @@ mod tests {
         for i in 0..10 {
             persistence
                 .add_card_to_collection(
-                    collection_id.clone(),
-                    (1000 + i).to_string(),
+                    &collection_id,
+                    &(1000 + i).to_string(),
                     1,
                     0,
-                    "2023-01-01T00:00:00Z".to_string(),
-                    "".to_string(),
+                    &"2023-01-01T00:00:00Z".to_string(),
+                    &"".to_string(),
                 )
                 .await
                 .unwrap();
@@ -587,7 +589,7 @@ mod tests {
 
         // Test pagination - get first page (limit 5, offset 0)
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 5)
+            .get_cards_in_collection_paginated(&collection_id, 0, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 5);
@@ -599,7 +601,7 @@ mod tests {
 
         // Test pagination - get second page (limit 5, offset 5)
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 5, 5)
+            .get_cards_in_collection_paginated(&collection_id, 5, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 5);
@@ -611,7 +613,7 @@ mod tests {
 
         // Test pagination - get page with less items than limit
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 8, 5)
+            .get_cards_in_collection_paginated(&collection_id, 8, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2); // Only 2 items left
@@ -620,7 +622,7 @@ mod tests {
 
         // Test pagination - offset beyond available items
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 20, 5)
+            .get_cards_in_collection_paginated(&collection_id, 20, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -635,12 +637,12 @@ mod tests {
             .unwrap();
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 5,
                 3,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
@@ -651,12 +653,12 @@ mod tests {
         assert_eq!(c, 0);
         let _k = persistence
             .add_card_to_collection(
-                "Default".to_string(),
-                "12346".to_string(),
+                &"Default".to_string(),
+                &"12346".to_string(),
                 2,
                 8,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
@@ -666,7 +668,7 @@ mod tests {
             .unwrap();
         assert_eq!(c, 1);
         let cards = persistence
-            .get_cards_in_collection_paginated("Default".to_string(), 0, 5)
+            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -682,7 +684,7 @@ mod tests {
             .unwrap();
         assert_eq!(persistence.list_collections().await.unwrap().len(), 1);
         let cards = persistence
-            .get_cards_in_collection_paginated("Default".to_string(), 0, 5)
+            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -701,19 +703,19 @@ mod tests {
         // Add a card to the collection
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 5,
                 3,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify the card was added
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -724,19 +726,19 @@ mod tests {
         // Try to reduce quantity with negative amounts
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 -2,
                 -8,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify quantities were updated
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -746,19 +748,19 @@ mod tests {
         // Try to reduce quantities below zero - should clamp at zero
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 -10,
                 -10,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify quantities were clamped at zero
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0); // Card should be removed when both quantities are 0
@@ -781,30 +783,30 @@ mod tests {
         // Add cards to the first collection
         persistence
             .add_card_to_collection(
-                collection1_id.clone(),
-                "card1".to_string(),
+                &collection1_id,
+                &"card1".to_string(),
                 5,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
         persistence
             .add_card_to_collection(
-                collection1_id.clone(),
-                "card2".to_string(),
+                &collection1_id,
+                &"card2".to_string(),
                 3,
                 1,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         // Verify cards are in collection 1
         let cards1 = persistence
-            .get_cards_in_collection_paginated(collection1_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection1_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards1.len(), 2);
@@ -822,7 +824,7 @@ mod tests {
 
         // Verify cards are now in collection 2
         let cards2 = persistence
-            .get_cards_in_collection_paginated(collection2_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection2_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards2.len(), 2);
@@ -851,30 +853,30 @@ mod tests {
 
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "card1".to_string(),
+                &collection_id,
+                &"card1".to_string(),
                 5,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         persistence
             .add_card_to_collection(
-                "Default".to_string(),
-                "default_card".to_string(),
+                &"Default".to_string(),
+                &"default_card".to_string(),
                 3,
                 1,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated("Default".to_string(), 0, 100)
+            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 100)
             .await
             .unwrap();
 
@@ -882,7 +884,7 @@ mod tests {
 
         persistence
             .move_cards_between_collections(
-                [CollectionCard {
+                &[CollectionCard {
                     uuid: "card1".to_string(),
                     quantity: 4,
                     foil_quantity: 0,
@@ -900,7 +902,7 @@ mod tests {
         assert!(collections.contains(&"Default".to_string()));
 
         let cards = persistence
-            .get_cards_in_collection_paginated("Default".to_string(), 0, 100)
+            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -910,7 +912,7 @@ mod tests {
         assert_eq!(card1.foil_quantity, 0);
 
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -934,7 +936,7 @@ mod tests {
         persistence
             .add_cards_to_collection(
                 collection_id.clone(),
-                vec![
+                &[
                     CollectionCard {
                         uuid: "12345".to_string(),
                         quantity: 2,
@@ -957,7 +959,7 @@ mod tests {
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -971,18 +973,18 @@ mod tests {
 
         persistence
             .add_card_to_collection(
-                collection_id.clone(),
-                "12345".to_string(),
+                &collection_id,
+                &"12345".to_string(),
                 3,
                 2,
-                "2023-01-01T00:00:00Z".to_string(),
-                "".to_string(),
+                &"2023-01-01T00:00:00Z".to_string(),
+                &"".to_string(),
             )
             .await
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -994,7 +996,7 @@ mod tests {
         persistence
             .add_cards_to_collection(
                 collection_id.clone(),
-                vec![
+                &[
                     CollectionCard {
                         uuid: "12345".to_string(),
                         quantity: -3,
@@ -1017,7 +1019,7 @@ mod tests {
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
