@@ -108,8 +108,8 @@ impl From<String> for Rarity {
 #[derive(Debug, Clone)]
 pub struct CollectionCard {
     pub uuid: CardID,
-    pub quantity: u32,
-    pub foil_quantity: u32,
+    pub quantity: i32,
+    pub foil_quantity: i32,
     pub time_added: String,
     pub collection: CollectionID,
     pub provider: String,

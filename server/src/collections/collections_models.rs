@@ -38,9 +38,9 @@ pub struct CollectionCardsQuery {
 #[derive(Serialize, Deserialize)]
 pub struct CollectionCard {
     pub id: String,
-    pub quantity: u32,
+    pub quantity: i32,
     #[serde(rename = "foilQuantity")]
-    pub foil_quantity: u32,
+    pub foil_quantity: i32,
     #[serde(rename = "collectionId")]
     pub collection_id: String,
     #[serde(rename = "timeAdded")]

@@ -1,5 +1,6 @@
 mod sqlite;
 
+use enum_dispatch::enum_dispatch;
 use models::CardID;
 use models::CollectionCard;
 use models::CollectionID;
@@ -10,29 +11,35 @@ pub use crate::sqlite::SQLitePersistenceSystem;
 
 mod csv_models;
 
+#[enum_dispatch]
 #[derive(Debug, Clone)]
 pub enum PersistenceSystem {
-    Database(SQLitePersistenceSystem),
+    SQLitePersistenceSystem,
 }
 
-#[async_trait::async_trait]
+#[enum_dispatch(PersistenceSystem)]
 pub trait PersistenceSystemTrait {
-    async fn add_collection(&mut self, name: CollectionID) -> eyre::Result<String>;
+    fn add_collection(
+        &mut self,
+        name: CollectionID,
+    ) -> impl std::future::Future<Output = eyre::Result<String>>;
 
-    async fn remove_collection(
+    fn remove_collection(
         &mut self,
         name: CollectionID,
         move_to: Option<CollectionID>,
-    ) -> eyre::Result<CollectionID>;
+    ) -> impl std::future::Future<Output = eyre::Result<CollectionID>>;
 
-    async fn list_collections(&self) -> eyre::Result<Vec<CollectionID>>;
+    fn list_collections(
+        &self,
+    ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionID>>>;
 
-    async fn get_cards_in_collection_count(
+    fn get_cards_in_collection_count(
         &self,
         collection_id: CollectionID,
-    ) -> eyre::Result<usize>;
+    ) -> impl std::future::Future<Output = eyre::Result<usize>>;
 
-    async fn add_card_to_collection(
+    fn add_card_to_collection(
         &mut self,
         collection_id: CollectionID,
         card_uuid: CardID,
@@ -40,102 +47,26 @@ pub trait PersistenceSystemTrait {
         foil_quantity: i32,
         time_added: String,
         provider: String,
-    ) -> eyre::Result<CollectionCard>;
+    ) -> impl std::future::Future<Output = eyre::Result<CollectionCard>>;
 
-    async fn get_cards_in_collection_paginated(
+    fn add_cards_to_collection(
+        &mut self,
+        collection_id: CollectionID,
+        cards: Vec<CollectionCard>,
+    ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionCard>>>;
+
+    fn get_cards_in_collection_paginated(
         &self,
         collection_id: CollectionID,
         offset: usize,
         limit: usize,
-    ) -> eyre::Result<Vec<CollectionCard>>;
+    ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionCard>>>;
 
-    async fn move_cards_between_collections(
+    fn move_cards_between_collections(
         &mut self,
         cards: Vec<CollectionCard>,
         to_collection_id: CollectionID,
-    ) -> eyre::Result<()>;
-}
-
-#[async_trait::async_trait]
-impl PersistenceSystemTrait for PersistenceSystem {
-    async fn add_collection(&mut self, name: CollectionID) -> eyre::Result<CollectionID> {
-        match self {
-            PersistenceSystem::Database(d) => d.add_collection(name).await,
-        }
-    }
-
-    async fn remove_collection(
-        &mut self,
-        name: CollectionID,
-        move_to: Option<CollectionID>,
-    ) -> eyre::Result<CollectionID> {
-        match self {
-            PersistenceSystem::Database(d) => d.remove_collection(name, move_to).await,
-        }
-    }
-
-    async fn list_collections(&self) -> eyre::Result<Vec<CollectionID>> {
-        match self {
-            PersistenceSystem::Database(d) => d.list_collections().await,
-        }
-    }
-
-    async fn get_cards_in_collection_count(&self, collection_id: String) -> eyre::Result<usize> {
-        match self {
-            PersistenceSystem::Database(d) => d.get_cards_in_collection_count(collection_id).await,
-        }
-    }
-
-    async fn get_cards_in_collection_paginated(
-        &self,
-        collection_id: CollectionID,
-        offset: usize,
-        limit: usize,
-    ) -> eyre::Result<Vec<CollectionCard>> {
-        match self {
-            PersistenceSystem::Database(d) => {
-                d.get_cards_in_collection_paginated(collection_id, offset, limit)
-                    .await
-            }
-        }
-    }
-
-    async fn add_card_to_collection(
-        &mut self,
-        collection_id: CollectionID,
-        card_uuid: CardID,
-        quantity: i32,
-        foil_quantity: i32,
-        time_added: String,
-        provider: String,
-    ) -> eyre::Result<CollectionCard> {
-        match self {
-            PersistenceSystem::Database(d) => {
-                d.add_card_to_collection(
-                    collection_id,
-                    card_uuid,
-                    quantity,
-                    foil_quantity,
-                    time_added,
-                    provider,
-                )
-                .await
-            }
-        }
-    }
-
-    async fn move_cards_between_collections(
-        &mut self,
-        cards: Vec<CollectionCard>,
-        to_collection_id: CollectionID,
-    ) -> eyre::Result<()> {
-        match self {
-            PersistenceSystem::Database(d) => {
-                d.move_cards_between_collections(cards, to_collection_id)
-                    .await
-            }
-        }
-    }
+    ) -> impl std::future::Future<Output = eyre::Result<()>>;
 }
 
 impl PersistenceSystem {
@@ -215,8 +146,12 @@ mod tests {
 
         let (sender, receiver) = tokio::sync::watch::channel(0.0);
 
-        let mut s = PersistenceSystem::Database(SQLitePersistenceSystem::new(true, None).unwrap());
-        let r = RetrievalSystem::Database(MagicSQLiteRetrievalSystem::new(None).unwrap());
+        let mut s = PersistenceSystem::SQLitePersistenceSystem(
+            SQLitePersistenceSystem::new(true, None).unwrap(),
+        );
+        let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
+            MagicSQLiteRetrievalSystem::new(None).unwrap(),
+        );
         s.import_csv(
             "/home/mihail/repos/gathers/test.csv".to_string(),
             r,

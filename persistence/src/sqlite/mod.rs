@@ -36,7 +36,6 @@ impl SQLitePersistenceSystem {
     }
 }
 
-#[async_trait::async_trait]
 impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn add_collection(&mut self, name: CollectionID) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
@@ -156,74 +155,75 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         time_added: String,
         provider: String,
     ) -> eyre::Result<CollectionCard> {
-        let conn = self.connection.lock().await;
-
-        let mut stmt = conn.prepare(
-            "SELECT quantity, foilquantity, timeadded FROM cards WHERE uuid = ?1 AND collection = ?2",
-        )?;
-        let existing_card = stmt.query_row(params![card_uuid, collection_id], |row| {
-            let quantity: u32 = row.get(0)?;
-            let foil_quantity: u32 = row.get(1)?;
-            let time: String = row.get(2)?;
-            Ok((quantity, foil_quantity, time))
-        });
-
-        match existing_card {
-            Ok((existing_quantity, existing_foil_quantity, time_added)) => {
-                // Card exists, update quantities
-                let new_quantity = (existing_quantity as i32 + quantity).max(0) as u32;
-                let new_foil_quantity =
-                    (existing_foil_quantity as i32 + foil_quantity).max(0) as u32;
-
-                // If both quantities are 0, remove the card from collection
-                if new_quantity == 0 && new_foil_quantity == 0 {
-                    conn.execute(
-                        "DELETE FROM cards WHERE uuid = ?1 AND collection = ?2",
-                        params![card_uuid, collection_id],
-                    )?;
-                    return Ok(CollectionCard {
-                        uuid: card_uuid,
-                        quantity: 0,
-                        foil_quantity: 0,
-                        time_added: "".to_string(),
-                        collection: "".to_string(),
-                        provider,
-                    });
-                } else {
-                    // Update the existing card
-                    conn.execute(
-                        "UPDATE cards SET quantity = ?1, foilquantity = ?2 WHERE uuid = ?3 AND collection = ?4",
-                        params![new_quantity, new_foil_quantity, card_uuid, collection_id],
-                    )?;
-
-                    return Ok(CollectionCard {
-                        uuid: card_uuid,
-                        quantity: new_quantity,
-                        foil_quantity: new_foil_quantity,
-                        time_added,
-                        collection: collection_id,
-                        provider,
-                    });
-                }
-            }
-            Err(_) => {
-                // Card doesn't exist, insert new one
-                if quantity > 0 || foil_quantity > 0 {
-                    conn.execute(
-                        "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded) VALUES (?1, ?2, ?3, ?4, ?5)",
-                        params![card_uuid, collection_id, quantity.max(0) as u32, foil_quantity.max(0) as u32, time_added],
-                    )?;
-                }
-                return Ok(CollectionCard {
+        let cards = self
+            .add_cards_to_collection(
+                collection_id.clone(),
+                vec![CollectionCard {
                     uuid: card_uuid,
-                    quantity: quantity.max(0) as u32,
-                    foil_quantity: foil_quantity.max(0) as u32,
-                    time_added,
                     collection: collection_id,
+                    quantity,
+                    foil_quantity,
+                    time_added,
                     provider,
-                });
-            }
+                }],
+            )
+            .await?;
+
+        Ok(cards[0].clone())
+    }
+
+    async fn add_cards_to_collection(
+        &mut self,
+        collection_id: CollectionID,
+        cards: Vec<CollectionCard>,
+    ) -> eyre::Result<Vec<CollectionCard>> {
+        let conn = self.connection.lock().await;
+        // Upsert with max(val, 0) for each quantity
+        let placeholders = cards
+            .iter()
+            .map(|_| "(?, ?, ?, ?, ?)")
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut params = vec![];
+        cards.iter().for_each(|c| {
+            params.push(c.uuid.clone());
+            params.push(collection_id.clone());
+            params.push(c.quantity.to_string());
+            params.push(c.foil_quantity.to_string());
+            params.push(c.time_added.clone());
+        });
+        let query = format!(
+            "
+INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded) 
+VALUES {}
+ON CONFLICT (uuid, collection) DO UPDATE SET 
+ quantity = max(cards.quantity + EXCLUDED.quantity, 0),
+ foilquantity = max(cards.foilquantity + EXCLUDED.foilquantity, 0)
+RETURNING uuid, collection, quantity, foilquantity, timeadded
+",
+            placeholders
+        );
+        let mut stmt = conn.prepare(&query)?;
+        let card_iter = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+            Ok(CollectionCard {
+                uuid: row.get(0)?,
+                quantity: row.get(2)?,
+                foil_quantity: row.get(3)?,
+                time_added: row.get(4)?,
+                collection: row.get(1)?,
+                provider: "".to_string(),
+            })
+        })?;
+        let mut cards = Vec::new();
+        for card in card_iter.flatten() {
+            cards.push(card);
         }
+        conn.execute(
+            "DELETE FROM cards WHERE quantity = 0 AND foilquantity = 0",
+            [],
+        )?;
+
+        Ok(cards)
     }
 
     async fn get_cards_in_collection_paginated(
@@ -240,8 +240,8 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         let card_iter =
             stmt.query_map(params![collection_id, limit as u32, offset as u32], |row| {
                 let uuid: String = row.get(0)?;
-                let quantity: u32 = row.get(1)?;
-                let foil_quantity: u32 = row.get(2)?;
+                let quantity: i32 = row.get(1)?;
+                let foil_quantity: i32 = row.get(2)?;
                 let time_added: String = row.get(3)?;
                 Ok(CollectionCard {
                     uuid,
@@ -556,6 +556,7 @@ mod tests {
             .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
             .await
             .unwrap();
+        println!("{cards:?}");
         assert_eq!(cards.len(), 0);
     }
 
@@ -917,5 +918,115 @@ mod tests {
         let card1 = cards.iter().find(|c| c.uuid == "card1").unwrap();
         assert_eq!(card1.quantity, 1);
         assert_eq!(card1.foil_quantity, 2);
+    }
+
+    #[tokio::test]
+    async fn test_add_cards_to_collection() {
+        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let collection_id = persistence
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        let time_added = "2023-01-01T00:00:00Z".to_string();
+
+        persistence
+            .add_cards_to_collection(
+                collection_id.clone(),
+                vec![
+                    CollectionCard {
+                        uuid: "12345".to_string(),
+                        quantity: 2,
+                        foil_quantity: 1,
+                        time_added: time_added.clone(),
+                        provider: "".to_string(),
+                        collection: collection_id.clone(),
+                    },
+                    CollectionCard {
+                        uuid: "12346".to_string(),
+                        quantity: 5,
+                        foil_quantity: 0,
+                        time_added: time_added.clone(),
+                        provider: "".to_string(),
+                        collection: collection_id.clone(),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let cards = persistence
+            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 2);
+        let card = cards.iter().find(|c| c.uuid == "12345").unwrap();
+        assert_eq!(card.quantity, 2);
+        assert_eq!(card.foil_quantity, 1);
+
+        let card = cards.iter().find(|c| c.uuid == "12346").unwrap();
+        assert_eq!(card.quantity, 5);
+        assert_eq!(card.foil_quantity, 0);
+
+        persistence
+            .add_card_to_collection(
+                collection_id.clone(),
+                "12345".to_string(),
+                3,
+                2,
+                "2023-01-01T00:00:00Z".to_string(),
+                "".to_string(),
+            )
+            .await
+            .unwrap();
+
+        let cards = persistence
+            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 2);
+        let card = cards.iter().find(|c| c.uuid == "12345").unwrap();
+        assert_eq!(card.uuid, "12345".to_string());
+        assert_eq!(card.quantity, 5); // 2 + 3
+        assert_eq!(card.foil_quantity, 3); // 1 + 2
+
+        persistence
+            .add_cards_to_collection(
+                collection_id.clone(),
+                vec![
+                    CollectionCard {
+                        uuid: "12345".to_string(),
+                        quantity: -3,
+                        foil_quantity: -1,
+                        time_added: time_added.clone(),
+                        provider: "".to_string(),
+                        collection: collection_id.clone(),
+                    },
+                    CollectionCard {
+                        uuid: "12346".to_string(),
+                        quantity: 5,
+                        foil_quantity: 0,
+                        time_added: time_added.clone(),
+                        provider: "".to_string(),
+                        collection: collection_id.clone(),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+        let cards = persistence
+            .get_cards_in_collection_paginated(collection_id.clone(), 0, 100)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 2);
+        let card = cards.iter().find(|c| c.uuid == "12345").unwrap();
+        assert_eq!(card.quantity, 2); // 5 - 3
+        assert_eq!(card.foil_quantity, 2); // 3 - 1
+
+        let card = cards.iter().find(|c| c.uuid == "12346").unwrap();
+        assert_eq!(card.quantity, 10);
+        assert_eq!(card.foil_quantity, 0);
     }
 }

@@ -21,11 +21,13 @@ struct Args {
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
-    let retrieval = match args.system {
-        Systems::Scryfall => RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem {}),
-        Systems::Sql => {
-            RetrievalSystem::Database(retrieval::MagicSQLiteRetrievalSystem::new(None)?)
+    let retrieval: RetrievalSystem = match args.system {
+        Systems::Scryfall => {
+            RetrievalSystem::ScryfallRetrievalSystem(retrieval::ScryfallRetrievalSystem {})
         }
+        Systems::Sql => RetrievalSystem::MagicSQLiteRetrievalSystem(
+            retrieval::MagicSQLiteRetrievalSystem::new(None)?,
+        ),
     };
     println!(
         "{:?}",

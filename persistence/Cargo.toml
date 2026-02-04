@@ -11,6 +11,7 @@ path = "src/lib.rs"
 async-trait = "0.1.89"
 chrono.workspace = true
 csv = "1.4.0"
+enum_dispatch.workspace = true
 eyre.workspace = true
 models = { path = "../models/" }
 retrieval = { path = "../retrieval/" }

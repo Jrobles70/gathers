@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 async-trait = "0.1.89"
+enum_dispatch.workspace = true
 eyre.workspace = true
 models = { path = "../models/" }
 reqwest.workspace = true

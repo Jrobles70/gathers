@@ -24,7 +24,6 @@ impl MagicSQLiteRetrievalSystem {
     }
 }
 
-#[async_trait::async_trait]
 impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
     async fn search_cards(
         &self,
@@ -159,19 +158,21 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         cards: Vec<(SetCode, CollectorNumber)>,
     ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>> {
         let conn = self.connection.lock().await;
-        // TODO: sanitise inputs
-        let placeholders = cards
-            .iter()
-            .map(|c| format!("('{}', '{}')", c.0, c.1))
-            .collect::<Vec<_>>()
-            .join(",");
+        let placeholders = cards.iter().map(|_| "(?,?)").collect::<Vec<_>>().join(",");
+        let mut params = vec![];
+        cards.iter().for_each(|c| {
+            params.push(c.0.clone());
+            params.push(c.1.clone());
+        });
         let query = format!(
             "SELECT uuid, setCode, number FROM cards WHERE (setCode, number) IN (VALUES {});",
             placeholders
         );
         println!("{query}");
         let mut stmt = conn.prepare(&query)?;
-        let iter = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        let iter = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
         Ok(iter
             .flatten()
             .map(|c: (String, String, String)| c)

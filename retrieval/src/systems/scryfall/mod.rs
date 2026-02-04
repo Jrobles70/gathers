@@ -8,7 +8,7 @@ pub struct ScryfallRetrievalSystem {}
 
 use models::{
     filters::CardSearchFilters, CardColour, CardID, CardIdentifiers, CollectorNumber, MagicCard,
-    Rarity, SetCode,
+    SetCode,
 };
 
 use crate::RetrievalSystemTrait;
@@ -19,7 +19,6 @@ impl ScryfallRetrievalSystem {
     }
 }
 
-#[async_trait::async_trait]
 impl RetrievalSystemTrait for ScryfallRetrievalSystem {
     async fn search_cards(
         &self,

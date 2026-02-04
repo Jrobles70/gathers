@@ -33,10 +33,9 @@ impl AppState {
     ) -> eyre::Result<Self> {
         Ok(AppState {
             retrieval: AppState::new_retrieval(system, retrieval_db_path.clone())?,
-            storage: PersistenceSystem::Database(persistence::SQLitePersistenceSystem::new(
-                false,
-                storage_db_path.clone(),
-            )?),
+            storage: PersistenceSystem::SQLitePersistenceSystem(
+                persistence::SQLitePersistenceSystem::new(false, storage_db_path.clone())?,
+            ),
             system,
             retrieval_db_path,
             storage_db_path,
@@ -49,11 +48,11 @@ impl AppState {
     ) -> eyre::Result<RetrievalSystem> {
         Ok(match system {
             Systems::Scryfall => {
-                RetrievalSystem::Scryfall(retrieval::ScryfallRetrievalSystem::new()?)
+                RetrievalSystem::ScryfallRetrievalSystem(retrieval::ScryfallRetrievalSystem::new()?)
             }
-            Systems::Sql => RetrievalSystem::Database(retrieval::MagicSQLiteRetrievalSystem::new(
-                retrieval_db_path.clone(),
-            )?),
+            Systems::Sql => RetrievalSystem::MagicSQLiteRetrievalSystem(
+                retrieval::MagicSQLiteRetrievalSystem::new(retrieval_db_path.clone())?,
+            ),
         })
     }
 
