@@ -33,7 +33,7 @@ pub fn collection_routes() -> Router<GathersState> {
     ) -> Result<Json<Vec<Collection>>, (StatusCode, Json<ErrorPayload>)> {
         let storage = &state.1.lock().await.storage;
 
-        match storage.list_collections().await {
+        match storage.list_collections(None).await {
             Ok(collections) => Ok(Json(
                 collections
                     .iter()
@@ -76,7 +76,7 @@ pub fn collection_routes() -> Router<GathersState> {
         let storage = &mut state.1.lock().await.storage;
 
         // TODO: allow setting the "move to collection" instead of None
-        match storage.remove_collection(id, None).await {
+        match storage.remove_collection(&id, None).await {
             Ok(message) => Ok(Json(CollectionRemoveResponse { message })),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -114,7 +114,7 @@ pub fn collection_routes() -> Router<GathersState> {
         storage: &mut PersistenceSystem,
         collection_id: &String,
     ) -> Result<(), Json<ErrorPayload>> {
-        let collections = match storage.list_collections().await {
+        let collections = match storage.list_collections(None).await {
             Ok(collections) => collections,
             Err(e) => {
                 return Err(Json(ErrorPayload {
@@ -311,6 +311,7 @@ pub fn collection_routes() -> Router<GathersState> {
     //     Query(query): Query<SearchQuery>,
     //     Json(input): Json<CardSearchFilters>,
     // ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
+    //     // This has to search both retrieval AND persistence
     //     Ok(Json(vec![]))
     // }
 

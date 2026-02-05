@@ -47,7 +47,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
     async fn remove_collection(
         &mut self,
-        name: CollectionID,
+        name: &CollectionID,
         move_to: Option<CollectionID>,
     ) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
@@ -71,7 +71,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             "DELETE FROM collection WHERE name = ?1 AND can_remove = TRUE";
         conn.execute(delete_collection_query, params![name])?;
 
-        Ok(name)
+        Ok(name.clone())
     }
 
     async fn move_cards_between_collections(
@@ -108,11 +108,17 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         Ok(())
     }
 
-    async fn list_collections(&self) -> eyre::Result<Vec<CollectionID>> {
+    async fn list_collections(&self, filter: Option<String>) -> eyre::Result<Vec<CollectionID>> {
         let conn = self.connection.lock().await;
 
         // TODO: not a fan of not limiting this at all
-        let mut stmt = conn.prepare("SELECT name FROM collection")?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT name FROM collection {}",
+            match filter {
+                Some(f) => format!("WHERE name LIKE '%{}%'", f),
+                None => "".to_string(),
+            }
+        ))?;
         let collection_iter = stmt.query_map(params![], |row| {
             let name: String = row.get(0)?;
             Ok(name)
@@ -153,19 +159,19 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         card_uuid: &CardID,
         quantity: i32,
         foil_quantity: i32,
-        time_added: &String,
-        provider: &String,
+        time_added: &str,
+        provider: &str,
     ) -> eyre::Result<CollectionCard> {
         let cards = self
             .add_cards_to_collection(
-                collection_id.clone(),
+                collection_id,
                 &[CollectionCard {
                     uuid: card_uuid.clone(),
                     collection: collection_id.clone(),
                     quantity,
                     foil_quantity,
-                    time_added: time_added.clone(),
-                    provider: provider.clone(),
+                    time_added: time_added.to_string(),
+                    provider: provider.to_string(),
                 }],
             )
             .await?;
@@ -175,8 +181,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
     async fn add_cards_to_collection(
         &mut self,
-        collection_id: CollectionID,
-        // cards: Vec<CollectionCard>,
+        collection_id: &CollectionID,
         cards: &[CollectionCard],
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
@@ -269,107 +274,98 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
 mod tests {
     use super::*;
 
+    const DEFAULT: &str = "Default";
+
     #[test]
     fn migrations_test() {
         assert!(MIGRATIONS.validate().is_ok());
     }
 
+    async fn add_card_to_collection(
+        persistence: &mut SQLitePersistenceSystem,
+        collection_id: &CollectionID,
+        card_id: &CardID,
+        quantity: i32,
+        foil_quantity: i32,
+    ) -> CardID {
+        persistence
+            .add_card_to_collection(
+                collection_id,
+                card_id,
+                quantity,
+                foil_quantity,
+                "2023-01-01T00:00:00Z",
+                "",
+            )
+            .await
+            .unwrap();
+        card_id.clone()
+    }
+
     #[tokio::test]
     async fn test_remove_collection_can_be_removed() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a collection that can be removed
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
 
         // Add cards to the collection
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"card1".to_string(),
-                5,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 5, 2).await;
 
         // Try to remove the collection (should be removed because can_remove is true by default)
-        persistence
-            .remove_collection(collection_id.clone(), None)
-            .await
-            .unwrap();
+        p.remove_collection(&collection_id, None).await.unwrap();
 
         // Verify collection was removed (because it can be removed)
-        let collections = persistence.list_collections().await.unwrap();
+        let collections = p.list_collections(None).await.unwrap();
         assert!(!collections.contains(&collection_id));
     }
 
     #[tokio::test]
     async fn test_remove_default_collection_with_move_to() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a regular collection
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
 
         // Add cards to the regular collection
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"card1".to_string(),
-                5,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 5, 2).await;
 
         // Add a card to the Default collection
-        persistence
-            .add_card_to_collection(
-                &"Default".to_string(),
-                &"default_card".to_string(),
-                3,
-                1,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        let cid =
+            add_card_to_collection(&mut p, &DEFAULT.into(), &"default_card".to_string(), 3, 1)
+                .await;
 
         // Try to remove the Default collection (should not be removed because can_remove is false)
         // But cards should still be moved to the test collection
-        persistence
-            .remove_collection("Default".to_string(), Some(collection_id.clone()))
+        p.remove_collection(&DEFAULT.into(), Some(collection_id.clone()))
             .await
             .unwrap();
 
         // Verify Default collection still exists
-        let collections = persistence.list_collections().await.unwrap();
-        assert!(collections.contains(&"Default".to_string()));
+        let collections = p.list_collections(None).await.unwrap();
+        assert!(collections.contains(&DEFAULT.into()));
 
         // Verify cards were moved to collection 1
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2); // Should have both cards now
 
         // Verify that card quantities are correct (default_card should have been added to existing card)
-        let default_card = cards.iter().find(|c| c.uuid == "default_card").unwrap();
+        let default_card = cards.iter().find(|c| c.uuid == cid).unwrap();
         assert_eq!(default_card.quantity, 3);
         assert_eq!(default_card.foil_quantity, 1);
 
         // Verify cards were moved away from Default
-        let cards = persistence
-            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 100)
+        let cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.into(), 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -377,39 +373,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_collection_with_none_move_to() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a collection
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
 
         // Add cards to the collection
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"card1".to_string(),
-                5,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 5, 2).await;
 
         // Remove collection with move_to = None (should delete cards and collection)
-        persistence
-            .remove_collection(collection_id.clone(), None)
-            .await
-            .unwrap();
+        p.remove_collection(&collection_id, None).await.unwrap();
 
         // Verify collection was removed
-        let collections = persistence.list_collections().await.unwrap();
+        let collections = p.list_collections(None).await.unwrap();
         assert!(!collections.contains(&collection_id));
 
         // Verify no cards remain in the collection
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
@@ -419,176 +402,125 @@ mod tests {
     #[tokio::test]
     async fn test_collection_management() {
         // Create a new persistence system
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a collection
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
         assert!(!collection_id.is_empty());
 
         // List collections
-        let collections = persistence.list_collections().await.unwrap();
+        let collections = p.list_collections(None).await.unwrap();
         assert_eq!(collections.len(), 2);
         assert!(collections.contains(&"Test Collection".to_string()));
-        assert!(collections.contains(&"Default".to_string()));
+        assert!(collections.contains(&DEFAULT.into()));
 
         // Add another collection
-        let collection_id2 = persistence
+        let collection_id2 = p
             .add_collection("Another Collection".to_string())
             .await
             .unwrap();
         assert!(!collection_id2.is_empty());
 
         // List collections again
-        let collections = persistence.list_collections().await.unwrap();
+        let collections = p.list_collections(None).await.unwrap();
         assert_eq!(collections.len(), 3);
         assert!(collections.contains(&"Test Collection".to_string()));
         assert!(collections.contains(&"Another Collection".to_string()));
 
         // Remove a collection
-        let result = persistence
-            .remove_collection("Test Collection".to_string(), None)
+        let result = p
+            .remove_collection(&"Test Collection".to_string(), None)
             .await
             .unwrap();
         assert!(!result.is_empty());
 
         // List collections after removal
-        let collections = persistence.list_collections().await.unwrap();
+        let collections = p.list_collections(None).await.unwrap();
         assert_eq!(collections.len(), 2);
-        assert!(collections.contains(&"Default".to_string()));
+        assert!(collections.contains(&DEFAULT.into()));
         assert!(collections.contains(&"Another Collection".to_string()));
     }
 
     #[tokio::test]
     async fn test_add_card_to_collection() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a collection
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
 
         // Add a card to the collection
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                2,
-                1,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        let cid = add_card_to_collection(&mut p, &collection_id, &"12345".to_string(), 2, 1).await;
 
         // Verify the card was added
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
-        assert_eq!(cards[0].uuid, "12345".to_string());
+        assert_eq!(cards[0].uuid, cid);
         assert_eq!(cards[0].quantity, 2);
         assert_eq!(cards[0].foil_quantity, 1);
 
         // Add more of the same card
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                3,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        add_card_to_collection(&mut p, &collection_id, &cid, 3, 2).await;
 
         // Verify the quantities were updated
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
-        assert_eq!(cards[0].uuid, "12345".to_string());
+        assert_eq!(cards[0].uuid, cid);
         assert_eq!(cards[0].quantity, 5); // 2 + 3
         assert_eq!(cards[0].foil_quantity, 3); // 1 + 2
 
         // Add negative quantities to reduce card amounts
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                -3,
-                -1,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        add_card_to_collection(&mut p, &collection_id, &cid, -3, -1).await;
 
         // Verify the quantities were updated
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
-        assert_eq!(cards[0].uuid, "12345".to_string());
+        assert_eq!(cards[0].uuid, cid);
         assert_eq!(cards[0].quantity, 2); // 5 - 3
         assert_eq!(cards[0].foil_quantity, 2); // 3 - 1
 
         // Remove all quantities of a card (both regular and foil)
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                -2,
-                -2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        add_card_to_collection(&mut p, &collection_id, &cid, -2, -2).await;
 
         // Verify the card was removed from collection (both quantities are 0)
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
-        println!("{cards:?}");
         assert_eq!(cards.len(), 0);
     }
 
     #[tokio::test]
     async fn test_get_cards_in_collection_paginated() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add a collection
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
 
         // Add multiple cards to the collection
         for i in 0..10 {
-            persistence
-                .add_card_to_collection(
-                    &collection_id,
-                    &(1000 + i).to_string(),
-                    1,
-                    0,
-                    &"2023-01-01T00:00:00Z".to_string(),
-                    &"".to_string(),
-                )
-                .await
-                .unwrap();
+            add_card_to_collection(&mut p, &collection_id, &(1000 + i).to_string(), 1, 0).await;
         }
 
         // Test pagination - get first page (limit 5, offset 0)
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 5)
             .await
             .unwrap();
@@ -600,7 +532,7 @@ mod tests {
         assert_eq!(cards[4].uuid, "1004".to_string());
 
         // Test pagination - get second page (limit 5, offset 5)
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 5, 5)
             .await
             .unwrap();
@@ -612,7 +544,7 @@ mod tests {
         assert_eq!(cards[4].uuid, "1009".to_string());
 
         // Test pagination - get page with less items than limit
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 8, 5)
             .await
             .unwrap();
@@ -621,7 +553,7 @@ mod tests {
         assert_eq!(cards[1].uuid, "1009".to_string());
 
         // Test pagination - offset beyond available items
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 20, 5)
             .await
             .unwrap();
@@ -630,211 +562,87 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_collection_that_cant_be_removed() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
-        let collection_id = persistence
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                5,
-                3,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-        let c = persistence
-            .get_cards_in_collection_count("Default".to_string())
+        add_card_to_collection(&mut p, &collection_id, &"12345".to_string(), 5, 3).await;
+        let c = p
+            .get_cards_in_collection_count(DEFAULT.into())
             .await
             .unwrap();
         assert_eq!(c, 0);
-        let _k = persistence
-            .add_card_to_collection(
-                &"Default".to_string(),
-                &"12346".to_string(),
-                2,
-                8,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-        let c = persistence
-            .get_cards_in_collection_count("Default".to_string())
+
+        add_card_to_collection(&mut p, &DEFAULT.into(), &"12346".to_string(), 2, 8).await;
+        let c = p
+            .get_cards_in_collection_count(DEFAULT.into())
             .await
             .unwrap();
         assert_eq!(c, 1);
-        let cards = persistence
-            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 5)
+
+        let cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.into(), 0, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
-        assert_eq!(persistence.list_collections().await.unwrap().len(), 2);
-        persistence
-            .remove_collection("Default".to_string(), None)
-            .await
-            .unwrap();
-        assert_eq!(persistence.list_collections().await.unwrap().len(), 2);
-        persistence
-            .remove_collection(collection_id, None)
-            .await
-            .unwrap();
-        assert_eq!(persistence.list_collections().await.unwrap().len(), 1);
-        let cards = persistence
-            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 5)
+        assert_eq!(p.list_collections(None).await.unwrap().len(), 2);
+        p.remove_collection(&DEFAULT.into(), None).await.unwrap();
+        assert_eq!(p.list_collections(None).await.unwrap().len(), 2);
+        p.remove_collection(&collection_id, None).await.unwrap();
+        assert_eq!(p.list_collections(None).await.unwrap().len(), 1);
+        let cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.into(), 0, 5)
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
     }
 
     #[tokio::test]
-    async fn test_add_card_to_collection_with_negative_quantities() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
-
-        // Add a collection
-        let collection_id = persistence
-            .add_collection("Test Collection".to_string())
-            .await
-            .unwrap();
-
-        // Add a card to the collection
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                5,
-                3,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-
-        // Verify the card was added
-        let cards = persistence
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
-            .await
-            .unwrap();
-        assert_eq!(cards.len(), 1);
-        assert_eq!(cards[0].uuid, "12345".to_string());
-        assert_eq!(cards[0].quantity, 5);
-        assert_eq!(cards[0].foil_quantity, 3);
-
-        // Try to reduce quantity with negative amounts
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                -2,
-                -8,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-
-        // Verify quantities were updated
-        let cards = persistence
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
-            .await
-            .unwrap();
-        assert_eq!(cards.len(), 1);
-        assert_eq!(cards[0].uuid, "12345".to_string());
-        assert_eq!(cards[0].quantity, 3); // 5 - 2
-
-        // Try to reduce quantities below zero - should clamp at zero
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"12345".to_string(),
-                -10,
-                -10,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-
-        // Verify quantities were clamped at zero
-        let cards = persistence
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
-            .await
-            .unwrap();
-        assert_eq!(cards.len(), 0); // Card should be removed when both quantities are 0
-    }
-
-    #[tokio::test]
     async fn test_remove_collection_with_move_to() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         // Add two collections
-        let collection1_id = persistence
-            .add_collection("Collection 1".to_string())
-            .await
-            .unwrap();
-        let collection2_id = persistence
-            .add_collection("Collection 2".to_string())
-            .await
-            .unwrap();
+        let collection1_id = p.add_collection("Collection 1".to_string()).await.unwrap();
+        let collection2_id = p.add_collection("Collection 2".to_string()).await.unwrap();
 
         // Add cards to the first collection
-        persistence
-            .add_card_to_collection(
-                &collection1_id,
-                &"card1".to_string(),
-                5,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-        persistence
-            .add_card_to_collection(
-                &collection1_id,
-                &"card2".to_string(),
-                3,
-                1,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        let cid1 =
+            add_card_to_collection(&mut p, &collection1_id, &"card1".to_string(), 5, 2).await;
+        let cid2 =
+            add_card_to_collection(&mut p, &collection1_id, &"card2".to_string(), 3, 1).await;
 
         // Verify cards are in collection 1
-        let cards1 = persistence
+        let cards1 = p
             .get_cards_in_collection_paginated(&collection1_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards1.len(), 2);
 
         // Remove collection 1 and move cards to collection 2
-        let result = persistence
-            .remove_collection(collection1_id.clone(), Some(collection2_id.clone()))
+        let result = p
+            .remove_collection(&collection1_id, Some(collection2_id.clone()))
             .await
             .unwrap();
         assert_eq!(result, collection1_id); // Should return the removed collection ID
 
         // Verify collection 1 is gone
-        let collections = persistence.list_collections().await.unwrap();
+        let collections = p.list_collections(None).await.unwrap();
         assert!(!collections.contains(&collection1_id));
 
         // Verify cards are now in collection 2
-        let cards2 = persistence
+        let cards2 = p
             .get_cards_in_collection_paginated(&collection2_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards2.len(), 2);
 
         // Verify the card quantities are correct
-        let card1 = cards2.iter().find(|c| c.uuid == "card1").unwrap();
+        let card1 = cards2.iter().find(|c| c.uuid == cid1).unwrap();
         assert_eq!(card1.quantity, 5);
         assert_eq!(card1.foil_quantity, 2);
 
-        let card2 = cards2.iter().find(|c| c.uuid == "card2").unwrap();
+        let card2 = cards2.iter().find(|c| c.uuid == cid2).unwrap();
         assert_eq!(card2.quantity, 3);
         assert_eq!(card2.foil_quantity, 1);
 
@@ -844,80 +652,57 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_cards_between_collections() {
-        let mut persistence = SQLitePersistenceSystem::new(true, None).unwrap();
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
-        let collection_id = persistence
+        let collection_id = p
             .add_collection("Test Collection".to_string())
             .await
             .unwrap();
 
-        persistence
-            .add_card_to_collection(
-                &collection_id,
-                &"card1".to_string(),
-                5,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
+        let cid = add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 5, 2).await;
+        add_card_to_collection(&mut p, &DEFAULT.into(), &"default_card".to_string(), 3, 1).await;
 
-        persistence
-            .add_card_to_collection(
-                &"Default".to_string(),
-                &"default_card".to_string(),
-                3,
-                1,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
-            )
-            .await
-            .unwrap();
-
-        let cards = persistence
-            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 100)
+        let cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.to_string(), 0, 100)
             .await
             .unwrap();
 
         assert_eq!(cards.len(), 1);
 
-        persistence
-            .move_cards_between_collections(
-                &[CollectionCard {
-                    uuid: "card1".to_string(),
-                    quantity: 4,
-                    foil_quantity: 0,
-                    time_added: "".to_string(),
-                    collection: collection_id.clone(),
-                    provider: "".to_string(),
-                }]
-                .to_vec(),
-                "Default".to_string(),
-            )
-            .await
-            .unwrap();
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: cid.clone(),
+                quantity: 4,
+                foil_quantity: 0,
+                time_added: "".to_string(),
+                collection: collection_id.clone(),
+                provider: "".to_string(),
+            }],
+            DEFAULT.to_string(),
+        )
+        .await
+        .unwrap();
 
-        let collections = persistence.list_collections().await.unwrap();
-        assert!(collections.contains(&"Default".to_string()));
+        let collections = p.list_collections(None).await.unwrap();
+        assert!(collections.contains(&DEFAULT.to_string()));
 
-        let cards = persistence
-            .get_cards_in_collection_paginated(&"Default".to_string(), 0, 100)
+        let cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.to_string(), 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
 
-        let card1 = cards.iter().find(|c| c.uuid == "card1").unwrap();
+        let card1 = cards.iter().find(|c| c.uuid == cid).unwrap();
         assert_eq!(card1.quantity, 4);
         assert_eq!(card1.foil_quantity, 0);
 
-        let cards = persistence
+        let cards = p
             .get_cards_in_collection_paginated(&collection_id, 0, 100)
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
 
-        let card1 = cards.iter().find(|c| c.uuid == "card1").unwrap();
+        let card1 = cards.iter().find(|c| c.uuid == cid).unwrap();
         assert_eq!(card1.quantity, 1);
         assert_eq!(card1.foil_quantity, 2);
     }
@@ -935,7 +720,7 @@ mod tests {
 
         persistence
             .add_cards_to_collection(
-                collection_id.clone(),
+                &collection_id,
                 &[
                     CollectionCard {
                         uuid: "12345".to_string(),
@@ -972,13 +757,16 @@ mod tests {
         assert_eq!(card.foil_quantity, 0);
 
         persistence
-            .add_card_to_collection(
+            .add_cards_to_collection(
                 &collection_id,
-                &"12345".to_string(),
-                3,
-                2,
-                &"2023-01-01T00:00:00Z".to_string(),
-                &"".to_string(),
+                &[CollectionCard {
+                    uuid: "12345".to_string(),
+                    quantity: 3,
+                    foil_quantity: 2,
+                    time_added: time_added.clone(),
+                    provider: "".to_string(),
+                    collection: collection_id.clone(),
+                }],
             )
             .await
             .unwrap();
@@ -995,7 +783,7 @@ mod tests {
 
         persistence
             .add_cards_to_collection(
-                collection_id.clone(),
+                &collection_id,
                 &[
                     CollectionCard {
                         uuid: "12345".to_string(),

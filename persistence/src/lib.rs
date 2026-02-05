@@ -8,6 +8,7 @@ use retrieval::NamedRetrievalSystem as _;
 use retrieval::RetrievalSystem;
 use retrieval::RetrievalSystemTrait;
 
+use crate::csv_models::CSVCard;
 pub use crate::sqlite::SQLitePersistenceSystem;
 
 mod csv_models;
@@ -27,12 +28,13 @@ pub trait PersistenceSystemTrait {
 
     fn remove_collection(
         &mut self,
-        name: CollectionID,
+        name: &CollectionID,
         move_to: Option<CollectionID>,
     ) -> impl std::future::Future<Output = eyre::Result<CollectionID>>;
 
     fn list_collections(
         &self,
+        filter: Option<String>,
     ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionID>>>;
 
     fn get_cards_in_collection_count(
@@ -46,13 +48,13 @@ pub trait PersistenceSystemTrait {
         card_uuid: &CardID,
         quantity: i32,
         foil_quantity: i32,
-        time_added: &String,
-        provider: &String,
+        time_added: &str,
+        provider: &str,
     ) -> impl std::future::Future<Output = eyre::Result<CollectionCard>>;
 
     fn add_cards_to_collection(
         &mut self,
-        collection_id: CollectionID,
+        collection_id: &CollectionID,
         cards: &[CollectionCard],
     ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionCard>>>;
 
@@ -74,7 +76,7 @@ impl PersistenceSystem {
     pub async fn import_csv(
         &mut self,
         filename: String,
-        retrieval: RetrievalSystem,
+        retrieval: &RetrievalSystem,
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
     ) -> eyre::Result<()> {
         let mut rdr = csv::Reader::from_path(filename)?;
@@ -124,8 +126,7 @@ impl PersistenceSystem {
                     provider: provider.clone(),
                 })
                 .collect();
-            self.add_cards_to_collection(collection_id.clone(), &cards)
-                .await?;
+            self.add_cards_to_collection(&collection_id, &cards).await?;
 
             i += cards.len() as f32;
             if let Some(ref sender) = progress_sender {
@@ -134,6 +135,48 @@ impl PersistenceSystem {
         }
 
         Ok(())
+    }
+
+    pub async fn export_collection(
+        &self,
+        collection_id: &CollectionID,
+        retrieval: &RetrievalSystem,
+    ) -> eyre::Result<String> {
+        let mut wtr = csv::Writer::from_writer(vec![]);
+        let mut offset = 0;
+        let limit = 100;
+        loop {
+            let cards = self
+                .get_cards_in_collection_paginated(collection_id, offset, limit)
+                .await?;
+            if cards.is_empty() {
+                break;
+            }
+
+            let card_ids = cards.iter().map(|c| c.uuid.clone()).collect();
+            let searched_cards = retrieval.get_cards_by_ids(card_ids).await?;
+            let csv_cards: Vec<CSVCard> = cards
+                .iter()
+                .filter_map(|c| {
+                    let searched = searched_cards.get(&c.uuid);
+                    searched.map(|s| CSVCard {
+                        set_code: s.set_code.clone(),
+                        collector_number: s.collector_number.clone(),
+                        quantity: c.quantity as u32,
+                        foil_quantity: c.foil_quantity as u32,
+                    })
+                })
+                .collect();
+
+            for card in csv_cards {
+                wtr.serialize(card)?;
+            }
+
+            offset += limit;
+            wtr.flush()?;
+        }
+        let data = String::from_utf8(wtr.into_inner()?)?;
+        Ok(data)
     }
 }
 
@@ -144,7 +187,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn migrations_csv_import() {
+    async fn migrations_csv_import_export() {
         // Test File:
         // Set,CollectorNumber,Quantity,FoilQuantity
         // 10E,16,2,1
@@ -160,13 +203,13 @@ mod tests {
         );
         s.import_csv(
             "/home/mihail/repos/gathers/test.csv".to_string(),
-            r,
+            &r,
             Some(sender),
         )
         .await
         .unwrap();
 
-        let collections = s.list_collections().await.unwrap();
+        let collections = s.list_collections(None).await.unwrap();
         assert_eq!(collections.len(), 2); // Default and the new one
         let new_collection = collections.iter().find(|c| !"Default".eq(*c)).unwrap();
 
@@ -197,5 +240,15 @@ mod tests {
 
         let latest_progress_update = receiver.borrow();
         assert_eq!(*latest_progress_update, 1.0);
+
+        let export = s
+            .export_collection(new_collection, &r)
+            .await
+            .expect("Should work");
+
+        assert_eq!(
+            "Set,CollectorNumber,Quantity,FoilQuantity\n10E,16,2,1\n10E,17,0,4\n",
+            &export
+        );
     }
 }
