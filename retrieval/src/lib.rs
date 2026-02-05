@@ -34,6 +34,7 @@ pub trait RetrievalSystemTrait {
         &self,
         cards: Vec<(SetCode, CollectorNumber)>,
     ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>>;
+    async fn update_backend(&self) -> eyre::Result<bool>;
 }
 
 pub trait NamedRetrievalSystem {

@@ -124,6 +124,10 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
     ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>> {
         Ok(vec![])
     }
+
+    async fn update_backend(&self) -> eyre::Result<bool> {
+        Ok(false)
+    }
 }
 
 #[cfg(test)]

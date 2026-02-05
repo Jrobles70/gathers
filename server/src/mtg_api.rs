@@ -100,12 +100,19 @@ pub fn mtg_routes() -> Router<GathersState> {
         // Compare hash with existing saved hash, if any
         // Download new version if hashes don't match
         // Reload state
-        match state.0.lock().await.reload_retrieval() {
+        let mut ret = state.0.lock().await;
+        match ret
+            .retrieval
+            .update_backend()
+            .await
+            .and_then(|_| ret.reload_retrieval())
+        {
+            // match state.0.lock().await.reload_retrieval() {
             Ok(()) => Ok(Json("Update successful".to_string())),
-            _ => Err((
+            Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
-                    error: "Oof".into(),
+                    error: format!("Oof. {e}"),
                 }),
             )),
         }

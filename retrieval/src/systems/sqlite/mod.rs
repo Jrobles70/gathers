@@ -1,10 +1,17 @@
 mod models;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 
 use ::models::{filters::CardSearchFilters, CardID, CollectorNumber, MagicCard, Set, SetCode};
 use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
+use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 
 use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
@@ -14,6 +21,7 @@ impl NamedRetrievalSystem for MagicSQLiteRetrievalSystem {}
 #[derive(Debug, Clone)]
 pub struct MagicSQLiteRetrievalSystem {
     connection: Arc<tokio::sync::Mutex<Connection>>,
+    db_path: String,
 }
 
 impl MagicSQLiteRetrievalSystem {
@@ -21,7 +29,8 @@ impl MagicSQLiteRetrievalSystem {
         let path = db_path
             .unwrap_or_else(|| "/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string());
         Ok(Self {
-            connection: Arc::new(Mutex::new(Connection::open(path)?)),
+            connection: Arc::new(Mutex::new(Connection::open(path.clone())?)),
+            db_path: path,
         })
     }
 }
@@ -179,5 +188,75 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             .flatten()
             .map(|c: (String, String, String)| c)
             .collect())
+    }
+
+    async fn update_backend(&self) -> eyre::Result<bool> {
+        async fn download_file(url: &str, path: &Path) -> eyre::Result<()> {
+            let response = reqwest::get(url).await?;
+            let mut file = fs::File::create(path)?;
+            let mut content = io::Cursor::new(response.bytes().await?);
+            io::copy(&mut content, &mut file)?;
+            println!("Finished download to {file:?}");
+            Ok(())
+        }
+
+        fn calculate_sha256(path: &Path) -> eyre::Result<String> {
+            let data = fs::read(path)?;
+            let mut hasher = Sha256::new();
+            hasher.update(&data);
+            let result = hasher.finalize();
+            Ok(hex::encode(result))
+        }
+
+        fn read_sha256_from_file(path: &Path) -> eyre::Result<String> {
+            let content = fs::read_to_string(path)?;
+            Ok(content.trim().to_lowercase())
+        }
+
+        let local_file_path = PathBuf::from_str(&self.db_path)?;
+        let download_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
+        let crc_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";
+
+        let temp_dir = tempfile::tempdir()?;
+        let crc_file_path = temp_dir.path().join("remote_crc.sha");
+
+        download_file(crc_url, &crc_file_path).await?;
+        let remote_crc = read_sha256_from_file(&crc_file_path)?;
+
+        let local_crc = if local_file_path.exists() {
+            calculate_sha256(&local_file_path)?
+        } else {
+            String::from("invalid") // Dummy value that won't match
+        };
+
+        if remote_crc != local_crc {
+            println!(
+                "CRC mismatch! Local: {}, Remote: {}. Downloading replacement...",
+                local_crc, remote_crc
+            );
+
+            tokio::spawn(async move {
+                let temp_dir = tempfile::tempdir().expect("Gotta be able to create a temp dir");
+                let download_file_path = temp_dir.path().join("downloaded_file");
+
+                println!("Download from {download_url:?} to {download_file_path:?}...");
+                download_file(download_url, &download_file_path)
+                    .await
+                    .and_then(|_| calculate_sha256(&download_file_path))
+                    .map(|downloaded_crc| {
+                        if downloaded_crc == remote_crc {
+                            fs::copy(&download_file_path, local_file_path)
+                                .expect("File failed to copy");
+                            println!("File replaced successfully.");
+                        }
+                    })
+                    .map_err(|e| println!("Failed to download due to {e}"))
+            });
+
+            Ok(true)
+        } else {
+            println!("CRCs match ({}). No replacement needed.", local_crc);
+            Ok(false)
+        }
     }
 }
