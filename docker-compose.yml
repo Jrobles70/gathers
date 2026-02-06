@@ -1,0 +1,11 @@
+services:
+  server:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/:/home/app/.local/share/hometg/DB/
+    environment:
+      - STORAGE_DB_PATH=/home/app/.local/share/hometg/DB/storage.db
+      - RETRIEVAL_DB_PATH=/home/app/.local/share/hometg/DB/AllPrintings.db
+    restart: unless-stopped
