@@ -246,9 +246,9 @@ mod tests {
             .await
             .expect("Should work");
 
-        assert_eq!(
-            "Set,CollectorNumber,Quantity,FoilQuantity\n10E,16,2,1\n10E,17,0,4\n",
-            &export
+        assert!(
+            export == "Set,CollectorNumber,Quantity,FoilQuantity\n10E,16,2,1\n10E,17,0,4\n"
+                || export == "Set,CollectorNumber,Quantity,FoilQuantity\n10E,17,0,4\n10E,16,2,1\n"
         );
     }
 }

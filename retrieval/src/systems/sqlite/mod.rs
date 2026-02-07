@@ -8,7 +8,9 @@ use std::{
     sync::Arc,
 };
 
-use ::models::{filters::CardSearchFilters, CardID, CollectorNumber, MagicCard, Set, SetCode};
+use ::models::{
+    filters::CardSearchFilters, CardColour, CardID, CollectorNumber, MagicCard, Set, SetCode,
+};
 use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -53,7 +55,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         if let Some(name) = &filters.name {
             if !name.is_empty() {
                 conditions.push(format!("a.name LIKE ?{i}"));
-                params.push(format!("%{}%", name.as_str()));
+                params.push(format!("%{name}%"));
                 i += 1;
             }
         }
@@ -67,14 +69,14 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         if let Some(artist) = &filters.artist {
             if !artist.is_empty() {
                 conditions.push(format!("a.artist LIKE ?{i}"));
-                params.push(format!("%{}%", artist.as_str()));
+                params.push(format!("%{artist}%"));
                 i += 1;
             }
         }
         if let Some(text) = &filters.text {
             if !text.is_empty() {
                 conditions.push(format!("a.text LIKE ?{i}"));
-                params.push(text.to_string());
+                params.push(format!("%{text}%"));
                 i += 1;
             }
         }
@@ -168,6 +170,9 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         &self,
         cards: Vec<(SetCode, CollectorNumber)>,
     ) -> eyre::Result<Vec<(SetCode, CollectorNumber, CardID)>> {
+        if cards.is_empty() {
+            return Ok(vec![]);
+        }
         let conn = self.connection.lock().await;
         let placeholders = cards.iter().map(|_| "(?,?)").collect::<Vec<_>>().join(",");
         let mut params = vec![];
@@ -258,5 +263,190 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             println!("CRCs match ({}). No replacement needed.", local_crc);
             Ok(false)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_new_with_none() {
+        let system = MagicSQLiteRetrievalSystem::new(None);
+        assert!(system.is_ok());
+        let system = system.unwrap();
+        assert!(!system.db_path.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_new_with_custom_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let custom_path = temp_dir.path().join("test.db");
+        let system =
+            MagicSQLiteRetrievalSystem::new(Some(custom_path.to_string_lossy().to_string()));
+        assert!(system.is_ok());
+        let system = system.unwrap();
+        assert_eq!(system.db_path, custom_path.to_string_lossy().to_string());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_name_filter() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            name: Some("Black Lotus".to_string()),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(!cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_color_identity_filter() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            color_identities: Some(vec![CardColour::Black]),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(!cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_artist_filter() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            artist: Some("Christopher Rush".to_string()),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(!cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_text_filter() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            text: Some("Destroy target creature".to_string()),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(!cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_set_code_filter() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            set_code: Some("LEA".to_string()),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(!cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_skip_and_limit() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            name: Some("Plains".to_string()),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, Some(6), Some(5)).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(cards.len() <= 5);
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_empty_result() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            name: Some("NonExistentCardXYZ123".to_string()),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_cards_by_ids() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let ids = vec![
+            "94cea151-fddc-5d37-bb90-8a3bb17c40b4".to_string(),
+            "5d45d146-5a42-502e-affb-71f3e81cf7e0".to_string(),
+        ];
+        let result = system.get_cards_by_ids(ids).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert_eq!(cards.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_cards_by_empty_ids() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let result = system.get_cards_by_ids(vec![]).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_sets() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let result = system.get_sets().await;
+        assert!(result.is_ok());
+        let sets = result.unwrap();
+        assert!(!sets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_bulk_search_cards() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let cards = vec![
+            (
+                SetCode::from_str("LEA").unwrap(),
+                CollectorNumber::from_str("1").unwrap(),
+            ),
+            (
+                SetCode::from_str("2ED").unwrap(),
+                CollectorNumber::from_str("1").unwrap(),
+            ),
+        ];
+        let result = system.bulk_search_cards(cards).await;
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_bulk_search_cards_empty() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let result = system.bulk_search_cards(vec![]).await;
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_named_retrieval_system_trait() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let name = system.name();
+        assert_eq!(
+            name,
+            "retrieval::systems::sqlite::MagicSQLiteRetrievalSystem"
+        );
     }
 }
