@@ -8,9 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use ::models::{
-    filters::CardSearchFilters, CardColour, CardID, CollectorNumber, MagicCard, Set, SetCode,
-};
+use ::models::{filters::CardSearchFilters, CardID, CollectorNumber, MagicCard, Set, SetCode};
 use models::{SqlCard, SqlCardIdentifiers};
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -269,6 +267,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ::models::CardColour;
     use tempfile::TempDir;
 
     #[tokio::test]

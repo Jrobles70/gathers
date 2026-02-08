@@ -16,6 +16,7 @@ pub enum RetrievalSystem {
 }
 
 #[enum_dispatch(RetrievalSystem)]
+#[allow(async_fn_in_trait)]
 pub trait RetrievalSystemTrait {
     async fn search_cards(
         &self,
