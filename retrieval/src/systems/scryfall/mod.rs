@@ -28,11 +28,44 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         skip: Option<usize>,
         limit: Option<usize>,
     ) -> eyre::Result<Vec<MagicCard>> {
+        let mut query = vec![];
+
+        if let Some(name) = &filters.name {
+            query.push(format!("name:{}", name));
+        }
+
+        if let Some(set_code) = &filters.set_code {
+            query.push(format!("set:{}", set_code));
+        }
+
+        if let Some(color_identities) = &filters.color_identities {
+            for color in color_identities {
+                query.push(format!("c:{}", color));
+            }
+        }
+
+        if let Some(text) = &filters.text {
+            query.push(format!("t:{}", text));
+        }
+
+        let query_string = query.join(" ");
+
+        let page = skip.map(|s| s / 100).unwrap_or(1);
+        let unique = "cards";
+        let order = "name";
+        let dir = "asc";
+        let include_extras = false;
+
         let url = format!(
-            "https://api.scryfall.com/cards/named?fuzzy={}",
-            filters.name.unwrap_or("panharmonicon".to_string())
-        )
-        .to_string();
+            "https://api.scryfall.com/cards/search?q={}&page={}&unique={}&order={}&dir={}&include_extras={}",
+            query_string,
+            page,
+            unique,
+            order,
+            dir,
+            include_extras
+        );
+
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::USER_AGENT,
@@ -42,68 +75,72 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         let client = reqwest::Client::new();
         let response = client.get(url).headers(headers).send().await?;
         let json: Value = response.json().await?;
-        println!("{json:?}");
-        let card_name = json
-            .get("name")
-            .and_then(Value::as_str)
-            .ok_or_eyre("Could not retrieve name")?;
-        let card_id = json
-            .get("id")
-            .and_then(Value::as_str)
-            .ok_or_eyre("Could not retrieve id")?
-            .to_string();
-        Ok(vec![models::MagicCard {
-            name: card_name.to_string(),
-            set_code: json
-                .get("set")
-                .and_then(Value::as_str)
-                .ok_or_eyre("Could not retrieve printings")?
-                .to_string(),
-            artist: json
-                .get("artist")
-                .and_then(Value::as_str)
-                .ok_or_eyre("Could not retrieve artist")?
-                .to_string(),
-            color_identity: json
-                .get("color_identity")
-                .and_then(Value::as_array)
-                .ok_or_eyre("Oh no")?
-                .iter()
-                .filter_map(Value::as_str)
-                .collect::<Vec<&str>>()
-                .iter()
-                .map(|c| match *c {
-                    "B" => CardColour::Black,
-                    "U" => CardColour::Blue,
-                    "W" => CardColour::White,
-                    "G" => CardColour::Green,
-                    "R" => CardColour::Red,
-                    "C" => CardColour::Colourless,
-                    _ => CardColour::Colourless,
+
+        if let Some(error) = json.get("object").and_then(Value::as_str) {
+            if error == "error" {
+                let error_msg = json
+                    .get("details")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Unknown error");
+                return Err(eyre::eyre!("Scryfall API error: {}", error_msg));
+            }
+        }
+
+        let cards_array = json
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_eyre("Could not retrieve cards array")?;
+
+        let limit = limit.unwrap_or(cards_array.len());
+        let cards = cards_array
+            .iter()
+            .take(limit)
+            .filter_map(|card| {
+                let card = card.as_object()?;
+                let card_name = card.get("name")?.as_str()?;
+                let card_id = card.get("id")?.as_str()?;
+                let set_code = card.get("set")?.as_str()?;
+                let artist = card.get("artist")?.as_str()?;
+                let rarity = card.get("rarity")?.as_str()?;
+                let oracle_text = card.get("oracle_text")?.as_str()?;
+                let collector_number = card.get("collector_number")?.as_str()?;
+
+                let color_identity = card
+                    .get("color_identity")
+                    .and_then(Value::as_array)?
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<&str>>()
+                    .iter()
+                    .map(|c| match *c {
+                        "B" => CardColour::Black,
+                        "U" => CardColour::Blue,
+                        "W" => CardColour::White,
+                        "G" => CardColour::Green,
+                        "R" => CardColour::Red,
+                        "C" => CardColour::Colourless,
+                        _ => CardColour::Colourless,
+                    })
+                    .collect::<Vec<CardColour>>();
+
+                Some(models::MagicCard {
+                    name: card_name.to_string(),
+                    set_code: set_code.to_string(),
+                    artist: artist.to_string(),
+                    color_identity,
+                    id: card_id.to_string(),
+                    rarity: rarity.to_string().into(),
+                    text: oracle_text.to_string(),
+                    card_identifiers: CardIdentifiers {
+                        scryfall_id: card_id.to_string(),
+                        id: card_id.to_string(),
+                    },
+                    collector_number: collector_number.to_string(),
                 })
-                .collect::<Vec<CardColour>>(),
-            id: card_id.clone(),
-            rarity: json
-                .get("rarity")
-                .and_then(Value::as_str)
-                .ok_or_eyre("Oh no")?
-                .to_string()
-                .into(),
-            text: json
-                .get("oracle_text")
-                .and_then(Value::as_str)
-                .ok_or_eyre("Oh no")?
-                .to_string(),
-            card_identifiers: CardIdentifiers {
-                scryfall_id: card_id.clone(),
-                id: card_id.clone(),
-            },
-            collector_number: json
-                .get("collector_number")
-                .and_then(Value::as_str)
-                .ok_or_eyre("Oh no")?
-                .to_string(),
-        }])
+            })
+            .collect::<Vec<MagicCard>>();
+
+        Ok(cards)
     }
 
     async fn get_cards_by_ids(

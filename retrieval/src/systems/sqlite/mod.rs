@@ -26,8 +26,7 @@ pub struct MagicSQLiteRetrievalSystem {
 
 impl MagicSQLiteRetrievalSystem {
     pub fn new(db_path: Option<String>) -> eyre::Result<Self> {
-        let path = db_path
-            .unwrap_or_else(|| "/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string());
+        let path = db_path.unwrap_or_else(|| "../data/testPrintings.db".to_string());
         Ok(Self {
             connection: Arc::new(Mutex::new(Connection::open(path.clone())?)),
             db_path: path,
@@ -97,7 +96,6 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         if let Some(skip) = skip {
             query.push_str(format!(" OFFSET {skip}").as_str())
         }
-        println!("{}", query);
         let mut stmt = conn.prepare(&query)?;
         let user_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
             Ok(SqlCard {
@@ -182,7 +180,6 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             "SELECT uuid, setCode, number FROM cards WHERE (setCode, number) IN (VALUES {});",
             placeholders
         );
-        println!("{query}");
         let mut stmt = conn.prepare(&query)?;
         let iter = stmt.query_map(rusqlite::params_from_iter(params), |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
@@ -293,7 +290,7 @@ mod tests {
     async fn test_search_cards_with_name_filter() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let filters = CardSearchFilters {
-            name: Some("Black Lotus".to_string()),
+            name: Some("Goblin King".to_string()),
             ..Default::default()
         };
         let result = system.search_cards(filters, None, None).await;
@@ -319,7 +316,7 @@ mod tests {
     async fn test_search_cards_with_artist_filter() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let filters = CardSearchFilters {
-            artist: Some("Christopher Rush".to_string()),
+            artist: Some("Jason Chan".to_string()),
             ..Default::default()
         };
         let result = system.search_cards(filters, None, None).await;
@@ -332,7 +329,7 @@ mod tests {
     async fn test_search_cards_with_text_filter() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let filters = CardSearchFilters {
-            text: Some("Destroy target creature".to_string()),
+            text: Some("destroy target enchantment".to_string()),
             ..Default::default()
         };
         let result = system.search_cards(filters, None, None).await;
@@ -345,7 +342,7 @@ mod tests {
     async fn test_search_cards_with_set_code_filter() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let filters = CardSearchFilters {
-            set_code: Some("LEA".to_string()),
+            set_code: Some("M20".to_string()),
             ..Default::default()
         };
         let result = system.search_cards(filters, None, None).await;
@@ -358,7 +355,7 @@ mod tests {
     async fn test_search_cards_with_skip_and_limit() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let filters = CardSearchFilters {
-            name: Some("Plains".to_string()),
+            name: Some("Rule of Law".to_string()),
             ..Default::default()
         };
         let result = system.search_cards(filters, Some(6), Some(5)).await;
@@ -384,8 +381,8 @@ mod tests {
     async fn test_get_cards_by_ids() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let ids = vec![
-            "94cea151-fddc-5d37-bb90-8a3bb17c40b4".to_string(),
-            "5d45d146-5a42-502e-affb-71f3e81cf7e0".to_string(),
+            "0003caab-9ff5-5d1a-bc06-976dd0457f19".to_string(),
+            "0005d268-3fd0-5424-bc6b-573ecd713aa1".to_string(),
         ];
         let result = system.get_cards_by_ids(ids).await;
         assert!(result.is_ok());
@@ -416,12 +413,12 @@ mod tests {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let cards = vec![
             (
-                SetCode::from_str("LEA").unwrap(),
-                CollectorNumber::from_str("1").unwrap(),
+                SetCode::from_str("TLE").unwrap(),
+                CollectorNumber::from_str("12").unwrap(),
             ),
             (
-                SetCode::from_str("2ED").unwrap(),
-                CollectorNumber::from_str("1").unwrap(),
+                SetCode::from_str("ARB").unwrap(),
+                CollectorNumber::from_str("52").unwrap(),
             ),
         ];
         let result = system.bulk_search_cards(cards).await;
