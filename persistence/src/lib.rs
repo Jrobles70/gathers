@@ -190,8 +190,8 @@ mod tests {
     async fn migrations_csv_import_export() {
         // Test File:
         // Set,CollectorNumber,Quantity,FoilQuantity
-        // 10E,16,2,1
-        // 10E,17,0,4
+        // M13,39,2,1
+        // ISD,173,0,4
 
         let (sender, receiver) = tokio::sync::watch::channel(0.0);
 
@@ -201,13 +201,9 @@ mod tests {
         let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
-        s.import_csv(
-            "/home/mihail/repos/gathers/test.csv".to_string(),
-            &r,
-            Some(sender),
-        )
-        .await
-        .unwrap();
+        s.import_csv("../data/test.csv".to_string(), &r, Some(sender))
+            .await
+            .unwrap();
 
         let collections = s.list_collections(None).await.unwrap();
         assert_eq!(collections.len(), 2); // Default and the new one
@@ -226,14 +222,14 @@ mod tests {
 
         let card = cards
             .iter()
-            .find(|c| c.uuid == "d68306e2-9877-5987-84b3-12b8234c8eec")
+            .find(|c| c.uuid == "0005d268-3fd0-5424-bc6b-573ecd713aa1")
             .unwrap();
         assert_eq!(card.quantity, 2);
         assert_eq!(card.foil_quantity, 1);
 
         let card = cards
             .iter()
-            .find(|c| c.uuid == "546eac7c-1424-597d-ac13-bf8558e88fe3")
+            .find(|c| c.uuid == "0003caab-9ff5-5d1a-bc06-976dd0457f19")
             .unwrap();
         assert_eq!(card.quantity, 0);
         assert_eq!(card.foil_quantity, 4);
@@ -246,9 +242,10 @@ mod tests {
             .await
             .expect("Should work");
 
+        println!("{export}");
         assert!(
-            export == "Set,CollectorNumber,Quantity,FoilQuantity\n10E,16,2,1\n10E,17,0,4\n"
-                || export == "Set,CollectorNumber,Quantity,FoilQuantity\n10E,17,0,4\n10E,16,2,1\n"
+            export == "Set,CollectorNumber,Quantity,FoilQuantity\nM13,39,2,1\nISD,173,0,4\n"
+                || export == "Set,CollectorNumber,Quantity,FoilQuantity\nISD,173,0,4\nM13,39,2,1\n"
         );
     }
 }
