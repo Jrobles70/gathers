@@ -33,8 +33,7 @@ pub enum Rarity {
     Rare,
     Mythic,
     Special,
-    // TODO if others
-    // Bonus
+    Bonus,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -101,6 +100,7 @@ impl std::fmt::Display for Rarity {
             Rarity::Rare => write!(f, "Rare"),
             Rarity::Mythic => write!(f, "Mythic"),
             Rarity::Special => write!(f, "Special"),
+            Rarity::Bonus => write!(f, "Bonus"),
         }
     }
 }
@@ -113,6 +113,7 @@ impl Rarity {
             Rarity::Rare => "rare",
             Rarity::Mythic => "mythic",
             Rarity::Special => "special",
+            Rarity::Bonus => "bonus",
         }
         .to_string()
     }
@@ -126,7 +127,7 @@ impl From<String> for Rarity {
             "Rare" | "rare" | "r" => Rarity::Rare,
             "Mythic" | "mythic" | "m" => Rarity::Mythic,
             "Special" => Rarity::Special,
-            _ => Rarity::Common,
+            _ => Rarity::Bonus,
         }
     }
 }
