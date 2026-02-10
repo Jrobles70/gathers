@@ -36,6 +36,18 @@ pub enum Rarity {
     // TODO if others
 }
 
+impl std::fmt::Display for Rarity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Rarity::Common => write!(f, "Common"),
+            Rarity::Uncommon => write!(f, "Uncommon"),
+            Rarity::Rare => write!(f, "Rare"),
+            Rarity::Mythic => write!(f, "Mythic"),
+            Rarity::Special => write!(f, "Special"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct CardIdentifiers {
     pub id: String,
