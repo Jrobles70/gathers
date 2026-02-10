@@ -1,0 +1,16 @@
+[package]
+name = "benches"
+version = "0.1.0"
+edition = "2021"
+
+
+[[bench]]
+name = "card_search_benchmark"
+harness = false
+path = "src/card_search_benchmark.rs"
+
+[dependencies]
+retrieval = { path = "../retrieval" }
+models = { path = "../models" }
+criterion = { version = "0.5", features = ["html_reports"] }
+tokio = { workspace = true }

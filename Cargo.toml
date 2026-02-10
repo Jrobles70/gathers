@@ -1,5 +1,5 @@
 [workspace]
-members = ["models", "retrieval", "cli", "server", "persistence"]
+members = ["models", "retrieval", "cli", "server", "persistence", "benches"]
 resolver = "2"
 
 [workspace.dependencies]
