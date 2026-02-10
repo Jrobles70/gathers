@@ -34,18 +34,7 @@ pub enum Rarity {
     Mythic,
     Special,
     // TODO if others
-}
-
-impl std::fmt::Display for Rarity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Rarity::Common => write!(f, "Common"),
-            Rarity::Uncommon => write!(f, "Uncommon"),
-            Rarity::Rare => write!(f, "Rare"),
-            Rarity::Mythic => write!(f, "Mythic"),
-            Rarity::Special => write!(f, "Special"),
-        }
-    }
+    // Bonus
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
@@ -101,6 +90,31 @@ impl Display for CardColour {
             CardColour::Multicoloured => write!(f, "_"),
             CardColour::Colourless => write!(f, "C"),
         }
+    }
+}
+
+impl std::fmt::Display for Rarity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Rarity::Common => write!(f, "Common"),
+            Rarity::Uncommon => write!(f, "Uncommon"),
+            Rarity::Rare => write!(f, "Rare"),
+            Rarity::Mythic => write!(f, "Mythic"),
+            Rarity::Special => write!(f, "Special"),
+        }
+    }
+}
+
+impl Rarity {
+    pub fn to_single_string(&self) -> String {
+        match self {
+            Rarity::Common => "common",
+            Rarity::Uncommon => "uncommon",
+            Rarity::Rare => "rare",
+            Rarity::Mythic => "mythic",
+            Rarity::Special => "special",
+        }
+        .to_string()
     }
 }
 

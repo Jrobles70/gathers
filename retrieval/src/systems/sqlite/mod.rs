@@ -85,8 +85,13 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             }
         }
         if let Some(rarity) = &filters.rarity {
-            conditions.push(format!("a.rarity LIKE ?{i}"));
-            params.push(rarity.to_string());
+            conditions.push(format!("a.rarity = ?{i}"));
+            params.push(format!("{}", rarity.to_single_string()));
+            i += 1;
+        }
+        if let Some(collector_number) = &filters.collector_number {
+            conditions.push(format!("a.number = ?{i}"));
+            params.push(format!("{collector_number}"));
         }
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
