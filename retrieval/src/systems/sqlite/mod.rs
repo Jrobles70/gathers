@@ -94,14 +94,14 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             params.push(format!("{collector_number}"));
             i += 1;
         }
-        if let Some(subtype) = &filters.subtype {
+        if let Some(subtype) = &filters.subtypes {
             if !subtype.is_empty() {
                 conditions.push(format!("a.subtypes LIKE ?{i}"));
                 params.push(format!("%{subtype}%"));
                 i += 1;
             }
         }
-        if let Some(supertype) = &filters.supertype {
+        if let Some(supertype) = &filters.supertypes {
             if !supertype.is_empty() {
                 conditions.push(format!("a.supertypes LIKE ?{i}"));
                 params.push(format!("%{supertype}%"));
