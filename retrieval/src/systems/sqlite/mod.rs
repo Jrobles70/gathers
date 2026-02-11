@@ -96,9 +96,11 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         }
         if let Some(subtype) = &filters.subtypes {
             if !subtype.is_empty() {
-                conditions.push(format!("a.subtypes LIKE ?{i}"));
-                params.push(format!("%{subtype}%"));
-                i += 1;
+                for s in subtype {
+                    conditions.push(format!("a.subtypes LIKE ?{i}"));
+                    params.push(format!("%{s}%"));
+                    i += 1;
+                }
             }
         }
         if let Some(supertype) = &filters.supertypes {
@@ -110,8 +112,10 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         }
         if let Some(types) = &filters.types {
             if !types.is_empty() {
-                conditions.push(format!("a.types LIKE ?{i}"));
-                params.push(format!("%{types}%"));
+                for t in types {
+                    conditions.push(format!("a.types LIKE ?{i}"));
+                    params.push(format!("%{t}%"));
+                }
             }
         }
         if !conditions.is_empty() {

@@ -42,13 +42,13 @@ struct Args {
     rarity: Option<String>,
 
     #[clap(long)]
-    subtype: Option<String>,
+    subtype: Option<Vec<String>>,
 
     #[clap(long)]
     supertype: Option<String>,
 
     #[clap(long)]
-    types: Option<String>,
+    types: Option<Vec<String>>,
 }
 
 #[tokio::main]
@@ -57,7 +57,7 @@ async fn main() -> eyre::Result<()> {
 
     let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH")
         .ok()
-        .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
+        .or_else(|| Some("AllPrintings.db".to_string()));
 
     let retrieval: RetrievalSystem = match args.system {
         Systems::Scryfall => {
