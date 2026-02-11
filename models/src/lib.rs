@@ -23,9 +23,9 @@ pub struct MagicCard {
     pub color_identity: Vec<CardColour>,
     pub text: CardText,
     pub card_identifiers: CardIdentifiers,
-    pub subtype: String,
-    pub supertype: String,
-    pub types: String,
+    pub subtypes: Vec<String>,
+    pub supertypes: Vec<String>,
+    pub types: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -77,9 +77,9 @@ impl Default for MagicCard {
                 scryfall_id: "".to_string(),
             },
             collector_number: "".to_string(),
-            subtype: "".to_string(),
-            supertype: "".to_string(),
-            types: "".to_string(),
+            subtypes: vec![],
+            supertypes: vec![],
+            types: vec![],
         }
     }
 }
@@ -94,6 +94,21 @@ impl Display for CardColour {
             CardColour::Black => write!(f, "B"),
             CardColour::Multicoloured => write!(f, "_"),
             CardColour::Colourless => write!(f, "C"),
+        }
+    }
+}
+
+impl From<&String> for CardColour {
+    fn from(value: &String) -> Self {
+        match value.to_lowercase().as_str() {
+            "w" | "white" => CardColour::White,
+            "u" | "blue" => CardColour::Blue,
+            "b" | "black" => CardColour::Black,
+            "r" | "red" => CardColour::Red,
+            "g" | "green" => CardColour::Green,
+            "c" | "colourless" => CardColour::Colourless,
+            "m" | "multicoloured" => CardColour::Multicoloured,
+            _ => CardColour::Colourless,
         }
     }
 }

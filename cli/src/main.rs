@@ -71,24 +71,7 @@ async fn main() -> eyre::Result<()> {
     let color_identities: Option<Vec<CardColour>> = if args.color.is_empty() {
         None
     } else {
-        Some(
-            args.color
-                .iter()
-                .filter_map(|c| match c.to_lowercase().as_str() {
-                    "w" | "white" => Some(CardColour::White),
-                    "u" | "blue" => Some(CardColour::Blue),
-                    "b" | "black" => Some(CardColour::Black),
-                    "r" | "red" => Some(CardColour::Red),
-                    "g" | "green" => Some(CardColour::Green),
-                    "c" | "colourless" => Some(CardColour::Colourless),
-                    "m" | "multicoloured" => Some(CardColour::Multicoloured),
-                    _ => {
-                        eprintln!("Warning: Unknown color '{}', ignoring", c);
-                        None
-                    }
-                })
-                .collect(),
-        )
+        Some(args.color.iter().map(|c| c.into()).collect())
     };
 
     let rarity: Option<Rarity> = args.rarity.map(|r| r.into());
@@ -141,9 +124,9 @@ async fn main() -> eyre::Result<()> {
             color_str,
             card.artist,
             card.collector_number,
-            card.subtype,
-            card.supertype,
-            card.types
+            card.subtypes.join(","),
+            card.supertypes.join(","),
+            card.types.join(",")
         );
     }
 

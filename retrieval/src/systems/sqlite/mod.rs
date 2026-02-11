@@ -9,7 +9,7 @@ use std::{
 };
 
 use ::models::{filters::CardSearchFilters, CardID, CollectorNumber, MagicCard, Set, SetCode};
-use models::{SqlCard, SqlCardIdentifiers};
+use models::SqlCard;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
@@ -127,25 +127,8 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             query.push_str(format!(" OFFSET {skip}").as_str())
         }
         let mut stmt = conn.prepare(&query)?;
-        let user_iter = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
-            Ok(SqlCard {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                set_code: row.get(2)?,
-                color_identity: row.get(5)?,
-                text: row.get(6)?,
-                rarity: row.get(3)?,
-                artist: row.get(4)?,
-                card_identifiers: SqlCardIdentifiers {
-                    scryfall_id: row.get(7)?,
-                    id: row.get(0)?,
-                },
-                collector_number: row.get(8)?,
-                subtype: row.get(9)?,
-                supertype: row.get(10)?,
-                types: row.get(11)?,
-            })
-        })?;
+        let user_iter =
+            stmt.query_map(rusqlite::params_from_iter(params.iter()), SqlCard::from_row)?;
 
         Ok(user_iter
             .filter(|c| c.is_ok())
@@ -160,25 +143,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number, a.subtypes, a.supertypes, a.types FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
             );
         let mut stmt = conn.prepare(&query)?;
-        let iter = stmt.query_map(rusqlite::params_from_iter(ids), |row| {
-            Ok(SqlCard {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                set_code: row.get(2)?,
-                color_identity: row.get(5)?,
-                text: row.get(6)?,
-                rarity: row.get(3)?,
-                artist: row.get(4)?,
-                card_identifiers: SqlCardIdentifiers {
-                    scryfall_id: row.get(7)?,
-                    id: row.get(0)?,
-                },
-                collector_number: row.get(8)?,
-                subtype: row.get(9)?,
-                supertype: row.get(10)?,
-                types: row.get(11)?,
-            })
-        })?;
+        let iter = stmt.query_map(rusqlite::params_from_iter(ids), SqlCard::from_row)?;
         Ok(iter
             .flatten()
             .map(|c| (c.clone().id, c.clone().into()))

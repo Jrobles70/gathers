@@ -22,6 +22,28 @@ pub struct SqlCard {
     pub types: String,
 }
 
+impl SqlCard {
+    pub fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Self> {
+        Ok(SqlCard {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            set_code: row.get(2)?,
+            color_identity: row.get(5)?,
+            text: row.get(6)?,
+            rarity: row.get(3)?,
+            artist: row.get(4)?,
+            card_identifiers: SqlCardIdentifiers {
+                scryfall_id: row.get(7)?,
+                id: row.get(0)?,
+            },
+            collector_number: row.get(8)?,
+            subtype: row.get(9)?,
+            supertype: row.get(10)?,
+            types: row.get(11)?,
+        })
+    }
+}
+
 impl From<SqlCard> for MagicCard {
     fn from(value: SqlCard) -> Self {
         let colours: Vec<CardColour> = value
@@ -43,6 +65,21 @@ impl From<SqlCard> for MagicCard {
         } else {
             colours
         };
+        let subtypes = value
+            .subtype
+            .split(",")
+            .map(|t| t.trim().to_string())
+            .collect();
+        let supertypes = value
+            .supertype
+            .split(",")
+            .map(|t| t.trim().to_string())
+            .collect();
+        let types = value
+            .types
+            .split(",")
+            .map(|t| t.trim().to_string())
+            .collect();
         MagicCard {
             id: value.id,
             name: value.name,
@@ -56,9 +93,9 @@ impl From<SqlCard> for MagicCard {
                 scryfall_id: value.card_identifiers.scryfall_id,
             },
             collector_number: value.collector_number,
-            subtype: value.subtype,
-            supertype: value.supertype,
-            types: value.types,
+            subtypes,
+            supertypes,
+            types,
         }
     }
 }
