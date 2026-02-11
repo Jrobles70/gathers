@@ -15,6 +15,9 @@ pub struct CardSearchFilters {
     pub text: Option<String>,
     #[serde(default, deserialize_with = "empty_string_to_none")]
     pub rarity: Option<Rarity>,
+    pub subtype: Option<String>,
+    pub supertype: Option<String>,
+    pub types: Option<String>,
 }
 
 impl CardSearchFilters {
@@ -27,6 +30,9 @@ impl CardSearchFilters {
             artist: None,
             text: None,
             rarity: None,
+            subtype: None,
+            supertype: None,
+            types: None,
         }
     }
 

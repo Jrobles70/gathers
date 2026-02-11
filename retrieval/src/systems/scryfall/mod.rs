@@ -136,6 +136,9 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                         id: card_id.to_string(),
                     },
                     collector_number: collector_number.to_string(),
+                    subtype: "".to_string(),
+                    supertype: "".to_string(),
+                    types: "".to_string(),
                 })
             })
             .collect::<Vec<MagicCard>>();
@@ -222,6 +225,9 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                     .and_then(Value::as_str)
                     .ok_or_eyre("Could not retrieve collector number")?
                     .to_string(),
+                subtype: "".to_string(),
+                supertype: "".to_string(),
+                types: "".to_string(),
             };
 
             result.insert(id, card);

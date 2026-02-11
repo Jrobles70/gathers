@@ -40,6 +40,15 @@ struct Args {
 
     #[clap(short, long)]
     rarity: Option<String>,
+
+    #[clap(long)]
+    subtype: Option<String>,
+
+    #[clap(long)]
+    supertype: Option<String>,
+
+    #[clap(long)]
+    types: Option<String>,
 }
 
 #[tokio::main]
@@ -94,6 +103,9 @@ async fn main() -> eyre::Result<()> {
                 artist: args.artist,
                 text: args.text,
                 rarity,
+                subtype: args.subtype,
+                supertype: args.supertype,
+                types: args.types,
                 ..Default::default()
             },
             Some(args.offset),
@@ -108,10 +120,10 @@ async fn main() -> eyre::Result<()> {
 
     println!("Found {} card(s):\n", cards.len());
     println!(
-        "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10}",
-        "Name", "Set", "Rarity", "Colors", "Artist", "Number"
+        "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
+        "Name", "Set", "Rarity", "Colors", "Artist", "Number", "Subtype", "Supertype", "Types"
     );
-    println!("{}", "-".repeat(110));
+    println!("{}", "-".repeat(140));
 
     for card in cards {
         let color_str: String = card
@@ -122,13 +134,16 @@ async fn main() -> eyre::Result<()> {
             .join("");
 
         println!(
-            "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10}",
+            "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
             card.name,
             card.set_code,
             card.rarity.to_string().to_lowercase(),
             color_str,
             card.artist,
-            card.collector_number
+            card.collector_number,
+            card.subtype,
+            card.supertype,
+            card.types
         );
     }
 

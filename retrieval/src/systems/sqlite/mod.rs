@@ -43,7 +43,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
     ) -> eyre::Result<Vec<MagicCard>> {
         let conn = self.connection.lock().await;
         let mut query =
-            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number, a.subtypes, a.supertypes, a.types FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
                 .to_string();
         let mut conditions = Vec::new();
         let mut params = Vec::new();
@@ -92,6 +92,27 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         if let Some(collector_number) = &filters.collector_number {
             conditions.push(format!("a.number = ?{i}"));
             params.push(format!("{collector_number}"));
+            i += 1;
+        }
+        if let Some(subtype) = &filters.subtype {
+            if !subtype.is_empty() {
+                conditions.push(format!("a.subtypes LIKE ?{i}"));
+                params.push(format!("%{subtype}%"));
+                i += 1;
+            }
+        }
+        if let Some(supertype) = &filters.supertype {
+            if !supertype.is_empty() {
+                conditions.push(format!("a.supertypes LIKE ?{i}"));
+                params.push(format!("%{supertype}%"));
+                i += 1;
+            }
+        }
+        if let Some(types) = &filters.types {
+            if !types.is_empty() {
+                conditions.push(format!("a.types LIKE ?{i}"));
+                params.push(format!("%{types}%"));
+            }
         }
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
@@ -120,6 +141,9 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
                     id: row.get(0)?,
                 },
                 collector_number: row.get(8)?,
+                subtype: row.get(9)?,
+                supertype: row.get(10)?,
+                types: row.get(11)?,
             })
         })?;
 
@@ -133,7 +157,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
-            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number, a.subtypes, a.supertypes, a.types FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
             );
         let mut stmt = conn.prepare(&query)?;
         let iter = stmt.query_map(rusqlite::params_from_iter(ids), |row| {
@@ -150,6 +174,9 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
                     id: row.get(0)?,
                 },
                 collector_number: row.get(8)?,
+                subtype: row.get(9)?,
+                supertype: row.get(10)?,
+                types: row.get(11)?,
             })
         })?;
         Ok(iter

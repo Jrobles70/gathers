@@ -23,6 +23,9 @@ pub struct MagicCard {
     pub color_identity: Vec<CardColour>,
     pub text: CardText,
     pub card_identifiers: CardIdentifiers,
+    pub subtype: String,
+    pub supertype: String,
+    pub types: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -74,6 +77,9 @@ impl Default for MagicCard {
                 scryfall_id: "".to_string(),
             },
             collector_number: "".to_string(),
+            subtype: "".to_string(),
+            supertype: "".to_string(),
+            types: "".to_string(),
         }
     }
 }

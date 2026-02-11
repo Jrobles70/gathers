@@ -17,6 +17,9 @@ pub struct SqlCard {
     pub text: String,
     pub card_identifiers: SqlCardIdentifiers,
     pub collector_number: String,
+    pub subtype: String,
+    pub supertype: String,
+    pub types: String,
 }
 
 impl From<SqlCard> for MagicCard {
@@ -53,6 +56,9 @@ impl From<SqlCard> for MagicCard {
                 scryfall_id: value.card_identifiers.scryfall_id,
             },
             collector_number: value.collector_number,
+            subtype: value.subtype,
+            supertype: value.supertype,
+            types: value.types,
         }
     }
 }
