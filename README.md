@@ -43,6 +43,9 @@ To run the server using Docker, you can use the provided Dockerfile and docker-c
 
 ### Using Docker Compose (Recommended)
 
+0. Make sure to edit the docker-compose.yml file and point it to the right volume mount. Then download a AllPrintings.db from www.mtgjson.com and save it in there. 
+I will fix this soon to auto-download on first start if the file does not exist yet.
+
 1. Build and start the server:
    ```bash
    docker-compose up -d
