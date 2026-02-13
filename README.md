@@ -20,8 +20,10 @@ Also allows you to manipulate the collections.
 
 REST server to leverage the `retrieval` and `persistence` crates.
 
-Compatible with the `hometg` React frontend.
-For better or worse (the API is not the cleanest).
+## webui
+
+A React web ui to interact with the server.
+It is quite ancient, from when `gathers` was actually `hometg` and written in C#. 
 
 ## cli
 
@@ -36,6 +38,12 @@ Main development happens on Codeberg.
 Support small tech!
 
 # Setup
+
+## Local
+
+`cargo run --bin cli -- --help` will be a good starting point for using the CLI and search for cards.
+
+`npm start` will spin up both the webui and the server. 
 
 ## Docker Setup
 

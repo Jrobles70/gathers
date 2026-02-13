@@ -24,12 +24,11 @@ Cargo.lock
 /target
 
 # NPM
-/webui/node_modules
-/webui/.pnp
-/.pnp
+node_modules/
+.pnp
 .pnp.js
 
-/webui/build
+build/
 
 .env.local
 .env.development.local

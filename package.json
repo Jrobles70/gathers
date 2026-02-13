@@ -1,0 +1,13 @@
+{
+  "name": "gathers",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"cd webui && npm start\" \"cargo run --bin server -- --system sql --port 5234\""
+  },
+  "eslintConfig": {},
+  "browserslist": {},
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
