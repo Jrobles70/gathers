@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use ::models::{filters::CardSearchFilters, CardID, CollectorNumber, MagicCard, Set, SetCode};
+use ::models::{CardID, CollectorNumber, MagicCard, Set, SetCode, filters::CardSearchFilters};
 use models::SqlCard;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -49,12 +49,12 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         let mut params = Vec::new();
 
         let mut i = 1;
-        if let Some(name) = &filters.name {
-            if !name.is_empty() {
-                conditions.push(format!("a.name LIKE ?{i}"));
-                params.push(format!("%{name}%"));
-                i += 1;
-            }
+        if let Some(name) = &filters.name
+            && !name.is_empty()
+        {
+            conditions.push(format!("a.name LIKE ?{i}"));
+            params.push(format!("%{name}%"));
+            i += 1;
         }
         if let Some(colours) = &filters.color_identities {
             for colour in colours {
@@ -63,61 +63,61 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
                 i += 1;
             }
         }
-        if let Some(artist) = &filters.artist {
-            if !artist.is_empty() {
-                conditions.push(format!("a.artist LIKE ?{i}"));
-                params.push(format!("%{artist}%"));
-                i += 1;
-            }
+        if let Some(artist) = &filters.artist
+            && !artist.is_empty()
+        {
+            conditions.push(format!("a.artist LIKE ?{i}"));
+            params.push(format!("%{artist}%"));
+            i += 1;
         }
-        if let Some(text) = &filters.text {
-            if !text.is_empty() {
-                conditions.push(format!("a.text LIKE ?{i}"));
-                params.push(format!("%{text}%"));
-                i += 1;
-            }
+        if let Some(text) = &filters.text
+            && !text.is_empty()
+        {
+            conditions.push(format!("a.text LIKE ?{i}"));
+            params.push(format!("%{text}%"));
+            i += 1;
         }
-        if let Some(set_code) = &filters.set_code {
-            if !set_code.is_empty() {
-                conditions.push(format!("a.setCode LIKE ?{i}"));
-                params.push(set_code.to_string());
-                i += 1;
-            }
+        if let Some(set_code) = &filters.set_code
+            && !set_code.is_empty()
+        {
+            conditions.push(format!("a.setCode LIKE ?{i}"));
+            params.push(set_code.to_string());
+            i += 1;
         }
         if let Some(rarity) = &filters.rarity {
             conditions.push(format!("a.rarity = ?{i}"));
             params.push(rarity.to_single_string().to_string());
             i += 1;
         }
-        if let Some(collector_number) = &filters.collector_number {
-            if !collector_number.is_empty() {
-                conditions.push(format!("a.number = ?{i}"));
-                params.push(collector_number.to_string());
+        if let Some(collector_number) = &filters.collector_number
+            && !collector_number.is_empty()
+        {
+            conditions.push(format!("a.number = ?{i}"));
+            params.push(collector_number.to_string());
+            i += 1;
+        }
+        if let Some(subtype) = &filters.subtypes
+            && !subtype.is_empty()
+        {
+            for s in subtype {
+                conditions.push(format!("a.subtypes LIKE ?{i}"));
+                params.push(format!("%{s}%"));
                 i += 1;
             }
         }
-        if let Some(subtype) = &filters.subtypes {
-            if !subtype.is_empty() {
-                for s in subtype {
-                    conditions.push(format!("a.subtypes LIKE ?{i}"));
-                    params.push(format!("%{s}%"));
-                    i += 1;
-                }
-            }
+        if let Some(supertype) = &filters.supertypes
+            && !supertype.is_empty()
+        {
+            conditions.push(format!("a.supertypes LIKE ?{i}"));
+            params.push(format!("%{supertype}%"));
+            i += 1;
         }
-        if let Some(supertype) = &filters.supertypes {
-            if !supertype.is_empty() {
-                conditions.push(format!("a.supertypes LIKE ?{i}"));
-                params.push(format!("%{supertype}%"));
-                i += 1;
-            }
-        }
-        if let Some(types) = &filters.types {
-            if !types.is_empty() {
-                for t in types {
-                    conditions.push(format!("a.types LIKE ?{i}"));
-                    params.push(format!("%{t}%"));
-                }
+        if let Some(types) = &filters.types
+            && !types.is_empty()
+        {
+            for t in types {
+                conditions.push(format!("a.types LIKE ?{i}"));
+                params.push(format!("%{t}%"));
             }
         }
         if !conditions.is_empty() {
@@ -146,8 +146,9 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
-            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number, a.subtypes, a.supertypes, a.types FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})", placeholders
-            );
+            "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number, a.subtypes, a.supertypes, a.types FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid WHERE a.uuid IN ({})",
+            placeholders
+        );
         let mut stmt = conn.prepare(&query)?;
         let iter = stmt.query_map(rusqlite::params_from_iter(ids), SqlCard::from_row)?;
         Ok(iter
