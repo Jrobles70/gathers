@@ -1,33 +1,6 @@
-# gathers
+# GatheRs
 
 Collection of Rust crates and binaries to help one search for and manage Magic: the Gathering (TM) cards. 
-
-## retrieval
-
-Find cards using search criteria.
-
-Backends available:
-- mtgjson SQLite DB
-- Scryfall.com
-
-## persistence
-
-Persist a collection of cards to a database.
-
-Also allows you to manipulate the collections.
-
-## server
-
-REST server to leverage the `retrieval` and `persistence` crates.
-
-## webui
-
-A React web ui to interact with the server.
-It is quite ancient, from when `gathers` was actually `hometg` and written in C#. 
-
-## cli
-
-Toy application to leverage the `retrieval` crates.
 
 # Codeberg vs Github
 
@@ -37,19 +10,12 @@ I will read issues from Github, but Github is only a mirror.
 Main development happens on Codeberg.
 Support small tech!
 
-# CLI Usage
+# CLI
 
-The CLI tool allows you to search for Magic: the Gathering cards using various filters. It supports two backends: Scryfall (online) and SQLite (local database).
+The CLI tool allows you to search for Magic: the Gathering cards using various filters.
+It supports two backends: Scryfall (online) and SQLite (local database).
 
-## Installation
-
-First, build the CLI binary:
-
-```bash
-cargo build --release --bin cli
-```
-
-Or run it directly:
+## Running
 
 ```bash
 cargo run --bin cli
@@ -136,19 +102,32 @@ The CLI supports the following filters:
 - `--types <strings>`: Filter by types
 - `--system <system>`: Choose backend (scryfall or sql)
 
-# Setup
+# Server and Webui
 
-## Local
+The following command spins up both the React webui, as well as the backend axum server.
+```bash
+npm start
+```
 
-`cargo run --bin cli -- --help` will be a good starting point for using the CLI and search for cards.
+You can start them individually by doing the following for the webui:
+```bash
+npm run start-webui
+```
 
-`npm start` will spin up both the webui and the server. 
+Or the following for the backend server:
+```bash
+cargo run --bin server -- --port 5234
+```
 
-## Docker Setup
+You can pass `--system sql` to use the Sqlite database, or `--system scryfall` to use Scryfall as the source of cards.
+
+You can then access the webui at `http://localhost:3000`.
+
+# Docker Setup
 
 To run the server using Docker, you can use the provided Dockerfile and docker-compose.yml:
 
-### Using Docker Compose (Recommended)
+## Using Docker Compose (Recommended)
 
 0. Make sure to edit the docker-compose.yml file and point it to the right volume mount. Then download a AllPrintings.db from www.mtgjson.com and save it in there. 
 I will fix this soon to auto-download on first start if the file does not exist yet.
@@ -165,13 +144,13 @@ I will fix this soon to auto-download on first start if the file does not exist 
    docker-compose down
    ```
 
-### Database Persistence
+## Database Persistence
 
 The Docker setup uses volume mounting to persist databases.
 
 These files will be created automatically in the `data` directory when you start the container for the first time.
 
-### Environment Variables
+## Environment Variables
 
 The Docker container sets the following environment variables:
 - `STORAGE_DB_PATH`: Path to the storage database
@@ -180,9 +159,39 @@ The Docker container sets the following environment variables:
 The default ports are:
 - 3000: Server port
 
-### Building Manually
+## Building Manually
 
 If you want to build the Docker image manually:
 ```bash
 docker build -t gathers-server .
 ```
+
+# Crates
+
+## retrieval
+
+Find cards using search criteria.
+
+Backends available:
+- mtgjson SQLite DB
+- Scryfall.com
+
+## persistence
+
+Persist a collection of cards to a database.
+
+Also allows you to manipulate the collections.
+
+## server
+
+REST server to leverage the `retrieval` and `persistence` crates.
+
+## webui
+
+A React web ui to interact with the server.
+It is quite ancient, from when `gathers` was actually `hometg` and written in C#. 
+
+## cli
+
+Toy application to leverage the `retrieval` crates.
+

@@ -1,9 +1,10 @@
 [workspace]
-members = ["models", "retrieval", "cli", "server", "persistence", "benches"]
+members = ["models", "retrieval", "gathers", "server", "persistence", "benches"]
 resolver = "2"
 
 [workspace.dependencies]
 chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5.58", features = ["derive"] }
 enum_dispatch = { version = "0.3.13", features = [] }
 eyre = "0.6.12"
 futures-util = "0.3.31"
