@@ -37,7 +37,110 @@ I will read issues from Github, but Github is only a mirror.
 Main development happens on Codeberg.
 Support small tech!
 
-# Setup
+# CLI Usage
+
+The CLI tool allows you to search for Magic: the Gathering cards using various filters. It supports two backends: Scryfall (online) and SQLite (local database).
+
+## Installation
+
+First, build the CLI binary:
+
+```bash
+cargo build --release --bin cli
+```
+
+Or run it directly:
+
+```bash
+cargo run --bin cli
+```
+
+## Setup
+
+Run this command to download the latest version of the Sqlite database from www.mtgjson.com. 
+They are a wonderful service and worth supporting. 
+
+```bash
+cargo run --bin cli -- --download
+```
+
+I am still stabilising "where stuff gets saved". Bear with me please.
+
+## Examples
+
+Here are some common ways to use the CLI:
+
+### 1. Basic Search by Name
+
+Search for cards by name:
+
+```bash
+cargo run --bin cli -- --name "Lightning Bolt"
+```
+
+### 2. Search with Color Filter
+
+Find cards of a specific color:
+
+```bash
+cargo run --bin cli -- --name "Shock" --color R
+```
+
+### 3. Search with Rarity Filter
+
+Find rare cards:
+
+```bash
+cargo run --bin cli -- --name "Black Lotus" --rarity Rare
+```
+
+### 4. Search with Set Filter
+
+Find cards from a specific set:
+
+```bash
+cargo run --bin cli -- --name "Force of Will" --set dmr
+```
+
+### 5. Search with Multiple Filters
+
+Combine multiple filters for precise searches:
+
+```bash
+cargo run --bin cli -- --name "Counterspell" --color U --rarity Rare
+```
+
+### 6. Using SQLite Backend
+
+Search using a local SQLite database:
+
+```bash
+cargo run --bin cli -- --system sql --name "Dark Ritual"
+```
+
+## Available Filters
+
+The SQLite backend requires the `AllPrintings.db` file to be present in the current directory. You can download this file from [mtgjson.com](https://www.mtgjson.com/).
+
+## Available Filters
+
+The CLI supports the following filters:
+
+- `--name <string>`: Search by card name
+- `--color <colors>`: Filter by color (W, U, B, R, G, C, M)
+- `--limit <number>`: Number of results to return (default: 10)
+- `--offset <number>`: Starting offset for results (default: 0)
+- `--set <string>`: Filter by set code
+- `--collector-number <string>`: Filter by collector number
+- `--artist <string>`: Filter by artist
+- `--text <string>`: Filter by card text
+- `--rarity <string>`: Filter by rarity (Common, Uncommon, Rare, Mythic, Special, Bonus)
+- `--subtype <strings>`: Filter by subtypes
+- `--supertype <string>`: Filter by supertypes
+- `--types <strings>`: Filter by types
+- `--system <system>`: Choose backend (Scryfall or Sql)
+
+## Setup
 
 ## Local
 
@@ -87,4 +190,3 @@ If you want to build the Docker image manually:
 ```bash
 docker build -t gathers-server .
 ```
-

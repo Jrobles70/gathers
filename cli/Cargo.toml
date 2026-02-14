@@ -1,7 +1,7 @@
 [package]
 name = "cli"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "cli"
@@ -14,5 +14,10 @@ reqwest.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 eyre.workspace = true
-clap = { version = "4.5.15", features = ["derive"] }
-table = "0.3"
+clap = { version = "4.5.58", features = ["derive"] }
+table = "0.4"
+indicatif = "0.18"
+console = "0.16"
+sha2 = "0.11.0-rc.5"
+hex = "0.4.3"
+futures-util.workspace = true
