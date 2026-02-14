@@ -120,14 +120,10 @@ cargo run --bin cli -- --system sql --name "Dark Ritual"
 
 ## Available Filters
 
-The SQLite backend requires the `AllPrintings.db` file to be present in the current directory. You can download this file from [mtgjson.com](https://www.mtgjson.com/).
-
-## Available Filters
-
 The CLI supports the following filters:
 
 - `--name <string>`: Search by card name
-- `--color <colors>`: Filter by color (W, U, B, R, G, C, M)
+- `--color <colors>`: Filter by color (W, U, B, R, G, C)
 - `--limit <number>`: Number of results to return (default: 10)
 - `--offset <number>`: Starting offset for results (default: 0)
 - `--set <string>`: Filter by set code
@@ -138,9 +134,9 @@ The CLI supports the following filters:
 - `--subtype <strings>`: Filter by subtypes
 - `--supertype <string>`: Filter by supertypes
 - `--types <strings>`: Filter by types
-- `--system <system>`: Choose backend (Scryfall or Sql)
+- `--system <system>`: Choose backend (scryfall or sql)
 
-## Setup
+# Setup
 
 ## Local
 
