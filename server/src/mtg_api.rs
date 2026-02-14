@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use axum::{
+    Json, Router,
     extract::State,
     routing::{get, post},
-    Json, Router,
 };
 use axum_extra::extract::Query;
 use models::filters::CardSearchFilters;
@@ -11,7 +11,7 @@ use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use serde::{Deserialize, Serialize};
 
-use crate::{mtg_api::mtg_api_models::APICard, GathersState};
+use crate::{GathersState, mtg_api::mtg_api_models::APICard};
 mod mtg_api_models;
 
 #[derive(Serialize, Debug)]

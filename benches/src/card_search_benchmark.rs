@@ -1,6 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use models::{filters::CardSearchFilters, CardColour, Rarity};
 use retrieval::{MagicSQLiteRetrievalSystem, RetrievalSystemTrait};
+use std::hint::black_box;
 use std::time::Instant;
 
 fn bench_card_search_benchmark(c: &mut Criterion) {
