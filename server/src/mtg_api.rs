@@ -19,12 +19,16 @@ struct ErrorPayload {
     error: String,
 }
 
+fn default_limit() -> usize {
+    10
+}
+
 pub fn mtg_routes() -> Router<GathersState> {
     #[derive(Deserialize)]
     struct SearchQuery {
         #[serde(default)]
         skip: usize,
-        #[serde(default)]
+        #[serde(default = "default_limit")]
         limit: usize,
     }
 

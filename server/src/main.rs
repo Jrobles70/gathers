@@ -1,10 +1,11 @@
-use axum::{error_handling::HandleErrorLayer, Router};
+use axum::{Router, error_handling::HandleErrorLayer};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
 use retrieval::RetrievalSystem;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::debug;
 
@@ -107,6 +108,7 @@ async fn main() -> eyre::Result<()> {
     )?));
     let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
 
+    let cors = CorsLayer::permissive();
     let app = Router::new()
         .nest("/mtg", mtg_routes())
         .nest("/collection", collection_routes())
@@ -126,6 +128,7 @@ async fn main() -> eyre::Result<()> {
                 .layer(TraceLayer::new_for_http())
                 .into_inner(),
         )
+        .layer(cors)
         .with_state((retrieval, storage));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
