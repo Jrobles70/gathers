@@ -20,4 +20,4 @@ Support small tech!
 
 # Info and Instructions and Ideas
 
-[Can be found on the Wiki!](https://codeberg.org/morosanmihail/gathers/wiki/Home).
+[Can be found on the Wiki!](https://codeberg.org/morosanmihail/gathers/wiki/Home)
