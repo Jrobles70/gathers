@@ -1,7 +1,7 @@
 use axum::{
+    Json, Router,
     extract::{Path, State},
     routing::{get, post},
-    Json, Router,
 };
 use axum_extra::extract::Query;
 use chrono::{DateTime, Utc};
@@ -12,11 +12,11 @@ use retrieval::{NamedRetrievalSystem as _, RetrievalSystemTrait};
 use serde::Serialize;
 
 use crate::{
+    GathersState,
     collections::collections_models::{
         CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard, CollectionCardsQuery,
         CollectionRemoveResponse, ResultCard, ResultCardInner, SearchQuery,
     },
-    GathersState,
 };
 mod collections_models;
 
@@ -279,7 +279,7 @@ pub fn collection_routes() -> Router<GathersState> {
         let ret = &state.0.lock().await.retrieval;
 
         match ret
-            .search_cards(input, query.offset.into(), (query.page_size + 1).into())
+            .search_cards(input, query.offset.into(), query.page_size.into())
             .await
         {
             Ok(result) => Ok(Json(

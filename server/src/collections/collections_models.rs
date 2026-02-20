@@ -62,7 +62,7 @@ impl From<&CollectionCard> for models::CollectionCard {
 }
 
 fn default_limit() -> usize {
-    20
+    24
 }
 
 #[derive(Deserialize)]
