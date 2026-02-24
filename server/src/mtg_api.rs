@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::extract::Query;
-use models::filters::CardSearchFilters;
+use models::{Card, filters::CardSearchFilters};
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,15 @@ pub fn mtg_routes() -> Router<GathersState> {
             .search_cards(input, query.skip.into(), query.limit.into())
             .await
         {
-            Ok(result) => Ok(Json(result.iter().map(|c| c.clone().into()).collect())),
+            Ok(result) => Ok(Json(
+                result
+                    .iter()
+                    .filter_map(|c| match c {
+                        Card::Magic(m) => Some(m.clone().into()),
+                        _ => None,
+                    })
+                    .collect(),
+            )),
             Err(_) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
@@ -75,7 +83,14 @@ pub fn mtg_routes() -> Router<GathersState> {
                     }),
                 )
             })
-            .map(|d| d.into_iter().map(|(k, v)| (k, v.into())).collect())
+            .map(|d| {
+                d.into_iter()
+                    .filter_map(|(k, v)| match v {
+                        Card::Magic(m) => Some((k, m.into())),
+                        _ => None,
+                    })
+                    .collect()
+            })
             .map(Json)
     }
 

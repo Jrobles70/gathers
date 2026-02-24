@@ -1,7 +1,4 @@
-use models::{
-    CardColour,
-    riftbound::{CardDomain, RiftboundCard},
-};
+use models::riftbound::{CardDomain, RiftboundCard};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqlCard {
@@ -58,16 +55,10 @@ impl From<SqlCard> for RiftboundCard {
             set_code: value.set_code,
             rarity: value.rarity.into(),
             artists: value.artists,
-            domains: domains,
+            domains,
             text: value.text,
-            card_identifiers: models::CardIdentifiers {
-                id: value.card_identifiers.id,
-                scryfall_id: value.card_identifiers.scryfall_id,
-            },
+            image: value.image,
             collector_number: value.collector_number,
-            subtypes,
-            supertypes,
-            types,
         }
     }
 }

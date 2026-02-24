@@ -25,12 +25,12 @@ pub trait RetrievalSystemTrait {
         filters: models::filters::CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<models::MagicCard>>;
+    ) -> eyre::Result<Vec<models::Card>>;
 
     async fn get_cards_by_ids(
         &self,
         ids: Vec<String>,
-    ) -> eyre::Result<HashMap<String, models::MagicCard>>;
+    ) -> eyre::Result<HashMap<String, models::Card>>;
 
     async fn get_sets(&self) -> eyre::Result<Vec<models::Set>>;
     async fn bulk_search_cards(

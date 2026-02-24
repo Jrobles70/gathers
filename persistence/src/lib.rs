@@ -2,6 +2,7 @@ mod sqlite;
 
 use enum_dispatch::enum_dispatch;
 use models::CardID;
+use models::CardTrait;
 use models::CollectionCard;
 use models::CollectionID;
 use retrieval::NamedRetrievalSystem as _;
@@ -160,8 +161,8 @@ impl PersistenceSystem {
                 .filter_map(|c| {
                     let searched = searched_cards.get(&c.uuid);
                     searched.map(|s| CSVCard {
-                        set_code: s.set_code.clone(),
-                        collector_number: s.collector_number.clone(),
+                        set_code: s.get_set(),
+                        collector_number: s.get_collector_number(),
                         quantity: c.quantity as u32,
                         foil_quantity: c.foil_quantity as u32,
                     })

@@ -8,5 +8,6 @@ name = "models"
 path = "src/lib.rs"
 
 [dependencies]
+enum_dispatch.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Artist, CardID, CardName, CardText, CollectorNumber, SetCode};
+use crate::{Artist, CardID, CardName, CardText, CardTrait, CollectorNumber, SetCode};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct MagicCard {
@@ -18,6 +18,16 @@ pub struct MagicCard {
     pub subtypes: Vec<String>,
     pub supertypes: Vec<String>,
     pub types: Vec<String>,
+}
+
+impl CardTrait for MagicCard {
+    fn get_set(&self) -> SetCode {
+        self.set_code.clone()
+    }
+
+    fn get_collector_number(&self) -> CollectorNumber {
+        self.collector_number.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

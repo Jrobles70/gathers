@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use eyre::OptionExt;
 use models::{
-    CardColour, CardID, CardIdentifiers, CollectorNumber, MagicCard, SetCode,
-    filters::CardSearchFilters,
+    Card, CardColour, CardID, CardIdentifiers, CollectorNumber, SetCode, filters::CardSearchFilters,
 };
 use serde_json::Value;
 
@@ -27,7 +26,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         filters: CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<MagicCard>> {
+    ) -> eyre::Result<Vec<Card>> {
         let mut query = vec![];
 
         if let Some(name) = &filters.name {
@@ -157,7 +156,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                     subtypes = subtype_tokens.iter().map(|s| s.to_string()).collect();
                 }
 
-                Some(models::MagicCard {
+                Some(Card::Magic(models::MagicCard {
                     name: card_name.to_string(),
                     set_code: set_code.to_string(),
                     artist: artist.to_string(),
@@ -173,9 +172,9 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                     subtypes,
                     supertypes,
                     types,
-                })
+                }))
             })
-            .collect::<Vec<MagicCard>>();
+            .collect::<Vec<Card>>();
 
         Ok(cards)
     }
@@ -183,7 +182,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
     async fn get_cards_by_ids(
         &self,
         ids: Vec<String>,
-    ) -> eyre::Result<HashMap<String, models::MagicCard>> {
+    ) -> eyre::Result<HashMap<String, models::Card>> {
         let mut result = HashMap::new();
 
         for id in ids {
@@ -264,7 +263,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                 types: vec![],
             };
 
-            result.insert(id, card);
+            result.insert(id, models::Card::Magic(card));
         }
 
         Ok(result)
@@ -308,6 +307,11 @@ mod tests {
 
         assert_eq!(card.len(), 1);
         let card = card.first().expect("No card?");
+        let card = if let Card::Magic(card) = card {
+            card
+        } else {
+            panic!("Not a Magic card")
+        };
         assert_eq!(card.name, "Panharmonicon");
         assert_eq!(card.color_identity, vec![]);
 
@@ -351,6 +355,12 @@ mod tests {
         assert!(!creatures.is_empty(), "Should find at least one creature");
 
         for card in creatures {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.types.is_empty(),
                 "Card {} should have types",
@@ -372,6 +382,12 @@ mod tests {
         assert!(!artifacts.is_empty(), "Should find at least one artifact");
 
         for card in artifacts {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.types.is_empty(),
                 "Card {} should have types",
@@ -400,6 +416,12 @@ mod tests {
         assert!(!elves.is_empty(), "Should find at least one elf");
 
         for card in elves {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.subtypes.is_empty(),
                 "Card {} should have subtypes",
@@ -421,6 +443,12 @@ mod tests {
         assert!(!wizards.is_empty(), "Should find at least one wizard");
 
         for card in wizards {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.subtypes.is_empty(),
                 "Card {} should have subtypes",
@@ -452,6 +480,12 @@ mod tests {
         );
 
         for card in legendary {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.supertypes.is_empty(),
                 "Card {} should have supertypes",
@@ -473,6 +507,12 @@ mod tests {
         assert!(!basic.is_empty(), "Should find at least one basic land");
 
         for card in basic {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.supertypes.is_empty(),
                 "Card {} should have supertypes",
@@ -504,6 +544,12 @@ mod tests {
         );
 
         for card in creatures_artifacts {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.types.is_empty(),
                 "Card {} should have types",
@@ -538,6 +584,12 @@ mod tests {
 
         // Verify that all returned cards have the expected fields
         for card in legendary_creatures {
+            let card = if let Card::Magic(card) = card {
+                card
+            } else {
+                panic!("Not a Magic card")
+            };
+
             assert!(
                 !card.types.is_empty(),
                 "Card {} should have types",

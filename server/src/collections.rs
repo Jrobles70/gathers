@@ -5,7 +5,7 @@ use axum::{
 };
 use axum_extra::extract::Query;
 use chrono::{DateTime, Utc};
-use models::filters::CardSearchFilters;
+use models::{Card, filters::CardSearchFilters};
 use persistence::{PersistenceSystem, PersistenceSystemTrait};
 use reqwest::StatusCode;
 use retrieval::{NamedRetrievalSystem as _, RetrievalSystemTrait};
@@ -285,6 +285,10 @@ pub fn collection_routes() -> Router<GathersState> {
             Ok(result) => Ok(Json(
                 result
                     .iter()
+                    .filter_map(|c| match c {
+                        Card::Magic(m) => Some(m),
+                        _ => None,
+                    })
                     .map(|c| ResultCard {
                         mtg_card: ResultCardInner {
                             id: c.id.clone(),

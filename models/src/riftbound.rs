@@ -1,8 +1,6 @@
-use std::fmt::Display;
-
 use serde::{Deserialize, Serialize};
 
-use crate::{Artist, CardID, CardName, CardText, CollectorNumber, SetCode};
+use crate::{Artist, CardID, CardName, CardText, CardTrait, CollectorNumber, SetCode};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct RiftboundCard {
@@ -15,6 +13,16 @@ pub struct RiftboundCard {
     pub domains: Vec<CardDomain>,
     pub text: CardText,
     pub image: String,
+}
+
+impl CardTrait for RiftboundCard {
+    fn get_set(&self) -> SetCode {
+        self.set_code.clone()
+    }
+
+    fn get_collector_number(&self) -> CollectorNumber {
+        self.collector_number.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

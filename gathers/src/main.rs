@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use models::{CardColour, Rarity};
+use models::{Card, CardColour, Rarity};
 use retrieval::{RetrievalSystem, RetrievalSystemTrait};
 use sha2::Digest;
 use std::io::Write;
@@ -137,6 +137,13 @@ async fn main() -> eyre::Result<()> {
     println!("{}", "-".repeat(140));
 
     for card in cards {
+        // TODO: check on provider
+        let card = if let Card::Magic(card) = card {
+            card
+        } else {
+            panic!("Not a Magic card")
+        };
+
         let color_str: String = card
             .color_identity
             .iter()
@@ -161,6 +168,8 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
+// TODO: move this to retrieval/sqlite
+// make sure it's used by server/update
 async fn download_database(db_path: Option<String>) -> eyre::Result<()> {
     let download_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
     let crc_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";

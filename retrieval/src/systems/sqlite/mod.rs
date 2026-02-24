@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use ::models::{CardID, CollectorNumber, MagicCard, Set, SetCode, filters::CardSearchFilters};
+use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
 use models::SqlCard;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -40,7 +40,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         filters: CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<MagicCard>> {
+    ) -> eyre::Result<Vec<Card>> {
         let conn = self.connection.lock().await;
         let mut query =
             "SELECT a.uuid, a.name, a.setCode, a.rarity, a.artist, a.colorIdentity, a.text, b.scryfallId, a.number, a.subtypes, a.supertypes, a.types FROM cards as a JOIN cardIdentifiers as b ON a.uuid = b.uuid"
@@ -138,11 +138,11 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
 
         Ok(user_iter
             .filter(|c| c.is_ok())
-            .map(|c| c.unwrap().into())
+            .map(|c| Card::Magic(c.unwrap().into()))
             .collect())
     }
 
-    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, MagicCard>> {
+    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, Card>> {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
@@ -153,7 +153,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         let iter = stmt.query_map(rusqlite::params_from_iter(ids), SqlCard::from_row)?;
         Ok(iter
             .flatten()
-            .map(|c| (c.clone().id, c.clone().into()))
+            .map(|c| (c.clone().id, Card::Magic(c.clone().into())))
             .collect())
     }
 

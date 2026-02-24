@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use ::models::{CardID, CollectorNumber, MagicCard, Set, SetCode, filters::CardSearchFilters};
+use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
 use models::SqlCard;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -40,7 +40,7 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
         filters: CardSearchFilters, // TODO
         skip: Option<usize>,
         limit: Option<usize>,
-    ) -> eyre::Result<Vec<MagicCard>> {
+    ) -> eyre::Result<Vec<Card>> {
         let conn = self.connection.lock().await;
         let mut query =
             "SELECT id, name, set_id, rarity, artists, domains, text, image_url, code FROM cards"
@@ -113,11 +113,11 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
 
         Ok(user_iter
             .filter(|c| c.is_ok())
-            .map(|c| c.unwrap().into())
+            .map(|c| Card::Riftbound(c.unwrap().into()))
             .collect())
     }
 
-    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, MagicCard>> {
+    async fn get_cards_by_ids(&self, ids: Vec<String>) -> eyre::Result<HashMap<String, Card>> {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
@@ -128,7 +128,7 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
         let iter = stmt.query_map(rusqlite::params_from_iter(ids), SqlCard::from_row)?;
         Ok(iter
             .flatten()
-            .map(|c| (c.clone().id, c.clone().into()))
+            .map(|c| (c.clone().id, Card::Riftbound(c.clone().into())))
             .collect())
     }
 
