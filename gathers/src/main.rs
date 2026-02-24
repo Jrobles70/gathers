@@ -11,6 +11,7 @@ use std::path::PathBuf;
 enum Systems {
     Scryfall,
     Sql,
+    RiftboundSql,
 }
 
 #[derive(Parser, Debug)]
@@ -95,6 +96,9 @@ async fn main() -> eyre::Result<()> {
         Systems::Sql => RetrievalSystem::MagicSQLiteRetrievalSystem(
             retrieval::MagicSQLiteRetrievalSystem::new(retrieval_db_path)?,
         ),
+        Systems::RiftboundSql => RetrievalSystem::RiftboundSQLiteRetrievalSystem(
+            retrieval::RiftboundSQLiteRetrievalSystem::new(retrieval_db_path)?,
+        ),
     };
 
     let color_identities: Option<Vec<CardColour>> = if args.color.is_empty() {
@@ -137,32 +141,44 @@ async fn main() -> eyre::Result<()> {
     println!("{}", "-".repeat(140));
 
     for card in cards {
-        // TODO: check on provider
-        let card = if let Card::Magic(card) = card {
-            card
-        } else {
-            panic!("Not a Magic card")
-        };
+        match args.system {
+            Systems::Scryfall | Systems::Sql => {
+                let card = if let Card::Magic(card) = card {
+                    card
+                } else {
+                    panic!("Not a Magic card")
+                };
 
-        let color_str: String = card
-            .color_identity
-            .iter()
-            .map(|c| format!("{}", c))
-            .collect::<Vec<_>>()
-            .join("");
+                let color_str: String = card
+                    .color_identity
+                    .iter()
+                    .map(|c| format!("{}", c))
+                    .collect::<Vec<_>>()
+                    .join("");
 
-        println!(
-            "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
-            card.name,
-            card.set_code,
-            card.rarity.to_string().to_lowercase(),
-            color_str,
-            card.artist,
-            card.collector_number,
-            card.supertypes.join(","),
-            card.types.join(","),
-            card.subtypes.join(","),
-        );
+                println!(
+                    "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
+                    card.name,
+                    card.set_code,
+                    card.rarity.to_string().to_lowercase(),
+                    color_str,
+                    card.artist,
+                    card.collector_number,
+                    card.supertypes.join(","),
+                    card.types.join(","),
+                    card.subtypes.join(","),
+                );
+            }
+            Systems::RiftboundSql => {
+                let card = if let Card::Riftbound(card) = card {
+                    card
+                } else {
+                    panic!("Not a Magic card")
+                };
+
+                println!("{card:?}");
+            }
+        }
     }
 
     Ok(())
