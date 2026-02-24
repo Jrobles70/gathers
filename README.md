@@ -4,6 +4,8 @@ Collection of Rust crates and binaries to help one search for and manage Magic: 
 
 ![Example of the UI](https://codeberg.org/morosanmihail/hometg/raw/branch/main/images/ui20230628.jpg)
 
+![Example of the UI, Riftbound](https://codeberg.org/morosanmihail/gathers/raw/branch/main/images/riftbound1.png)
+
 ![Example of the CLI Tool](https://codeberg.org/morosanmihail/gathers/raw/branch/main/images/cli1.png)
 
 ![Prototype Riftbound support](https://codeberg.org/morosanmihail/gathers/raw/branch/riftbound/images/cli2.png)

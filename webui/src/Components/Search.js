@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import Card from "./Card";
+import RiftboundCard from "./RiftboundCard";
 import { useOperations } from "../OperationsContext";
 import ReactPaginate from "react-paginate";
 import { useCardSets } from "./ReusableConstants/CardSets";
@@ -14,6 +15,7 @@ function Search({ startSearch = false, dedicatedPage = false }) {
   const [shouldSearch, setShouldSearch] = useState(startSearch);
   const cardSets = useCardSets();
   const collections = useCollections();
+  const [systemType, setSystemType] = useState(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchOptions, setSearchOptions] = useState({
@@ -38,8 +40,28 @@ function Search({ startSearch = false, dedicatedPage = false }) {
 
   let pageSize = 24;
 
+  // Fetch system type on component mount
   useEffect(() => {
-    if (shouldSearch) {
+    async function fetchSystemType() {
+      try {
+        const response = await ops.fetch(
+          "Getting system info",
+          [],
+          "/system",
+          {},
+        );
+        setSystemType(response.system);
+      } catch (error) {
+        console.error("Failed to get system type:", error);
+        // Default to Magic if we can't determine the system
+        setSystemType("Sql");
+      }
+    }
+    fetchSystemType();
+  }, []);
+
+  useEffect(() => {
+    if (shouldSearch && systemType) {
       setLoading(true);
 
       let url =
@@ -50,6 +72,19 @@ function Search({ startSearch = false, dedicatedPage = false }) {
 
       if (searchCollection === "skipNotOwned") {
         url = url + "&skipNotOwned=true";
+      }
+
+      // Use different endpoints based on system type
+      const isRiftboundSystem =
+        systemType === "RiftboundSql" ||
+        searchParams.get("riftbound") === "true";
+
+      if (isRiftboundSystem) {
+        url =
+          "/riftbound/cards/search?pageSize=" +
+          pageSize +
+          "&offset=" +
+          (pageNumber - 1) * pageSize;
       }
 
       ops
@@ -67,7 +102,7 @@ function Search({ startSearch = false, dedicatedPage = false }) {
           setShouldSearch(false);
         });
     }
-  }, [pageNumber, shouldSearch]);
+  }, [pageNumber, shouldSearch, systemType]);
 
   const handleSearchInput = (event, field) => {
     let newState = Object.assign({}, searchOptions);
@@ -100,6 +135,9 @@ function Search({ startSearch = false, dedicatedPage = false }) {
     setShouldSearch(true);
     setPageNumber(parseInt(event.selected) + 1);
   };
+
+  // Determine which card component to use based on system type
+  const CardComponent = systemType === "RiftboundSql" ? RiftboundCard : Card;
 
   return (
     <React.Fragment>
@@ -161,66 +199,147 @@ function Search({ startSearch = false, dedicatedPage = false }) {
             />
           </div>
           <div className="input-group">
-            <div className="form-check form-check-inline">
-              <input
-                onChange={(e) => handleColourIdentitiesInput(e, "W")}
-                className="form-check-input"
-                type="checkbox"
-                id="inlineCheckbox1"
-                value="W"
-              />
-              <label className="form-check-label" htmlFor="inlineCheckbox1">
-                W
-              </label>
-            </div>
-            <div className="form-check form-check-inline">
-              <input
-                onChange={(e) => handleColourIdentitiesInput(e, "U")}
-                className="form-check-input"
-                type="checkbox"
-                id="inlineCheckbox2"
-                value="U"
-              />
-              <label className="form-check-label" htmlFor="inlineCheckbox2">
-                U
-              </label>
-            </div>
-            <div className="form-check form-check-inline">
-              <input
-                onChange={(e) => handleColourIdentitiesInput(e, "B")}
-                className="form-check-input"
-                type="checkbox"
-                id="inlineCheckbox3"
-                value="B"
-              />
-              <label className="form-check-label" htmlFor="inlineCheckbox3">
-                B
-              </label>
-            </div>
-            <div className="form-check form-check-inline">
-              <input
-                onChange={(e) => handleColourIdentitiesInput(e, "R")}
-                className="form-check-input"
-                type="checkbox"
-                id="inlineCheckbox4"
-                value="R"
-              />
-              <label className="form-check-label" htmlFor="inlineCheckbox4">
-                R
-              </label>
-            </div>
-            <div className="form-check form-check-inline">
-              <input
-                onChange={(e) => handleColourIdentitiesInput(e, "G")}
-                className="form-check-input"
-                type="checkbox"
-                id="inlineCheckbox5"
-                value="G"
-              />
-              <label className="form-check-label" htmlFor="inlineCheckbox5">
-                G
-              </label>
-            </div>
+            {systemType === "RiftboundSql" ? (
+              // Riftbound domains (Calm, Chaos, Fury, Mind, Body, Order)
+              <>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "Calm")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox1"
+                    value="Calm"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox1">
+                    Calm
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "Chaos")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox2"
+                    value="Chaos"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox2">
+                    Chaos
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "Fury")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox3"
+                    value="Fury"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox3">
+                    Fury
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "Mind")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox4"
+                    value="Mind"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox4">
+                    Mind
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "Body")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox5"
+                    value="Body"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox5">
+                    Body
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "Order")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox6"
+                    value="Order"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox6">
+                    Order
+                  </label>
+                </div>
+              </>
+            ) : (
+              // Magic colors (W, U, B, R, G)
+              <>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "W")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox1"
+                    value="W"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox1">
+                    W
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "U")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox2"
+                    value="U"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox2">
+                    U
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "B")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox3"
+                    value="B"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox3">
+                    B
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "R")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox4"
+                    value="R"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox4">
+                    R
+                  </label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleColourIdentitiesInput(e, "G")}
+                    className="form-check-input"
+                    type="checkbox"
+                    id="inlineCheckbox5"
+                    value="G"
+                  />
+                  <label className="form-check-label" htmlFor="inlineCheckbox5">
+                    G
+                  </label>
+                </div>
+              </>
+            )}
           </div>
           {false ? (
             <div className="input-group">
@@ -296,7 +415,10 @@ function Search({ startSearch = false, dedicatedPage = false }) {
                 dropdown="in MtG database"
                 value={""}
               >
-                in MtG database
+                in{" "}
+                {systemType === "RiftboundSql"
+                  ? "Riftbound database"
+                  : "MtG database"}
               </option>
               <option
                 key={"searchincol-collections"}
@@ -321,18 +443,35 @@ function Search({ startSearch = false, dedicatedPage = false }) {
               <p>Loading...</p>
             ) : (
               <div className="card-grid list">
-                {cards.map((card) => (
-                  <Card
-                    key={
-                      card.mtGCard.id +
-                      "-" +
-                      (card.card != null ? card.card.collectionId : "")
-                    }
-                    id={card.mtGCard.id}
-                    card={card.mtGCard}
-                    details={card.card}
-                  />
-                ))}
+                {systemType === "RiftboundSql"
+                  ? cards.map((card) => (
+                      <CardComponent
+                        key={
+                          card.id +
+                          "-" +
+                          (card.details != null
+                            ? card.details.collectionId
+                            : "")
+                        }
+                        id={card.id}
+                        card={card}
+                        details={card.details}
+                      />
+                    ))
+                  : cards.map((card) => (
+                      <CardComponent
+                        key={
+                          card.mtGCard.id +
+                          "-" +
+                          (card.mtGCard.details != null
+                            ? card.mtGCard.details.collectionId
+                            : "")
+                        }
+                        id={card.mtGCard.id}
+                        card={card.mtGCard}
+                        details={card.mtGCard.details}
+                      />
+                    ))}
               </div>
             )}
           </div>

@@ -1,4 +1,4 @@
-use axum::{Router, error_handling::HandleErrorLayer};
+use axum::{Json, Router, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
 use retrieval::RetrievalSystem;
@@ -11,9 +11,16 @@ use tracing::debug;
 
 use crate::collections::collection_routes;
 use crate::mtg_api::mtg_routes;
+use crate::riftbound_api::riftbound_routes;
 
 mod collections;
 mod mtg_api;
+mod riftbound_api;
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SystemInfo {
+    pub system: Systems,
+}
 
 type GathersState = (Arc<Mutex<RetrievalState>>, Arc<Mutex<StorageState>>);
 
@@ -50,7 +57,16 @@ impl RetrievalState {
             Systems::Sql => RetrievalSystem::MagicSQLiteRetrievalSystem(
                 retrieval::MagicSQLiteRetrievalSystem::new(retrieval_db_path.clone())?,
             ),
+            Systems::RiftboundSql => RetrievalSystem::RiftboundSQLiteRetrievalSystem(
+                retrieval::RiftboundSQLiteRetrievalSystem::new(retrieval_db_path.clone())?,
+            ),
         })
+    }
+
+    pub async fn get_system_info(&self) -> SystemInfo {
+        SystemInfo {
+            system: self.system,
+        }
     }
 
     pub fn reload_retrieval(&mut self) -> eyre::Result<()> {
@@ -71,10 +87,11 @@ impl StorageState {
     }
 }
 
-#[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize)]
 pub enum Systems {
     Scryfall,
     Sql,
+    RiftboundSql,
 }
 
 #[derive(Parser, Debug)]
@@ -85,6 +102,13 @@ struct Args {
 
     #[clap(short, long)]
     port: usize,
+}
+
+async fn get_system_info(
+    State(state): State<GathersState>,
+) -> Result<Json<SystemInfo>, (axum::http::StatusCode, Json<String>)> {
+    let ret = state.0.lock().await;
+    Ok(Json(ret.get_system_info().await))
 }
 
 #[tokio::main]
@@ -111,7 +135,9 @@ async fn main() -> eyre::Result<()> {
     let cors = CorsLayer::permissive();
     let app = Router::new()
         .nest("/mtg", mtg_routes())
+        .nest("/riftbound", riftbound_routes())
         .nest("/collection", collection_routes())
+        .route("/system", axum::routing::get(get_system_info))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|error: BoxError| async move {
