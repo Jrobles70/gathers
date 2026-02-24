@@ -6,7 +6,7 @@ Collection of Rust crates and binaries to help one search for and manage Magic: 
 
 ![Example of the CLI Tool](https://codeberg.org/morosanmihail/gathers/raw/branch/main/images/cli1.png)
 
-![Prototype Riftbound support](https://codeberg.org/morosanmihail/gathers/raw/branch/main/images/cli2.png)
+![Prototype Riftbound support](https://codeberg.org/morosanmihail/gathers/raw/branch/riftbound/images/cli2.png)
 
 # Codeberg vs Github
 
