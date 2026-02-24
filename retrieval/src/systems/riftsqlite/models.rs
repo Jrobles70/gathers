@@ -1,4 +1,7 @@
-use models::riftbound::{CardDomain, RiftboundCard};
+use models::{
+    Artist,
+    riftbound::{CardDomain, RiftboundCard},
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SqlCard {
@@ -49,12 +52,13 @@ impl From<SqlCard> for RiftboundCard {
         } else {
             domains
         };
+        let artists: Vec<Artist> = value.artists.split(",").map(|s| s.to_string()).collect();
         RiftboundCard {
             id: value.id,
             name: value.name,
             set_code: value.set_code,
             rarity: value.rarity.into(),
-            artists: value.artists,
+            artists,
             domains,
             text: value.text,
             image: value.image,

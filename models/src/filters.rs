@@ -45,6 +45,8 @@ impl CardSearchFilters {
         self.color_identities = Some(identities);
         self
     }
+
+    // TODO: finish these and actually use them
 }
 
 fn empty_string_to_none<'de, D>(deserializer: D) -> Result<Option<Rarity>, D::Error>

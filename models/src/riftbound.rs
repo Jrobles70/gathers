@@ -9,7 +9,7 @@ pub struct RiftboundCard {
     pub set_code: SetCode,
     pub collector_number: CollectorNumber,
     pub rarity: RBRarity,
-    pub artists: Artist,
+    pub artists: Vec<Artist>,
     pub domains: Vec<CardDomain>,
     pub text: CardText,
     pub image: String,
