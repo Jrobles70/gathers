@@ -14,7 +14,7 @@ impl NamedRetrievalSystem for RiftboundSQLiteRetrievalSystem {}
 #[derive(Debug, Clone)]
 pub struct RiftboundSQLiteRetrievalSystem {
     connection: Arc<tokio::sync::Mutex<Connection>>,
-    db_path: String,
+    _db_path: String,
 }
 
 impl RiftboundSQLiteRetrievalSystem {
@@ -22,7 +22,7 @@ impl RiftboundSQLiteRetrievalSystem {
         let path = db_path.unwrap_or_else(|| "../data/riftbound.db".to_string());
         Ok(Self {
             connection: Arc::new(Mutex::new(Connection::open(path.clone())?)),
-            db_path: path,
+            _db_path: path,
         })
     }
 }
