@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use eyre::OptionExt;
 use models::{
-    filters::CardSearchFilters, CardColour, CardID, CardIdentifiers, CollectorNumber, MagicCard,
-    SetCode,
+    CardColour, CardID, CardIdentifiers, CollectorNumber, MagicCard, SetCode,
+    filters::CardSearchFilters,
 };
 use serde_json::Value;
 
@@ -74,12 +74,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
 
         let url = format!(
             "https://api.scryfall.com/cards/search?q={}&page={}&unique={}&order={}&dir={}&include_extras={}",
-            query_string,
-            page,
-            unique,
-            order,
-            dir,
-            include_extras
+            query_string, page, unique, order, dir, include_extras
         );
 
         let mut headers = reqwest::header::HeaderMap::new();

@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use enum_dispatch::enum_dispatch;
 use models::{CardID, CollectorNumber, SetCode};
+pub use systems::riftsqlite::RiftboundSQLiteRetrievalSystem;
 pub use systems::scryfall::ScryfallRetrievalSystem;
 pub use systems::sqlite::MagicSQLiteRetrievalSystem;
 
@@ -13,6 +14,7 @@ pub use systems::sqlite::MagicSQLiteRetrievalSystem;
 pub enum RetrievalSystem {
     ScryfallRetrievalSystem,
     MagicSQLiteRetrievalSystem,
+    RiftboundSQLiteRetrievalSystem,
 }
 
 #[enum_dispatch(RetrievalSystem)]
