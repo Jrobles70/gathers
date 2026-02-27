@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{CardColour, Rarity, riftbound::CardDomain};
+use crate::{CardColour, Rarity, pokemon::EnergyType, riftbound::CardDomain};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CardSearchFilters {
@@ -20,6 +20,9 @@ pub struct CardSearchFilters {
     pub types: Option<Vec<String>>,
     /// Riftbound-only: filter by one or more card domains.
     pub domains: Option<Vec<CardDomain>>,
+    /// Pokemon-only: filter by one or more energy types.
+    #[serde(alias = "energyTypes")]
+    pub energy_types: Option<Vec<EnergyType>>,
 }
 
 impl CardSearchFilters {
@@ -36,6 +39,7 @@ impl CardSearchFilters {
             supertypes: None,
             types: None,
             domains: None,
+            energy_types: None,
         }
     }
 

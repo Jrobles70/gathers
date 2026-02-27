@@ -5,9 +5,10 @@ use std::collections::HashMap;
 
 use enum_dispatch::enum_dispatch;
 use models::{CardID, CollectorNumber, SetCode};
+pub use systems::pokemon::PokemonSQLiteRetrievalSystem;
 pub use systems::riftsqlite::RiftboundSQLiteRetrievalSystem;
 pub use systems::scryfall::ScryfallRetrievalSystem;
-pub use systems::sqlite::{download_mtg_db, MagicSQLiteRetrievalSystem};
+pub use systems::sqlite::{MagicSQLiteRetrievalSystem, download_mtg_db};
 
 #[enum_dispatch]
 #[derive(Debug, Clone)]
@@ -15,6 +16,7 @@ pub enum RetrievalSystem {
     ScryfallRetrievalSystem,
     MagicSQLiteRetrievalSystem,
     RiftboundSQLiteRetrievalSystem,
+    PokemonSQLiteRetrievalSystem,
 }
 
 #[enum_dispatch(RetrievalSystem)]

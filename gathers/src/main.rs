@@ -8,6 +8,7 @@ enum Systems {
     Scryfall,
     Sql,
     RiftboundSql,
+    Pokemon,
 }
 
 #[derive(Parser, Debug)]
@@ -55,6 +56,9 @@ struct Args {
     #[clap(long)]
     domain: Vec<String>,
 
+    #[clap(long)]
+    energy: Option<String>,
+
     #[clap(short, long)]
     download: bool,
 }
@@ -74,6 +78,11 @@ async fn main() -> eyre::Result<()> {
             let raw =
                 std::env::var("RETRIEVAL_DB_PATH").unwrap_or_else(|_| "riftbound.db".to_string());
             Some(resolve_db_path(&raw, "riftbound.db"))
+        }
+        Systems::Pokemon => {
+            let raw =
+                std::env::var("RETRIEVAL_DB_PATH").unwrap_or_else(|_| "pokemon.db".to_string());
+            Some(resolve_db_path(&raw, "pokemon.db"))
         }
     };
 
@@ -103,6 +112,7 @@ async fn main() -> eyre::Result<()> {
                         .await?;
                 }
                 Systems::Scryfall => unreachable!(),
+                Systems::Pokemon => todo!(),
             }
 
             if args.download {
@@ -124,6 +134,9 @@ async fn main() -> eyre::Result<()> {
         Systems::RiftboundSql => RetrievalSystem::RiftboundSQLiteRetrievalSystem(
             retrieval::RiftboundSQLiteRetrievalSystem::new(retrieval_db_path)?,
         ),
+        Systems::Pokemon => RetrievalSystem::PokemonSQLiteRetrievalSystem(
+            retrieval::PokemonSQLiteRetrievalSystem::new(retrieval_db_path)?,
+        ),
     };
 
     let color_identities: Option<Vec<CardColour>> = if args.color.is_empty() {
@@ -137,6 +150,8 @@ async fn main() -> eyre::Result<()> {
     } else {
         Some(args.domain.into_iter().map(CardDomain::from).collect())
     };
+
+    // TODO: energy
 
     let rarity: Option<Rarity> = args.rarity.map(|r| r.into());
 
@@ -154,6 +169,7 @@ async fn main() -> eyre::Result<()> {
                 supertypes: args.supertype,
                 types: args.types,
                 domains,
+                energy_types: None, // TODO
             },
             Some(args.offset),
             Some(args.limit),
@@ -234,6 +250,27 @@ async fn main() -> eyre::Result<()> {
                     card.rarity.to_string().to_lowercase(),
                     domain_str,
                     artist_str,
+                    card.collector_number,
+                );
+            }
+        }
+        Systems::Pokemon => {
+            println!(
+                "{:<20} {:<35} {:<18} {:<10}",
+                "Name", "Set", "Rarity", "Number"
+            );
+            println!("{}", "-".repeat(85));
+            for card in cards {
+                let card = if let Card::Pokemon(card) = card {
+                    card
+                } else {
+                    panic!("Not a Pokemon card")
+                };
+                println!(
+                    "{:<20} {:<35} {:<18} {:<10}",
+                    card.name,
+                    card.set_code,
+                    card.rarity.to_string().to_lowercase(),
                     card.collector_number,
                 );
             }

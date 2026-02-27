@@ -1,6 +1,9 @@
 # GatheRs
 
 Collection of Rust crates and binaries to help one search for and manage Magic: the Gathering (TM) cards.
+And Riftbound, apparently.
+And Pokemon, it seems.
+I really do like my modular code.
 
 ![Example of the UI](https://codeberg.org/morosanmihail/hometg/raw/branch/main/images/ui20230628.jpg)
 

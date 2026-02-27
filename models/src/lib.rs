@@ -2,10 +2,12 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 pub mod filters;
 pub mod mtg;
+pub mod pokemon;
 pub mod riftbound;
 
 pub use mtg::{CardColour, CardIdentifiers, MagicCard, Rarity};
 
+use crate::pokemon::PokemonCard;
 use crate::riftbound::RiftboundCard;
 
 pub type Artist = String;
@@ -22,6 +24,7 @@ pub type CollectorNumber = String;
 pub enum Card {
     Magic(MagicCard),
     Riftbound(RiftboundCard),
+    Pokemon(PokemonCard),
 }
 
 #[enum_dispatch(Card)]
