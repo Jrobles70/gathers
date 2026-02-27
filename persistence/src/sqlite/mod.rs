@@ -184,6 +184,10 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         collection_id: &CollectionID,
         cards: &[CollectionCard],
     ) -> eyre::Result<Vec<CollectionCard>> {
+        if cards.is_empty() {
+            return Ok(vec![]);
+        }
+
         let conn = self.connection.lock().await;
 
         let placeholders = cards
@@ -818,5 +822,194 @@ mod tests {
         let card = cards.iter().find(|c| c.uuid == "12346").unwrap();
         assert_eq!(card.quantity, 10);
         assert_eq!(card.foil_quantity, 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_collections_with_filter() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        p.add_collection("Test Alpha".to_string()).await.unwrap();
+        p.add_collection("Test Beta".to_string()).await.unwrap();
+        p.add_collection("Gamma".to_string()).await.unwrap();
+
+        // Filter matching two collections
+        let collections = p
+            .list_collections(Some("Test".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(collections.len(), 2);
+        assert!(collections.contains(&"Test Alpha".to_string()));
+        assert!(collections.contains(&"Test Beta".to_string()));
+
+        // Filter matching exactly one collection
+        let collections = p
+            .list_collections(Some("Alpha".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(collections.len(), 1);
+        assert!(collections.contains(&"Test Alpha".to_string()));
+
+        // Filter matching none
+        let collections = p
+            .list_collections(Some("XYZ_NOMATCH".to_string()))
+            .await
+            .unwrap();
+        assert!(collections.is_empty());
+
+        // None filter returns all (Default + 3 added)
+        let collections = p.list_collections(None).await.unwrap();
+        assert_eq!(collections.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_quantity_floor_cannot_go_negative() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let collection_id = p
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        // Add 3 regular, 2 foil
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 3, 2).await;
+
+        // Over-subtract regular (−100 against 3), subtract 1 foil
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), -100, -1).await;
+
+        // Regular floors at 0; foil = 2 − 1 = 1; card still exists
+        let cards = p
+            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].quantity, 0);
+        assert_eq!(cards[0].foil_quantity, 1);
+
+        // Remove remaining foil; both quantities hit 0 → card deleted
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 0, -1).await;
+        let cards = p
+            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_move_cards_between_collections_skips_zero_quantity() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let collection_id = p
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 5, 2).await;
+
+        // Attempt to move a card with both quantities = 0 — should be a no-op
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: "card1".to_string(),
+                quantity: 0,
+                foil_quantity: 0,
+                time_added: "2023-01-01T00:00:00Z".to_string(),
+                collection: collection_id.clone(),
+                provider: "".to_string(),
+            }],
+            DEFAULT.to_string(),
+        )
+        .await
+        .unwrap();
+
+        // Source collection unchanged
+        let cards = p
+            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].quantity, 5);
+        assert_eq!(cards[0].foil_quantity, 2);
+
+        // Default collection untouched
+        let default_cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.to_string(), 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(default_cards.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_remove_collection_move_to_merges_quantities() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let col1 = p.add_collection("Collection 1".to_string()).await.unwrap();
+        let col2 = p.add_collection("Collection 2".to_string()).await.unwrap();
+
+        // Same card exists in both collections
+        add_card_to_collection(&mut p, &col1, &"shared_card".to_string(), 3, 1).await;
+        add_card_to_collection(&mut p, &col2, &"shared_card".to_string(), 2, 4).await;
+
+        // Only-in-col1 card
+        add_card_to_collection(&mut p, &col1, &"unique_card".to_string(), 5, 0).await;
+
+        // Remove col1, moving its cards into col2
+        p.remove_collection(&col1, Some(col2.clone())).await.unwrap();
+
+        let collections = p.list_collections(None).await.unwrap();
+        assert!(!collections.contains(&col1));
+
+        let cards = p
+            .get_cards_in_collection_paginated(&col2, 0, 100)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 2);
+
+        // Shared card quantities should be merged
+        let shared = cards.iter().find(|c| c.uuid == "shared_card").unwrap();
+        assert_eq!(shared.quantity, 5); // 3 + 2
+        assert_eq!(shared.foil_quantity, 5); // 1 + 4
+
+        // Unique card moved as-is
+        let unique = cards.iter().find(|c| c.uuid == "unique_card").unwrap();
+        assert_eq!(unique.quantity, 5);
+        assert_eq!(unique.foil_quantity, 0);
+    }
+
+    #[tokio::test]
+    async fn test_add_collection_duplicate_name_errors() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        p.add_collection("My Collection".to_string()).await.unwrap();
+
+        // Same name again — PRIMARY KEY violation
+        let result = p.add_collection("My Collection".to_string()).await;
+        assert!(result.is_err());
+
+        // "Default" is seeded by migrations; re-adding it must also fail
+        let result = p.add_collection(DEFAULT.to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_add_cards_to_collection_empty_slice() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let collection_id = p
+            .add_collection("Test Collection".to_string())
+            .await
+            .unwrap();
+
+        // Empty slice should succeed and return an empty vec (not malformed SQL)
+        let result = p
+            .add_cards_to_collection(&collection_id, &[])
+            .await
+            .unwrap();
+        assert!(result.is_empty());
+
+        // Collection should still be empty
+        let cards = p
+            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 0);
     }
 }
