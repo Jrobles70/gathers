@@ -4,6 +4,8 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+// Adapted from https://github.com/vikkumar2021/RiftboundCardDatabase
+
 const BASE_URL: &str = "https://riftbound.leagueoflegends.com";
 const GALLERY_PATH: &str = "/en-us/card-gallery/";
 
@@ -195,13 +197,10 @@ impl RiftboundCardFetcher {
 }
 
 fn json_id_to_string(v: &Value) -> Option<String> {
-    if v.is_null() {
-        None
-    } else if let Some(s) = v.as_str() {
-        Some(s.to_string())
-    } else if let Some(n) = v.as_i64() {
-        Some(n.to_string())
-    } else {
-        v.as_f64().map(|n| n.to_string())
+    match v {
+        Value::Null => None,
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
     }
 }

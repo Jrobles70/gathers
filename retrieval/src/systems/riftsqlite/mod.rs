@@ -33,7 +33,7 @@ impl RiftboundSQLiteRetrievalSystem {
 impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
     async fn search_cards(
         &self,
-        filters: CardSearchFilters, // TODO
+        filters: CardSearchFilters,
         skip: Option<usize>,
         limit: Option<usize>,
     ) -> eyre::Result<Vec<Card>> {
