@@ -2,16 +2,19 @@ mod models;
 
 use std::{
     collections::HashMap,
-    fs, io,
+    fs,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
 
 use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
+use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use models::SqlCard;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use tokio::sync::Mutex;
 
 use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
@@ -199,37 +202,16 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
     }
 
     async fn update_backend(&self) -> eyre::Result<bool> {
-        async fn download_file(url: &str, path: &Path) -> eyre::Result<()> {
-            let response = reqwest::get(url).await?;
-            let mut file = fs::File::create(path)?;
-            let mut content = io::Cursor::new(response.bytes().await?);
-            io::copy(&mut content, &mut file)?;
-            println!("Finished download to {file:?}");
-            Ok(())
-        }
-
-        fn calculate_sha256(path: &Path) -> eyre::Result<String> {
-            let data = fs::read(path)?;
-            let mut hasher = Sha256::new();
-            hasher.update(&data);
-            let result = hasher.finalize();
-            Ok(hex::encode(result))
-        }
-
-        fn read_sha256_from_file(path: &Path) -> eyre::Result<String> {
-            let content = fs::read_to_string(path)?;
-            Ok(content.trim().to_lowercase())
-        }
+        const DOWNLOAD_URL: &str = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
+        const CRC_URL: &str = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";
 
         let local_file_path = PathBuf::from_str(&self.db_path)?;
-        let download_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
-        let crc_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";
 
         let temp_dir = tempfile::tempdir()?;
         let crc_file_path = temp_dir.path().join("remote_crc.sha");
 
-        download_file(crc_url, &crc_file_path).await?;
-        let remote_crc = read_sha256_from_file(&crc_file_path)?;
+        stream_to_file(CRC_URL, "SHA256 fetched", &crc_file_path).await?;
+        let remote_crc = fs::read_to_string(&crc_file_path)?.trim().to_lowercase();
 
         let local_crc = if local_file_path.exists() {
             calculate_sha256(&local_file_path)?
@@ -247,8 +229,8 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
                 let temp_dir = tempfile::tempdir().expect("Gotta be able to create a temp dir");
                 let download_file_path = temp_dir.path().join("downloaded_file");
 
-                println!("Download from {download_url:?} to {download_file_path:?}...");
-                download_file(download_url, &download_file_path)
+                println!("Download from {DOWNLOAD_URL:?} to {download_file_path:?}...");
+                stream_to_file(DOWNLOAD_URL, "Download complete", &download_file_path)
                     .await
                     .and_then(|_| calculate_sha256(&download_file_path))
                     .map(|downloaded_crc| {
@@ -267,6 +249,76 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             Ok(false)
         }
     }
+}
+
+async fn stream_to_file(url: &str, label: &str, path: &Path) -> eyre::Result<()> {
+    let response = reqwest::Client::new().get(url).send().await?;
+    let total_size = response.content_length().unwrap_or(0);
+
+    let pb = ProgressBar::new(total_size);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({eta_precise}) {bytes} / {total_bytes}")?
+            .progress_chars("#>-"),
+    );
+
+    let mut file = fs::File::create(path)?;
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk)?;
+        pb.inc(chunk.len() as u64);
+    }
+    pb.finish_with_message(label.to_string());
+    Ok(())
+}
+
+fn calculate_sha256(path: &Path) -> eyre::Result<String> {
+    let data = fs::read(path)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+    Ok(hex::encode(hasher.finalize()))
+}
+
+pub async fn download_mtg_db(path: &str) -> eyre::Result<()> {
+    const DOWNLOAD_URL: &str = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
+    const CRC_URL: &str = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";
+
+    let target = PathBuf::from_str(path)?;
+
+    if let Some(parent) = target.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        fs::create_dir_all(parent)?;
+    }
+
+    let temp_dir = tempfile::tempdir()?;
+
+    println!("Fetching remote SHA256 for AllPrintings.db...");
+    let crc_path = temp_dir.path().join("remote.sha256");
+    stream_to_file(CRC_URL, "SHA256 fetched", &crc_path).await?;
+    let remote_crc = fs::read_to_string(&crc_path)?.trim().to_lowercase();
+
+    if target.exists() && calculate_sha256(&target)? == remote_crc {
+        println!("AllPrintings.db is already up to date (CRC: {remote_crc}).");
+        return Ok(());
+    }
+
+    println!("Downloading AllPrintings.db to {target:?}...");
+    let download_path = temp_dir.path().join("AllPrintings.db.download");
+    stream_to_file(DOWNLOAD_URL, "Download complete", &download_path).await?;
+
+    let downloaded_crc = calculate_sha256(&download_path)?;
+    if downloaded_crc != remote_crc {
+        eyre::bail!(
+            "AllPrintings.db CRC mismatch after download: expected {remote_crc}, got {downloaded_crc}"
+        );
+    }
+
+    fs::copy(&download_path, &target)?;
+    println!("AllPrintings.db downloaded and verified (CRC: {downloaded_crc}).");
+    Ok(())
 }
 
 #[cfg(test)]

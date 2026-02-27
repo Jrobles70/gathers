@@ -1,10 +1,6 @@
 use clap::{Parser, ValueEnum};
-use futures_util::StreamExt;
-use indicatif::{ProgressBar, ProgressStyle};
-use models::{Card, CardColour, Rarity};
+use models::{Card, CardColour, Rarity, riftbound::CardDomain};
 use retrieval::{RetrievalSystem, RetrievalSystemTrait};
-use sha2::Digest;
-use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -56,6 +52,9 @@ struct Args {
     #[clap(long)]
     types: Option<Vec<String>>,
 
+    #[clap(long)]
+    domain: Vec<String>,
+
     #[clap(short, long)]
     download: bool,
 }
@@ -64,29 +63,55 @@ struct Args {
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
-    let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH")
-        .ok()
-        .or_else(|| Some("AllPrintings.db".to_string()));
-
-    if args.download {
-        download_database(retrieval_db_path.clone()).await?;
-        return Ok(());
-    }
-
-    let db_path = PathBuf::from(retrieval_db_path.as_deref().unwrap_or("AllPrintings.db"));
-    if !db_path.exists() {
-        println!("Database file not found at: {:?}", db_path);
-        println!("Would you like to download it? (y/n)");
-
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
-
-        if input.trim().to_lowercase() == "y" {
-            download_database(retrieval_db_path.clone()).await?;
-        } else {
-            println!("Please download the database first or use the --download flag.");
-            return Ok(());
+    let retrieval_db_path: Option<String> = match args.system {
+        Systems::Scryfall => None,
+        Systems::Sql => {
+            let raw = std::env::var("RETRIEVAL_DB_PATH")
+                .unwrap_or_else(|_| "AllPrintings.db".to_string());
+            Some(resolve_db_path(&raw, "AllPrintings.db"))
         }
+        Systems::RiftboundSql => {
+            let raw =
+                std::env::var("RETRIEVAL_DB_PATH").unwrap_or_else(|_| "riftbound.db".to_string());
+            Some(resolve_db_path(&raw, "riftbound.db"))
+        }
+    };
+
+    if let Some(ref path) = retrieval_db_path {
+        let db_exists = PathBuf::from(path).exists();
+
+        if args.download || !db_exists {
+            if !db_exists && !args.download {
+                println!("Database not found at: {path}");
+                println!("Would you like to download/update it? (y/n)");
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if input.trim().to_lowercase() != "y" {
+                    println!("Run with --download to fetch the database.");
+                    return Ok(());
+                }
+            }
+
+            match args.system {
+                Systems::Sql => {
+                    retrieval::download_mtg_db(path).await?;
+                }
+                Systems::RiftboundSql => {
+                    let tmp = retrieval::RiftboundSQLiteRetrievalSystem::new(Some(path.clone()))?;
+                    RetrievalSystem::RiftboundSQLiteRetrievalSystem(tmp)
+                        .update_backend()
+                        .await?;
+                }
+                Systems::Scryfall => unreachable!(),
+            }
+
+            if args.download {
+                return Ok(());
+            }
+        }
+    } else if args.download {
+        println!("Scryfall does not use a local database.");
+        return Ok(());
     }
 
     let retrieval: RetrievalSystem = match args.system {
@@ -104,7 +129,13 @@ async fn main() -> eyre::Result<()> {
     let color_identities: Option<Vec<CardColour>> = if args.color.is_empty() {
         None
     } else {
-        Some(args.color.iter().map(|c| c.into()).collect())
+        Some(args.color.iter().map(CardColour::from).collect())
+    };
+
+    let domains: Option<Vec<CardDomain>> = if args.domain.is_empty() {
+        None
+    } else {
+        Some(args.domain.into_iter().map(CardDomain::from).collect())
     };
 
     let rarity: Option<Rarity> = args.rarity.map(|r| r.into());
@@ -122,6 +153,7 @@ async fn main() -> eyre::Result<()> {
                 subtypes: args.subtype,
                 supertypes: args.supertype,
                 types: args.types,
+                domains,
             },
             Some(args.offset),
             Some(args.limit),
@@ -134,28 +166,34 @@ async fn main() -> eyre::Result<()> {
     }
 
     println!("Found {} card(s):\n", cards.len());
-    println!(
-        "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
-        "Name", "Set", "Rarity", "Colors", "Artist", "Number", "Subtype", "Supertype", "Types"
-    );
-    println!("{}", "-".repeat(140));
 
-    for card in cards {
-        match args.system {
-            Systems::Scryfall | Systems::Sql => {
+    match args.system {
+        Systems::Scryfall | Systems::Sql => {
+            println!(
+                "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
+                "Name",
+                "Set",
+                "Rarity",
+                "Colors",
+                "Artist",
+                "Number",
+                "Subtype",
+                "Supertype",
+                "Types"
+            );
+            println!("{}", "-".repeat(140));
+            for card in cards {
                 let card = if let Card::Magic(card) = card {
                     card
                 } else {
                     panic!("Not a Magic card")
                 };
-
                 let color_str: String = card
                     .color_identity
                     .iter()
                     .map(|c| format!("{}", c))
                     .collect::<Vec<_>>()
                     .join("");
-
                 println!(
                     "{:<30} {:<5} {:<10} {:<7} {:<25} {:<10} {:<15} {:<15} {:<15}",
                     card.name,
@@ -169,14 +207,35 @@ async fn main() -> eyre::Result<()> {
                     card.subtypes.join(","),
                 );
             }
-            Systems::RiftboundSql => {
+        }
+        Systems::RiftboundSql => {
+            println!(
+                "{:<30} {:<5} {:<10} {:<30} {:<25} {:<10}",
+                "Name", "Set", "Rarity", "Domains", "Artists", "Number"
+            );
+            println!("{}", "-".repeat(115));
+            for card in cards {
                 let card = if let Card::Riftbound(card) = card {
                     card
                 } else {
-                    panic!("Not a Magic card")
+                    panic!("Not a Riftbound card")
                 };
-
-                println!("{card:?}");
+                let domain_str = card
+                    .domains
+                    .iter()
+                    .map(|d| d.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let artist_str = card.artists.join(",");
+                println!(
+                    "{:<30} {:<5} {:<10} {:<30} {:<25} {:<10}",
+                    card.name,
+                    card.set_code,
+                    card.rarity.to_string().to_lowercase(),
+                    domain_str,
+                    artist_str,
+                    card.collector_number,
+                );
             }
         }
     }
@@ -184,83 +243,13 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-// TODO: move this to retrieval/sqlite
-// make sure it's used by server/update
-async fn download_database(db_path: Option<String>) -> eyre::Result<()> {
-    let download_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
-    let crc_url = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";
-
-    let persistent_path = if let Some(ref path) = db_path
-        && path.starts_with('.')
-    {
+fn resolve_db_path(raw: &str, filename: &str) -> String {
+    if raw.starts_with('.') {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        let persistent_dir = PathBuf::from(home).join(".local/share/gathers");
-        std::fs::create_dir_all(&persistent_dir)?;
-        persistent_dir.join("AllPrintings.db")
+        let dir = PathBuf::from(home).join(".local/share/gathers");
+        std::fs::create_dir_all(&dir).ok();
+        dir.join(filename).to_string_lossy().into_owned()
     } else {
-        PathBuf::from(db_path.as_deref().unwrap_or("AllPrintings.db"))
-    };
-
-    println!("Retrieving sha256 file to check if download is needed.");
-
-    let crc_response = reqwest::get(crc_url).await?;
-    let crc_content = crc_response.text().await?;
-    let remote_crc = crc_content.trim().to_lowercase();
-
-    let local_crc = if persistent_path.exists() {
-        let data = std::fs::read(&persistent_path)?;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&data);
-        let result = hasher.finalize();
-        Some(hex::encode(result))
-    } else {
-        None
-    };
-
-    if local_crc.as_ref() == Some(&remote_crc) {
-        println!("Database is already up to date (CRC: {}).", remote_crc);
-        return Ok(());
+        raw.to_string()
     }
-
-    println!("Downloading AllPrintings.db to: {:?}", persistent_path);
-
-    let client = reqwest::Client::new();
-    let response = client.get(download_url).send().await?;
-    let total_size = response.content_length().unwrap_or(0);
-
-    let pb = ProgressBar::new(total_size);
-    pb.set_style(ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({eta_precise}) {bytes} / {total_bytes}")
-        ?.progress_chars("#>-"));
-
-    let mut file = std::fs::File::create(&persistent_path)?;
-    let mut stream = response.bytes_stream();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk: Vec<u8> = chunk?.to_vec();
-        file.write_all(&chunk)?;
-        pb.inc(chunk.len() as u64);
-    }
-
-    pb.finish_with_message("Download complete");
-
-    let data = std::fs::read(&persistent_path)?;
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(&data);
-    let result = hasher.finalize();
-    let downloaded_crc = hex::encode(result);
-
-    if downloaded_crc == remote_crc {
-        println!(
-            "Database downloaded successfully (CRC: {}).",
-            downloaded_crc
-        );
-    } else {
-        println!(
-            "Warning: CRC mismatch. Downloaded CRC: {}, Expected CRC: {}",
-            downloaded_crc, remote_crc
-        );
-    }
-
-    Ok(())
 }

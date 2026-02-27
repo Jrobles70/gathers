@@ -1,7 +1,7 @@
 use axum::{Json, Router, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
-use retrieval::RetrievalSystem;
+use retrieval::{RetrievalSystem, RetrievalSystemTrait};
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
@@ -117,14 +117,35 @@ async fn main() -> eyre::Result<()> {
 
     let port = args.port;
 
-    // Use default paths but make them configurable
     let storage_db_path = std::env::var("STORAGE_DB_PATH")
         .ok()
-        .or_else(|| Some("/home/mihail/.local/share/hometg/DB/storage.db".to_string()));
+        .or_else(|| Some("~/.local/share/gathers/DB/storage.db".to_string()));
 
     let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH")
         .ok()
-        .or_else(|| Some("/home/mihail/.local/share/hometg/DB/AllPrintings.db".to_string()));
+        .or_else(|| Some("~/.local/share/gathers/DB/AllPrintings.db".to_string()));
+
+    if std::env::var("GATHERS_NO_AUTO_UPDATE").is_err() {
+        match args.system {
+            Systems::Sql => {
+                if let Some(ref path) = retrieval_db_path
+                    && !std::path::Path::new(path).exists()
+                {
+                    retrieval::download_mtg_db(path).await?;
+                }
+            }
+            Systems::RiftboundSql => {
+                if let Some(ref path) = retrieval_db_path
+                    && !std::path::Path::new(path).exists()
+                {
+                    let temp =
+                        RetrievalState::new_retrieval(args.system, retrieval_db_path.clone())?;
+                    temp.update_backend().await?;
+                }
+            }
+            _ => {}
+        }
+    }
 
     let retrieval = Arc::new(Mutex::new(RetrievalState::new(
         args.system,

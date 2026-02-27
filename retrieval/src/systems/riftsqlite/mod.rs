@@ -1,20 +1,23 @@
 mod models;
+mod update;
 
 use std::{collections::HashMap, sync::Arc};
 
 use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
 use models::SqlCard;
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 use tokio::sync::Mutex;
 
-use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
+use crate::{
+    NamedRetrievalSystem, RetrievalSystemTrait, systems::riftsqlite::update::RiftboundCardFetcher,
+};
 
 impl NamedRetrievalSystem for RiftboundSQLiteRetrievalSystem {}
 
 #[derive(Debug, Clone)]
 pub struct RiftboundSQLiteRetrievalSystem {
     connection: Arc<tokio::sync::Mutex<Connection>>,
-    _db_path: String,
+    db_path: String,
 }
 
 impl RiftboundSQLiteRetrievalSystem {
@@ -22,7 +25,7 @@ impl RiftboundSQLiteRetrievalSystem {
         let path = db_path.unwrap_or_else(|| "../data/riftbound.db".to_string());
         Ok(Self {
             connection: Arc::new(Mutex::new(Connection::open(path.clone())?)),
-            _db_path: path,
+            db_path: path,
         })
     }
 }
@@ -87,6 +90,14 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
         {
             conditions.push(format!("code = ?{i}"));
             params.push(collector_number.to_string());
+            i += 1;
+        }
+        if let Some(domains) = &filters.domains {
+            for domain in domains {
+                conditions.push(format!("domains LIKE ?{i}"));
+                params.push(format!("%{domain}%"));
+                i += 1;
+            }
         }
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
@@ -168,6 +179,69 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
     }
 
     async fn update_backend(&self) -> eyre::Result<bool> {
-        todo!("Oh no")
+        let db_path = self.db_path.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut fetcher = RiftboundCardFetcher::new()?;
+            let cards = fetcher.fetch_all_simplified()?;
+
+            let mut conn = Connection::open(&db_path)?;
+            let tx = conn.transaction()?;
+
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS cards (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                code TEXT,
+                set_id TEXT,
+                type TEXT,
+                rarity TEXT,
+                energy INTEGER,
+                might INTEGER,
+                image_url TEXT,
+                domains TEXT,
+                artists TEXT,
+                text TEXT
+            )",
+            )?;
+
+            for card in &cards {
+                let collector_number: Option<String> =
+                    card.collector_number.as_ref().and_then(|v| {
+                        if v.is_null() {
+                            None
+                        } else if let Some(s) = v.as_str() {
+                            Some(s.to_string())
+                        } else {
+                            Some(v.to_string())
+                        }
+                    });
+
+                let domains = card.domain_ids.as_deref().unwrap_or(&[]).join(",");
+                let artists = card.artists.as_deref().unwrap_or(&[]).join(",");
+
+                tx.execute(
+                    "INSERT OR REPLACE INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    params![
+                        card.id.as_deref(),
+                        card.name.as_deref(),
+                        collector_number.as_deref(),
+                        card.set.as_deref(),
+                        card.card_type.as_deref(),
+                        card.rarity.as_deref(),
+                        card.energy.as_deref(),
+                        card.might.as_deref(),
+                        card.image_url.as_deref(),
+                        domains.as_str(),
+                        artists.as_str(),
+                        card.ability_html.as_deref(),
+                    ],
+                )?;
+            }
+
+            tx.commit()?;
+            Ok(true)
+        })
+        .await
+        .map_err(|e| eyre::eyre!("update_backend task panicked: {e}"))?
     }
 }

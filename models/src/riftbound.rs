@@ -46,6 +46,34 @@ pub enum CardDomain {
     Colorless,
 }
 
+impl std::fmt::Display for CardDomain {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CardDomain::Calm => write!(f, "Calm"),
+            CardDomain::Chaos => write!(f, "Chaos"),
+            CardDomain::Fury => write!(f, "Fury"),
+            CardDomain::Mind => write!(f, "Mind"),
+            CardDomain::Body => write!(f, "Body"),
+            CardDomain::Order => write!(f, "Order"),
+            CardDomain::Colorless => write!(f, "Colorless"),
+        }
+    }
+}
+
+impl From<String> for CardDomain {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "calm" => CardDomain::Calm,
+            "chaos" => CardDomain::Chaos,
+            "fury" => CardDomain::Fury,
+            "mind" => CardDomain::Mind,
+            "body" => CardDomain::Body,
+            "order" => CardDomain::Order,
+            _ => CardDomain::Colorless,
+        }
+    }
+}
+
 impl std::fmt::Display for RBRarity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

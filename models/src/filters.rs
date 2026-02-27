@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{CardColour, Rarity};
+use crate::{CardColour, Rarity, riftbound::CardDomain};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CardSearchFilters {
@@ -18,6 +18,8 @@ pub struct CardSearchFilters {
     pub subtypes: Option<Vec<String>>,
     pub supertypes: Option<String>,
     pub types: Option<Vec<String>>,
+    /// Riftbound-only: filter by one or more card domains.
+    pub domains: Option<Vec<CardDomain>>,
 }
 
 impl CardSearchFilters {
@@ -33,6 +35,7 @@ impl CardSearchFilters {
             subtypes: None,
             supertypes: None,
             types: None,
+            domains: None,
         }
     }
 

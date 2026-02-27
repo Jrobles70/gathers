@@ -112,9 +112,29 @@ pub fn riftbound_routes() -> Router<GathersState> {
             .map(|s| Json(s.iter().map(|s| s.code.clone()).collect()))
     }
 
+    async fn update(
+        State(state): State<GathersState>,
+    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+        let mut ret = state.0.lock().await;
+        match ret
+            .retrieval
+            .update_backend()
+            .await
+            .and_then(|_| ret.reload_retrieval())
+        {
+            Ok(()) => Ok(Json("Update successful".to_string())),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Oof. {e}"),
+                }),
+            )),
+        }
+    }
+
     Router::new()
         .route("/cards/search", post(search_riftbound_cards))
         .route("/cards", get(retrieve_riftbound_cards))
         .route("/sets", get(get_sets))
-    // .route("/update", get(update))
+        .route("/update", get(update))
 }

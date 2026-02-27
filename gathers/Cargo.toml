@@ -14,7 +14,3 @@ reqwest.workspace = true
 tokio.workspace = true
 eyre.workspace = true
 clap.workspace = true
-indicatif = "0.18"
-sha2 = "0.11.0-rc.5"
-hex = "0.4.3"
-futures-util.workspace = true

@@ -736,13 +736,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "eyre",
- "futures-util",
- "hex",
- "indicatif",
  "models",
  "reqwest",
  "retrieval",
- "sha2",
  "tokio",
 ]
 
@@ -1569,10 +1565,14 @@ version = "0.1.0"
 dependencies = [
  "enum_dispatch",
  "eyre",
+ "futures-util",
  "hex",
+ "indicatif",
  "models",
+ "regex",
  "reqwest",
  "rusqlite",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",
