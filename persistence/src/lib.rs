@@ -86,15 +86,16 @@ impl PersistenceSystem {
             let record: csv_models::CSVCard = result?;
             cards.push(record);
         }
-        // TODO: split bulk search by some bucket amount
-        let card_ids = retrieval
-            .bulk_search_cards(
-                cards
-                    .iter()
-                    .map(|c| (c.set_code.clone(), c.collector_number.clone()))
-                    .collect(),
-            )
-            .await?;
+        const BULK_CHUNK_SIZE: usize = 500;
+        let input: Vec<(String, String)> = cards
+            .iter()
+            .map(|c| (c.set_code.clone(), c.collector_number.clone()))
+            .collect();
+        let mut card_ids = vec![];
+        for chunk in input.chunks(BULK_CHUNK_SIZE) {
+            let chunk_result = retrieval.bulk_search_cards(chunk.to_vec()).await?;
+            card_ids.extend(chunk_result);
+        }
 
         let cta: Vec<(String, u32, u32)> = card_ids
             .iter()
