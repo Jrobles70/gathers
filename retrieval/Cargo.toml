@@ -1,7 +1,7 @@
 [package]
 name = "retrieval"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [lib]
 name = "retrieval"
@@ -11,15 +11,14 @@ path = "src/lib.rs"
 enum_dispatch.workspace = true
 eyre.workspace = true
 futures-util.workspace = true
-hex = "0.4.3"
-indicatif = "0.18"
+hex.workspace = true
+indicatif.workspace = true
 models = { path = "../models/" }
+regex.workspace = true
 reqwest.workspace = true
 rusqlite.workspace = true
+serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.11.0-rc.5"
-tempfile = "3.24.0"
+sha2.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
-
-regex = "1"
-serde = { version = "1", features = ["derive"] }

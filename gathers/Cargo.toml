@@ -1,16 +1,16 @@
 [package]
 name = "gathers"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [[bin]]
 name = "gathers"
 path = "src/main.rs"
 
 [dependencies]
-retrieval = { path = "../retrieval" }
+clap.workspace = true
+eyre.workspace = true
 models = { path = "../models" }
 reqwest.workspace = true
+retrieval = { path = "../retrieval" }
 tokio.workspace = true
-eyre.workspace = true
-clap.workspace = true

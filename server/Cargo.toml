@@ -1,30 +1,26 @@
 [package]
 name = "server"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [[bin]]
 name = "server"
 path = "src/main.rs"
 
 [dependencies]
-retrieval = { path = "../retrieval" }
+aide.workspace = true
+axum.workspace = true
+axum-extra.workspace = true
+chrono.workspace = true
+clap.workspace = true
+eyre.workspace = true
 models = { path = "../models" }
 persistence = { path = "../persistence" }
-chrono.workspace = true
 reqwest.workspace = true
+retrieval = { path = "../retrieval" }
+schemars.workspace = true
 serde.workspace = true
 tokio.workspace = true
-eyre.workspace = true
-clap.workspace = true
-axum = { version = "0.8.8", features = ["macros"] }
-axum-extra = { version = "0.12.5", features = ["query"] }
-tower = { version = "0.5.2", features = ["util", "timeout"] }
-tower-http = { version = "0.6.1", features = [
-  "add-extension",
-  "trace",
-  "cors",
-] }
+tower.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
-aide = { version = "0.15.1", features = ["axum", "axum-json", "axum-query", "swagger"] }
-schemars = { version = "0.9", features = ["chrono04"] }

@@ -1,8 +1,7 @@
 [package]
 name = "benches"
-version = "0.1.0"
-edition = "2021"
-
+version.workspace = true
+edition.workspace = true
 
 [[bench]]
 name = "card_search_benchmark"
@@ -10,6 +9,6 @@ harness = false
 path = "src/card_search_benchmark.rs"
 
 [dependencies]
-retrieval = { path = "../retrieval" }
+criterion.workspace = true
 models = { path = "../models" }
-criterion = { version = "0.8", features = ["html_reports"] }
+retrieval = { path = "../retrieval" }
