@@ -29,7 +29,7 @@ export default function Sidebar() {
         <nav className="navbar navbar-expand-lg navbar-light bg-light">
           <div className="container-fluid">
             <a className="navbar-brand" href="/">
-              HomeTG
+              GatheRs
             </a>
           </div>
         </nav>
