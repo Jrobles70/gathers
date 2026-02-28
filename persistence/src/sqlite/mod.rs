@@ -25,6 +25,10 @@ impl SQLitePersistenceSystem {
             Connection::open(":memory:")?
         } else {
             let path = db_path.unwrap_or_else(|| "storage.db".to_string());
+            let path = std::path::Path::new(&path);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
             Connection::open(path)?
         };
         MIGRATIONS.to_latest(&mut conn)?;

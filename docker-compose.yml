@@ -4,8 +4,8 @@ services:
     ports:
       - "5234:5234"
     volumes:
-      - ./data/:/home/app/.local/share/gathers/DB/
+      - ./data/:/home/app/.local/share/gathers/DB/:rw
     environment:
       - STORAGE_DB_PATH=/home/app/.local/share/gathers/DB/storage.db
-      - RETRIEVAL_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
+      - RETRIEVAL_DB_PATH=/home/app/.local/share/gathers/DB/riftbound.db
     restart: unless-stopped

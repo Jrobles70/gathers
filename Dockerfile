@@ -38,4 +38,4 @@ EXPOSE 5234
 ENV STORAGE_DB_PATH=/home/app/.local/share/gathers/DB/storage.db
 ENV RETRIEVAL_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
 
-CMD ["./server", "--system", "sql", "--port", "5234"]
+CMD ["./server", "--system", "riftbound-sql", "--port", "5234"]
