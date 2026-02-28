@@ -23,12 +23,12 @@ export function CardLoaderProvider({ children }) {
   }
 
   async function batchFunction(keys) {
-    let urlParams = keys.join("&ids=");
+    const params = new URLSearchParams(keys.map((k) => ["ids", k]));
     const results = await ops
       .fetch(
         "Bulk updating details for cards",
         {},
-        getCardEndpoint() + "?ids=" + urlParams,
+        getCardEndpoint() + "?" + params.toString(),
       )
       .then((data) => data);
     return keys.map((key) => results[key] || new Error(`No card for ${key}`));
