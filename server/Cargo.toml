@@ -26,3 +26,5 @@ tower-http = { version = "0.6.1", features = [
   "cors",
 ] }
 tracing.workspace = true
+aide = { version = "0.15.1", features = ["axum", "axum-json", "axum-query", "swagger"] }
+schemars = { version = "0.9", features = ["chrono04"] }

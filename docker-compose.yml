@@ -2,10 +2,10 @@ services:
   server:
     build: .
     ports:
-      - "3000:3000"
+      - "5234:5234"
     volumes:
-      - ./data/:/home/app/.local/share/hometg/DB/
+      - ./data/:/home/app/.local/share/gathers/DB/
     environment:
-      - STORAGE_DB_PATH=/home/app/.local/share/hometg/DB/storage.db
-      - RETRIEVAL_DB_PATH=/home/app/.local/share/hometg/DB/AllPrintings.db
+      - STORAGE_DB_PATH=/home/app/.local/share/gathers/DB/storage.db
+      - RETRIEVAL_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
     restart: unless-stopped

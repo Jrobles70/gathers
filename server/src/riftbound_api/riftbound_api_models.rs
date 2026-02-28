@@ -1,7 +1,47 @@
-use models::riftbound::{CardDomain, RiftboundCard};
+use models::riftbound::RiftboundCard;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub enum APICardDomain {
+    Calm,
+    Chaos,
+    Fury,
+    Mind,
+    Body,
+    Order,
+    Colorless,
+}
+
+impl From<models::riftbound::CardDomain> for APICardDomain {
+    fn from(value: models::riftbound::CardDomain) -> Self {
+        match value {
+            models::riftbound::CardDomain::Calm => APICardDomain::Calm,
+            models::riftbound::CardDomain::Chaos => APICardDomain::Chaos,
+            models::riftbound::CardDomain::Fury => APICardDomain::Fury,
+            models::riftbound::CardDomain::Mind => APICardDomain::Mind,
+            models::riftbound::CardDomain::Body => APICardDomain::Body,
+            models::riftbound::CardDomain::Order => APICardDomain::Order,
+            models::riftbound::CardDomain::Colorless => APICardDomain::Colorless,
+        }
+    }
+}
+
+impl From<APICardDomain> for models::riftbound::CardDomain {
+    fn from(value: APICardDomain) -> Self {
+        match value {
+            APICardDomain::Calm => models::riftbound::CardDomain::Calm,
+            APICardDomain::Chaos => models::riftbound::CardDomain::Chaos,
+            APICardDomain::Fury => models::riftbound::CardDomain::Fury,
+            APICardDomain::Mind => models::riftbound::CardDomain::Mind,
+            APICardDomain::Body => models::riftbound::CardDomain::Body,
+            APICardDomain::Order => models::riftbound::CardDomain::Order,
+            APICardDomain::Colorless => models::riftbound::CardDomain::Colorless,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct APIRiftboundCard {
     pub id: String,
     pub name: String,
@@ -9,7 +49,7 @@ pub struct APIRiftboundCard {
     pub set_code: String,
     pub rarity: RBRarity,
     pub artists: Vec<String>,
-    pub domains: Vec<CardDomain>,
+    pub domains: Vec<APICardDomain>,
     pub text: String,
     pub image: String,
 }
@@ -22,15 +62,14 @@ impl From<RiftboundCard> for APIRiftboundCard {
             set_code: value.set_code,
             rarity: value.rarity.into(),
             artists: value.artists,
-            domains: value.domains,
+            domains: value.domains.into_iter().map(Into::into).collect(),
             text: value.text,
             image: value.image,
         }
     }
 }
 
-// Rarity enum for Riftbound cards
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum RBRarity {
     Common,
     Uncommon,

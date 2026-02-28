@@ -1,22 +1,98 @@
-use models::{CardColour, CardIdentifiers, MagicCard, Rarity};
+use models::{CardIdentifiers, MagicCard};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub enum APIRarity {
+    Common,
+    Uncommon,
+    Rare,
+    Mythic,
+    Special,
+    Bonus,
+}
+
+impl From<models::Rarity> for APIRarity {
+    fn from(value: models::Rarity) -> Self {
+        match value {
+            models::Rarity::Common => APIRarity::Common,
+            models::Rarity::Uncommon => APIRarity::Uncommon,
+            models::Rarity::Rare => APIRarity::Rare,
+            models::Rarity::Mythic => APIRarity::Mythic,
+            models::Rarity::Special => APIRarity::Special,
+            models::Rarity::Bonus => APIRarity::Bonus,
+        }
+    }
+}
+
+impl From<APIRarity> for models::Rarity {
+    fn from(value: APIRarity) -> Self {
+        match value {
+            APIRarity::Common => models::Rarity::Common,
+            APIRarity::Uncommon => models::Rarity::Uncommon,
+            APIRarity::Rare => models::Rarity::Rare,
+            APIRarity::Mythic => models::Rarity::Mythic,
+            APIRarity::Special => models::Rarity::Special,
+            APIRarity::Bonus => models::Rarity::Bonus,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub enum APICardColour {
+    White,
+    Blue,
+    Black,
+    Red,
+    Green,
+    Colourless,
+    Multicoloured,
+}
+
+impl From<models::CardColour> for APICardColour {
+    fn from(value: models::CardColour) -> Self {
+        match value {
+            models::CardColour::White => APICardColour::White,
+            models::CardColour::Blue => APICardColour::Blue,
+            models::CardColour::Black => APICardColour::Black,
+            models::CardColour::Red => APICardColour::Red,
+            models::CardColour::Green => APICardColour::Green,
+            models::CardColour::Colourless => APICardColour::Colourless,
+            models::CardColour::Multicoloured => APICardColour::Multicoloured,
+        }
+    }
+}
+
+impl From<APICardColour> for models::CardColour {
+    fn from(value: APICardColour) -> Self {
+        match value {
+            APICardColour::White => models::CardColour::White,
+            APICardColour::Blue => models::CardColour::Blue,
+            APICardColour::Black => models::CardColour::Black,
+            APICardColour::Red => models::CardColour::Red,
+            APICardColour::Green => models::CardColour::Green,
+            APICardColour::Colourless => models::CardColour::Colourless,
+            APICardColour::Multicoloured => models::CardColour::Multicoloured,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct APICard {
     pub id: String,
     pub name: String,
     #[serde(rename = "setCode")]
     pub set_code: String,
-    pub rarity: Rarity,
+    pub rarity: APIRarity,
     pub artist: String,
     #[serde(rename = "colorIdentity")]
-    pub color_identity: Vec<CardColour>,
+    pub color_identity: Vec<APICardColour>,
     pub text: String,
     #[serde(rename = "cardIdentifiers")]
     pub card_identifiers: APICardIdentifiers,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct APICardIdentifiers {
     pub id: String,
     #[serde(rename = "scryfallId")]
@@ -29,9 +105,9 @@ impl From<MagicCard> for APICard {
             id: value.id,
             name: value.name,
             set_code: value.set_code,
-            rarity: value.rarity,
+            rarity: value.rarity.into(),
             artist: value.artist,
-            color_identity: value.color_identity,
+            color_identity: value.color_identity.into_iter().map(Into::into).collect(),
             text: value.text,
             card_identifiers: value.card_identifiers.into(),
         }

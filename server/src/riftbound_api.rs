@@ -1,20 +1,24 @@
 use std::collections::HashMap;
 
-use axum::{
-    Json, Router,
-    extract::State,
+use aide::axum::{
+    ApiRouter,
     routing::{get, post},
 };
-use axum_extra::extract::Query;
-use models::{Card, filters::CardSearchFilters};
+use axum::{Json, extract::{Query, State}};
+use models::Card;
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{GathersState, riftbound_api::riftbound_api_models::APIRiftboundCard};
-mod riftbound_api_models;
+use crate::{
+    GathersState,
+    collections::collections_models::APICardSearchFilters,
+    riftbound_api::riftbound_api_models::APIRiftboundCard,
+};
+pub mod riftbound_api_models;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, JsonSchema)]
 struct ErrorPayload {
     error: String,
 }
@@ -23,8 +27,8 @@ fn default_limit() -> usize {
     10
 }
 
-pub fn riftbound_routes() -> Router<GathersState> {
-    #[derive(Deserialize)]
+pub fn riftbound_routes() -> ApiRouter<GathersState> {
+    #[derive(Deserialize, JsonSchema)]
     struct SearchQuery {
         #[serde(default)]
         skip: usize,
@@ -35,12 +39,12 @@ pub fn riftbound_routes() -> Router<GathersState> {
     async fn search_riftbound_cards(
         State(state): State<GathersState>,
         Query(query): Query<SearchQuery>,
-        Json(input): Json<CardSearchFilters>,
+        Json(input): Json<APICardSearchFilters>,
     ) -> Result<Json<Vec<APIRiftboundCard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
 
         match ret
-            .search_cards(input, query.skip.into(), query.limit.into())
+            .search_cards(input.into(), query.skip.into(), query.limit.into())
             .await
         {
             Ok(result) => Ok(Json(
@@ -61,7 +65,7 @@ pub fn riftbound_routes() -> Router<GathersState> {
         }
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, JsonSchema)]
     struct RetrieveQuery {
         #[serde(default)]
         ids: Vec<String>,
@@ -69,7 +73,7 @@ pub fn riftbound_routes() -> Router<GathersState> {
 
     async fn retrieve_riftbound_cards(
         State(state): State<GathersState>,
-        axum_extra::extract::Query(query): axum_extra::extract::Query<RetrieveQuery>,
+        Query(query): Query<RetrieveQuery>,
     ) -> Result<Json<HashMap<String, APIRiftboundCard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
 
@@ -132,9 +136,9 @@ pub fn riftbound_routes() -> Router<GathersState> {
         }
     }
 
-    Router::new()
-        .route("/cards/search", post(search_riftbound_cards))
-        .route("/cards", get(retrieve_riftbound_cards))
-        .route("/sets", get(get_sets))
-        .route("/update", get(update))
+    ApiRouter::new()
+        .api_route("/cards/search", post(search_riftbound_cards))
+        .api_route("/cards", get(retrieve_riftbound_cards))
+        .api_route("/sets", get(get_sets))
+        .api_route("/update", get(update))
 }

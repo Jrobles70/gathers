@@ -1,33 +1,36 @@
-use axum::{
-    Json, Router,
-    extract::{Path, State},
+use aide::axum::{
+    ApiRouter,
     routing::{get, post},
 };
-use axum_extra::extract::Query;
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+};
 use chrono::{DateTime, Utc};
-use models::{Card, filters::CardSearchFilters};
+use models::Card;
 use persistence::{PersistenceSystem, PersistenceSystemTrait};
 use reqwest::StatusCode;
 use retrieval::{NamedRetrievalSystem as _, RetrievalSystemTrait};
+use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::{
     GathersState,
     collections::collections_models::{
-        CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard, CollectionCardsQuery,
-        CollectionRemoveResponse, ResultCard, ResultCardInner, SearchQuery,
+        APICardSearchFilters, CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard,
+        CollectionCardsQuery, CollectionRemoveResponse, ResultCard, ResultCardInner, SearchQuery,
     },
 };
-mod collections_models;
+pub mod collections_models;
 
 use crate::collections::collections_models::Collection;
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 struct ErrorPayload {
     error: String,
 }
 
-pub fn collection_routes() -> Router<GathersState> {
+pub fn collection_routes() -> ApiRouter<GathersState> {
     async fn list(
         State(state): State<GathersState>,
     ) -> Result<Json<Vec<Collection>>, (StatusCode, Json<ErrorPayload>)> {
@@ -288,12 +291,12 @@ pub fn collection_routes() -> Router<GathersState> {
     async fn search_temp(
         State(state): State<GathersState>,
         Query(query): Query<SearchQuery>,
-        Json(input): Json<CardSearchFilters>,
+        Json(input): Json<APICardSearchFilters>,
     ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
 
         match ret
-            .search_cards(input, query.offset.into(), query.page_size.into())
+            .search_cards(input.into(), query.offset.into(), query.page_size.into())
             .await
         {
             Ok(result) => Ok(Json(
@@ -324,23 +327,14 @@ pub fn collection_routes() -> Router<GathersState> {
         }
     }
 
-    // async fn search(
-    //     State(state): State<GathersState>,
-    //     Query(query): Query<SearchQuery>,
-    //     Json(input): Json<CardSearchFilters>,
-    // ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
-    //     // This has to search both retrieval AND persistence
-    //     Ok(Json(vec![]))
-    // }
-
-    Router::new()
-        .route("/list", get(list))
-        .route("/add", post(add))
-        .route("/remove/{id}", post(remove))
-        .route("/move/{id}", post(move_to))
-        .route("/cards/{id}/list", get(cards_get))
-        .route("/cards/{id}/count", get(collection_cards_count))
-        .route("/search", post(search_temp))
-        .route("/cards/{id}/add", post(cards_add))
-        .route("/cards/{id}/delete", post(cards_remove))
+    ApiRouter::new()
+        .api_route("/list", get(list))
+        .api_route("/add", post(add))
+        .api_route("/remove/{id}", post(remove))
+        .api_route("/move/{id}", post(move_to))
+        .api_route("/cards/{id}/list", get(cards_get))
+        .api_route("/cards/{id}/count", get(collection_cards_count))
+        .api_route("/search", post(search_temp))
+        .api_route("/cards/{id}/add", post(cards_add))
+        .api_route("/cards/{id}/delete", post(cards_remove))
 }

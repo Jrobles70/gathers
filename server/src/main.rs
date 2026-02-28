@@ -1,7 +1,11 @@
-use axum::{Json, Router, error_handling::HandleErrorLayer, extract::State};
+use aide::axum::{ApiRouter, routing::get};
+use aide::openapi::{Info, OpenApi};
+use aide::swagger::Swagger;
+use axum::{Extension, Json, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
 use retrieval::{RetrievalSystem, RetrievalSystemTrait};
+use schemars::JsonSchema;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
@@ -19,7 +23,7 @@ mod mtg_api;
 mod pokemon_api;
 mod riftbound_api;
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, JsonSchema)]
 pub struct SystemInfo {
     pub system: Systems,
 }
@@ -92,7 +96,9 @@ impl StorageState {
     }
 }
 
-#[derive(Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize)]
+#[derive(
+    Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize, JsonSchema,
+)]
 pub enum Systems {
     Scryfall,
     Sql,
@@ -117,6 +123,10 @@ async fn get_system_info(
     Ok(Json(ret.get_system_info().await))
 }
 
+async fn serve_api(Extension(api): Extension<OpenApi>) -> impl axum::response::IntoResponse {
+    Json(api)
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
@@ -126,13 +136,23 @@ async fn main() -> eyre::Result<()> {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let gathers_dir = std::path::Path::new(&home).join(".local/share/gathers");
 
-    let storage_db_path = std::env::var("STORAGE_DB_PATH")
-        .ok()
-        .or_else(|| Some(gathers_dir.join("DB/storage.db").to_string_lossy().into_owned()));
+    let storage_db_path = std::env::var("STORAGE_DB_PATH").ok().or_else(|| {
+        Some(
+            gathers_dir
+                .join("DB/storage.db")
+                .to_string_lossy()
+                .into_owned(),
+        )
+    });
 
-    let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH")
-        .ok()
-        .or_else(|| Some(gathers_dir.join("DB/AllPrintings.db").to_string_lossy().into_owned()));
+    let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH").ok().or_else(|| {
+        Some(
+            gathers_dir
+                .join("DB/AllPrintings.db")
+                .to_string_lossy()
+                .into_owned(),
+        )
+    });
 
     if std::env::var("GATHERS_NO_AUTO_UPDATE").is_err() {
         match args.system {
@@ -162,13 +182,25 @@ async fn main() -> eyre::Result<()> {
     )?));
     let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
 
+    let mut api = OpenApi {
+        info: Info {
+            title: "GatheRs API".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            ..Info::default()
+        },
+        ..OpenApi::default()
+    };
+
     let cors = CorsLayer::permissive();
-    let app = Router::new()
+    let app = ApiRouter::new()
         .nest("/mtg", mtg_routes())
         .nest("/riftbound", riftbound_routes())
         .nest("/pokemon", pokemon_routes())
         .nest("/collection", collection_routes())
-        .route("/system", axum::routing::get(get_system_info))
+        .api_route("/system", get(get_system_info))
+        .route("/api.json", axum::routing::get(serve_api))
+        .route("/swagger", Swagger::new("/api.json").axum_route())
+        .finish_api(&mut api)
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -186,6 +218,7 @@ async fn main() -> eyre::Result<()> {
                 .into_inner(),
         )
         .layer(cors)
+        .layer(Extension(api))
         .with_state((retrieval, storage));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
