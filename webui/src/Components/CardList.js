@@ -1,9 +1,12 @@
 ﻿import React, { useState, useEffect } from "react";
 import Card from "./Card";
+import RiftboundCard from "./RiftboundCard";
+import PokemonCard from "./PokemonCard";
 import { useNavigate } from "react-router-dom";
 import { useCollection, usePageNumber } from "./CollectionContext";
 import { useOperations } from "../OperationsContext";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
+import { useSystemType } from "./SystemTypeContext";
 import ReactPaginate from "react-paginate";
 import {
   useCards,
@@ -15,12 +18,22 @@ import {
   useRefreshCardList,
 } from "./CardListContexts/RefreshCardListContext";
 
+function CardComponent({ systemType, id, details }) {
+  if (systemType === "RiftboundSql") {
+    return <RiftboundCard id={id} details={details} />;
+  } else if (systemType === "PokemonSql") {
+    return <PokemonCard id={id} details={details} />;
+  }
+  return <Card id={id} details={details} />;
+}
+
 export default function CardList() {
   const navigate = useNavigate();
   const ops = useOperations();
   const collection = useCollection();
   const pageNumber = usePageNumber();
   const selectedDispatch = useSelectedCardsDispatch();
+  const systemType = useSystemType();
   const refresh = useRefresh();
   const setRefresh = useRefreshCardList();
 
@@ -70,7 +83,8 @@ export default function CardList() {
         ) : (
           <React.Fragment>
             {cards.map((card) => (
-              <Card
+              <CardComponent
+                systemType={systemType}
                 id={card.id}
                 details={card}
                 key={card.collectionId + "-" + card.id}

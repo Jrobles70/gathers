@@ -177,8 +177,7 @@ pub fn collection_routes() -> Router<GathersState> {
         Json(input): Json<CardToAdd>,
     ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
         let storage = &mut state.1.lock().await.storage;
-        let ret = &state.0.lock().await.retrieval;
-        let provider = ret.name().to_string();
+        let provider = state.0.lock().await.retrieval.name().to_string();
 
         if let Err(e) = validate_collection(storage, &collection_id).await {
             return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
@@ -222,36 +221,51 @@ pub fn collection_routes() -> Router<GathersState> {
         Path(collection_id): Path<String>,
         Query(query): Query<CollectionCardsQuery>,
     ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let storage = &mut state.1.lock().await.storage;
-
-        match storage
+        let raw_cards = state
+            .1
+            .lock()
+            .await
+            .storage
             .get_cards_in_collection_paginated(&collection_id, query.offset, query.limit)
             .await
-        {
-            Ok(cards) => {
-                let mut response_cards = Vec::new();
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to get cards from collection. {e}"),
+                    }),
+                )
+            })?;
 
-                for card in cards {
-                    response_cards.push(CollectionCard {
-                        id: card.uuid.to_string(), // uuid is the card ID from retrieval system
-                        quantity: card.quantity,
-                        foil_quantity: card.foil_quantity,
-                        collection_id: collection_id.clone(), // This should be the collection ID passed in
-                        time_added: DateTime::parse_from_rfc3339(&card.time_added)
-                            .map(|dt| dt.with_timezone(&Utc))
-                            .unwrap_or_else(|_| Utc::now()),
-                    });
-                }
-
-                Ok(Json(response_cards))
-            }
-            Err(e) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: format!("Failed to get cards from collection. {e}"),
-                }),
-            )),
+        if raw_cards.is_empty() {
+            return Ok(Json(vec![]));
         }
+
+        let ids: Vec<String> = raw_cards.iter().map(|c| c.uuid.clone()).collect();
+        let found = state
+            .0
+            .lock()
+            .await
+            .retrieval
+            .get_cards_by_ids(ids)
+            .await
+            .unwrap_or_default();
+
+        let response_cards = raw_cards
+            .into_iter()
+            .filter(|card| found.contains_key(&card.uuid))
+            .map(|card| CollectionCard {
+                id: card.uuid,
+                quantity: card.quantity,
+                foil_quantity: card.foil_quantity,
+                collection_id: collection_id.clone(),
+                time_added: DateTime::parse_from_rfc3339(&card.time_added)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
+            })
+            .collect();
+
+        Ok(Json(response_cards))
     }
 
     async fn collection_cards_count(

@@ -1,6 +1,7 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useRef } from "react";
 import { useOperations } from "../../OperationsContext";
 import { useCardCache } from "./CardCacheContext";
+import { useSystemType } from "../SystemTypeContext";
 
 const CardLoaderContext = createContext(null);
 export function useCardLoader() {
@@ -11,6 +12,15 @@ export function CardLoaderProvider({ children }) {
   const DataLoader = require("dataloader");
   const ops = useOperations();
   const [cache, dispatch] = useCardCache();
+  const systemType = useSystemType();
+  const systemTypeRef = useRef(systemType);
+  systemTypeRef.current = systemType;
+
+  function getCardEndpoint() {
+    if (systemTypeRef.current === "RiftboundSql") return "/riftbound/cards";
+    if (systemTypeRef.current === "PokemonSql") return "/pokemon/cards";
+    return "/mtg/cards";
+  }
 
   async function batchFunction(keys) {
     let urlParams = keys.join("&ids=");
@@ -18,7 +28,7 @@ export function CardLoaderProvider({ children }) {
       .fetch(
         "Bulk updating details for cards",
         {},
-        "/mtg/cards?ids=" + urlParams,
+        getCardEndpoint() + "?ids=" + urlParams,
       )
       .then((data) => data);
     return keys.map((key) => results[key] || new Error(`No card for ${key}`));

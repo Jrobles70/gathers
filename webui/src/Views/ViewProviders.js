@@ -7,24 +7,27 @@ import { CardsProvider } from "../Components/CardListContexts/CardsContext";
 import { CollectionsProvider } from "../Components/CollectionContext";
 import Header from "../Components/Layout/Header";
 import { RefreshCardListProvider } from "../Components/CardListContexts/RefreshCardListContext";
+import { SystemTypeProvider } from "../Components/SystemTypeContext";
 
 export default function ViewProviders({ children }) {
   return (
     <CollectionsProvider>
-      <Header />
-      <main>
-        <CardsProvider>
-          <SelectedCardsProvider>
-            <CardCacheProvider>
-              <CardLoaderProvider>
-                <RefreshCardListProvider>
-                  <CardSetsProvider>{children}</CardSetsProvider>
-                </RefreshCardListProvider>
-              </CardLoaderProvider>
-            </CardCacheProvider>
-          </SelectedCardsProvider>
-        </CardsProvider>
-      </main>
+      <SystemTypeProvider>
+        <Header />
+        <main>
+          <CardsProvider>
+            <SelectedCardsProvider>
+              <CardCacheProvider>
+                <CardLoaderProvider>
+                  <RefreshCardListProvider>
+                    <CardSetsProvider>{children}</CardSetsProvider>
+                  </RefreshCardListProvider>
+                </CardLoaderProvider>
+              </CardCacheProvider>
+            </SelectedCardsProvider>
+          </CardsProvider>
+        </main>
+      </SystemTypeProvider>
     </CollectionsProvider>
   );
 }

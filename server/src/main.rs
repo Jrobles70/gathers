@@ -11,10 +11,12 @@ use tracing::debug;
 
 use crate::collections::collection_routes;
 use crate::mtg_api::mtg_routes;
+use crate::pokemon_api::pokemon_routes;
 use crate::riftbound_api::riftbound_routes;
 
 mod collections;
 mod mtg_api;
+mod pokemon_api;
 mod riftbound_api;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -60,6 +62,9 @@ impl RetrievalState {
             Systems::RiftboundSql => RetrievalSystem::RiftboundSQLiteRetrievalSystem(
                 retrieval::RiftboundSQLiteRetrievalSystem::new(retrieval_db_path.clone())?,
             ),
+            Systems::PokemonSql => RetrievalSystem::PokemonSQLiteRetrievalSystem(
+                retrieval::PokemonSQLiteRetrievalSystem::new(retrieval_db_path.clone())?,
+            ),
         })
     }
 
@@ -92,6 +97,7 @@ pub enum Systems {
     Scryfall,
     Sql,
     RiftboundSql,
+    PokemonSql,
 }
 
 #[derive(Parser, Debug)]
@@ -117,13 +123,16 @@ async fn main() -> eyre::Result<()> {
 
     let port = args.port;
 
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let gathers_dir = std::path::Path::new(&home).join(".local/share/gathers");
+
     let storage_db_path = std::env::var("STORAGE_DB_PATH")
         .ok()
-        .or_else(|| Some("~/.local/share/gathers/DB/storage.db".to_string()));
+        .or_else(|| Some(gathers_dir.join("DB/storage.db").to_string_lossy().into_owned()));
 
     let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH")
         .ok()
-        .or_else(|| Some("~/.local/share/gathers/DB/AllPrintings.db".to_string()));
+        .or_else(|| Some(gathers_dir.join("DB/AllPrintings.db").to_string_lossy().into_owned()));
 
     if std::env::var("GATHERS_NO_AUTO_UPDATE").is_err() {
         match args.system {
@@ -157,6 +166,7 @@ async fn main() -> eyre::Result<()> {
     let app = Router::new()
         .nest("/mtg", mtg_routes())
         .nest("/riftbound", riftbound_routes())
+        .nest("/pokemon", pokemon_routes())
         .nest("/collection", collection_routes())
         .route("/system", axum::routing::get(get_system_info))
         .layer(
