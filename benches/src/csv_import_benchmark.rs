@@ -1,10 +1,10 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use persistence::{PersistenceSystem, SQLitePersistenceSystem};
 use retrieval::{PokemonSQLiteRetrievalSystem, RetrievalSystem};
-use std::hint::black_box;
-use std::time::Instant;
+use std::{hint::black_box, time::Instant};
 
 fn bench_csv_import(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
     let retrieval = RetrievalSystem::PokemonSQLiteRetrievalSystem(
         PokemonSQLiteRetrievalSystem::new(Some("../data/pokemon.db".to_string())).unwrap(),
     );
@@ -12,7 +12,7 @@ fn bench_csv_import(c: &mut Criterion) {
     let mut group = c.benchmark_group("csv_import");
 
     group.bench_function("import_pokemon_csv", |b| {
-        b.iter(async || {
+        b.to_async(&rt).iter(|| async {
             let mut persistence = PersistenceSystem::SQLitePersistenceSystem(
                 SQLitePersistenceSystem::new(true, None).unwrap(),
             );

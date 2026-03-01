@@ -241,7 +241,9 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "models",
+ "persistence",
  "retrieval",
+ "tokio",
 ]
 
 [[package]]
@@ -489,6 +491,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 

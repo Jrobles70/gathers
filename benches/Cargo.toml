@@ -18,3 +18,4 @@ criterion.workspace = true
 models = { path = "../models" }
 persistence = { path = "../persistence" }
 retrieval = { path = "../retrieval" }
+tokio.workspace = true
