@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use models::{filters::CardSearchFilters, CardColour, Rarity};
+use criterion::{Criterion, criterion_group, criterion_main};
+use models::{CardColour, Rarity, filters::CardSearchFilters};
 use retrieval::{MagicSQLiteRetrievalSystem, RetrievalSystemTrait};
 use std::hint::black_box;
 use std::time::Instant;

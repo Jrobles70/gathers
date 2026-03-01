@@ -5,7 +5,7 @@ import SearchRiftbound from "./SearchRiftbound";
 import SearchPokemon from "./SearchPokemon";
 import { useSystemType } from "./SystemTypeContext";
 
-function Search({ startSearch = false, dedicatedPage = false }) {
+function Search({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const systemType = useSystemType();
   const [searchParams] = useSearchParams();
 
@@ -14,6 +14,7 @@ function Search({ startSearch = false, dedicatedPage = false }) {
       <SearchRiftbound
         startSearch={startSearch}
         dedicatedPage={dedicatedPage}
+        sidePanel={sidePanel}
       />
     );
   }
@@ -23,12 +24,13 @@ function Search({ startSearch = false, dedicatedPage = false }) {
       <SearchPokemon
         startSearch={startSearch}
         dedicatedPage={dedicatedPage}
+        sidePanel={sidePanel}
       />
     );
   }
 
   return (
-    <SearchMagic startSearch={startSearch} dedicatedPage={dedicatedPage} />
+    <SearchMagic startSearch={startSearch} dedicatedPage={dedicatedPage} sidePanel={sidePanel} />
   );
 }
 

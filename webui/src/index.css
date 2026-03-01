@@ -82,6 +82,27 @@ code {
     box-shadow: 0 2px 5px 0 rgb(0 0 0 / 16%), 0 2px 10px 0 rgb(0 0 0 / 12%);
 }
 
+/* Collection split view (Quick Search open) */
+.collection-split-view {
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+}
+
+.collection-search-panel {
+    width: 320px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    max-height: calc(100vh - 60px);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+    padding-right: 0.5rem;
+}
+
+.collection-cards-panel {
+    flex: 1;
+    min-width: 0;
+}
+
 .sidebar-sticky {
     position: relative;
     top: 0;

@@ -7,7 +7,7 @@ import DeleteCollection from "./CardListNavButtons/DeleteCollection";
 import ExportCollection from "./CardListNavButtons/ExportCollection";
 import QuickSearch from "./CardListNavButtons/QuickSearch";
 
-export default function CardListNav() {
+export default function CardListNav({ onToggleSearch, searchOpen }) {
   return (
     <Fragment>
       <nav
@@ -15,7 +15,7 @@ export default function CardListNav() {
         data-bs-theme="dark"
       >
         <div className="container-fluid">
-          <QuickSearch />
+          <QuickSearch onToggle={onToggleSearch} isOpen={searchOpen} />
           <SelectionTracker />
           <DeleteCards />
           <MoveCards />

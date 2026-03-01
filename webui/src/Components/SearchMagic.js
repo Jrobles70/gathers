@@ -6,7 +6,7 @@ import ReactPaginate from "react-paginate";
 import { useCardSets } from "./ReusableConstants/CardSets";
 import { useCollections } from "./CollectionContext";
 
-function SearchMagic({ startSearch = false, dedicatedPage = false }) {
+function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const ops = useOperations();
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -105,7 +105,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false }) {
   return (
     <React.Fragment>
       <div
-        className={dedicatedPage === true ? "" : "collapse"}
+        className={dedicatedPage === true || sidePanel === true ? "" : "collapse"}
         id={dedicatedPage ? "main-search" : "search"}
       >
         <h2>Search</h2>

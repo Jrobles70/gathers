@@ -1,15 +1,14 @@
 import React from "react";
 
-export default function QuickSearch() {
+export default function QuickSearch({ onToggle, isOpen }) {
   return (
     <div className="d-flex">
       <button
         className="btn btn-outline-info"
         type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#search"
+        onClick={onToggle}
       >
-        Quick Search
+        {isOpen ? "Close Search" : "Quick Search"}
       </button>
     </div>
   );

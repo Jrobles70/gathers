@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
 use aide::axum::{
-    ApiRouter,
+    ApiRouter, IntoApiResponse,
     routing::{get, post},
 };
-use axum::{
-    Json,
-    extract::{Query, State},
-};
+use axum::{Json, extract::State};
+use axum_extra::extract::Query;
 use models::Card;
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
@@ -42,28 +40,25 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Query(query): Query<MagicSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
-    ) -> Result<Json<Vec<APICard>>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> impl IntoApiResponse {
         let ret = &state.0.lock().await.retrieval;
 
         match ret
             .search_cards(input.into(), query.skip.into(), query.limit.into())
             .await
         {
-            Ok(result) => Ok(Json(
-                result
+            Ok(result) => {
+                let cards: Vec<APICard> = result
                     .iter()
                     .filter_map(|c| match c {
                         Card::Magic(m) => Some(m.clone().into()),
                         _ => None,
                     })
-                    .collect(),
-            )),
-            Err(_) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: "Failed to search cards".into(),
-                }),
-            )),
+                    .collect();
+
+                (StatusCode::ACCEPTED, Json(cards))
+            }
+            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(vec![])), // Err(_) => Err((
         }
     }
 

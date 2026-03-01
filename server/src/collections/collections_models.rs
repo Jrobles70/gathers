@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::mtg_api::mtg_api_models::{APICardColour, APIRarity};
 use crate::pokemon_api::pokemon_api_models::APIEnergyType;
@@ -18,6 +18,7 @@ pub struct APICardSearchFilters {
     pub collector_number: Option<String>,
     pub artist: Option<String>,
     pub text: Option<String>,
+    #[serde(default, deserialize_with = "empty_string_to_none")]
     pub rarity: Option<APIRarity>,
     pub subtypes: Option<Vec<String>>,
     pub supertypes: Option<String>,
@@ -145,4 +146,17 @@ pub struct ResultCardInner {
 pub struct ResultCard {
     #[serde(rename = "mtGCard")]
     pub mtg_card: ResultCardInner,
+}
+
+fn empty_string_to_none<'de, D>(deserializer: D) -> Result<Option<APIRarity>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(match opt.as_deref() {
+        Some("") | None => None,
+        Some(s) => {
+            Some(serde_json::from_str(&format!("\"{}\"", s)).map_err(serde::de::Error::custom)?)
+        }
+    })
 }
