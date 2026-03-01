@@ -36,6 +36,8 @@ COPY --from=builder /app/target/release/server .
 EXPOSE 5234
 
 ENV STORAGE_DB_PATH=/home/app/.local/share/gathers/DB/storage.db
-ENV RETRIEVAL_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
+ENV MTG_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
+ENV RIFTBOUND_DB_PATH=/home/app/.local/share/gathers/DB/riftbound.db
+ENV POKEMON_DB_PATH=/home/app/.local/share/gathers/DB/pokemon.db
 
 CMD ["./server", "--system", "riftbound-sql", "--port", "5234"]

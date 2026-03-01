@@ -50,6 +50,7 @@ export default function MoveCards() {
           Move
         </button>
         <select
+          value={destinationCollection}
           onChange={(e) => setDestinationCollection(e.target.value)}
           className="form-control"
           id="exampleFormControlSelect1"

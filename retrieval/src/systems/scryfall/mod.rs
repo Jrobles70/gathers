@@ -86,14 +86,14 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
         let response = client.get(url).headers(headers).send().await?;
         let json: Value = response.json().await?;
 
-        if let Some(error) = json.get("object").and_then(Value::as_str) {
-            if error == "error" {
-                let error_msg = json
-                    .get("details")
-                    .and_then(Value::as_str)
-                    .unwrap_or("Unknown error");
-                return Err(eyre::eyre!("Scryfall API error: {}", error_msg));
-            }
+        if let Some(error) = json.get("object").and_then(Value::as_str)
+            && error == "error"
+        {
+            let error_msg = json
+                .get("details")
+                .and_then(Value::as_str)
+                .unwrap_or("Unknown error");
+            return Err(eyre::eyre!("Scryfall API error: {}", error_msg));
         }
 
         let cards_array = json

@@ -1,27 +1,22 @@
 use std::collections::HashMap;
 
 use aide::axum::{
-    ApiRouter, IntoApiResponse,
+    ApiRouter,
     routing::{get, post},
 };
+use axum::http::StatusCode;
 use axum::{Json, extract::State};
 use axum_extra::extract::Query;
 use models::Card;
-use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
-    GathersState, collections::collections_models::APICardSearchFilters,
+    ApiError, ErrorPayload, GathersState, collections::collections_models::APICardSearchFilters,
     mtg_api::mtg_api_models::APICard,
 };
 pub mod mtg_api_models;
-
-#[derive(Serialize, Debug, JsonSchema)]
-struct ErrorPayload {
-    error: String,
-}
 
 fn default_limit() -> usize {
     10
@@ -40,8 +35,9 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Query(query): Query<MagicSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
-    ) -> impl IntoApiResponse {
-        let ret = &state.0.lock().await.retrieval;
+    ) -> Result<(StatusCode, Json<Vec<APICard>>), ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_mtg()?;
 
         match ret
             .search_cards(input.into(), query.skip.into(), query.limit.into())
@@ -55,10 +51,14 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
                         _ => None,
                     })
                     .collect();
-
-                (StatusCode::ACCEPTED, Json(cards))
+                Ok((StatusCode::ACCEPTED, Json(cards)))
             }
-            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(vec![])), // Err(_) => Err((
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to search cards. {e}"),
+                }),
+            )),
         }
     }
 
@@ -71,16 +71,17 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
     async fn retrieve_cards(
         State(state): State<GathersState>,
         Query(query): Query<MagicRetrieveQuery>,
-    ) -> Result<Json<HashMap<String, APICard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.0.lock().await.retrieval;
+    ) -> Result<Json<HashMap<String, APICard>>, ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_mtg()?;
 
         ret.get_cards_by_ids(query.ids)
             .await
-            .map_err(|_| {
+            .map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorPayload {
-                        error: "Oof".into(),
+                        error: format!("Failed to retrieve cards. {e}"),
                     }),
                 )
             })
@@ -95,34 +96,30 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
             .map(Json)
     }
 
-    async fn get_sets(
-        State(state): State<GathersState>,
-    ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.0.lock().await.retrieval;
+    async fn get_sets(State(state): State<GathersState>) -> Result<Json<Vec<String>>, ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_mtg()?;
 
         ret.get_sets()
             .await
-            .map_err(|_| {
+            .map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorPayload {
-                        error: "Oof".into(),
+                        error: format!("Failed to get sets. {e}"),
                     }),
                 )
             })
             .map(|s| Json(s.iter().map(|s| s.code.clone()).collect()))
     }
 
-    async fn update(
-        State(state): State<GathersState>,
-    ) -> Result<Json<String>, (StatusCode, Json<ErrorPayload>)> {
+    async fn update(State(state): State<GathersState>) -> Result<Json<String>, ApiError> {
         let mut ret = state.0.lock().await;
-        match ret
-            .retrieval
-            .update_backend()
-            .await
-            .and_then(|_| ret.reload_retrieval())
-        {
+        let result = {
+            let mtg = ret.require_mtg()?;
+            mtg.update_backend().await
+        };
+        match result.and_then(|_| ret.reload_mtg()) {
             Ok(()) => Ok(Json("Update successful".to_string())),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,

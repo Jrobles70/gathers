@@ -4,26 +4,21 @@ use aide::axum::{
     ApiRouter,
     routing::{get, post},
 };
+use axum::http::StatusCode;
 use axum::{
     Json,
     extract::{Query, State},
 };
 use models::Card;
-use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
-    GathersState, collections::collections_models::APICardSearchFilters,
+    ApiError, ErrorPayload, GathersState, collections::collections_models::APICardSearchFilters,
     pokemon_api::pokemon_api_models::APIPokemonCard,
 };
 pub mod pokemon_api_models;
-
-#[derive(Serialize, Debug, JsonSchema)]
-struct ErrorPayload {
-    error: String,
-}
 
 fn default_limit() -> usize {
     24
@@ -42,29 +37,31 @@ pub fn pokemon_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Query(query): Query<PokemonSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
-    ) -> Result<Json<Vec<APIPokemonCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.0.lock().await.retrieval;
+    ) -> Result<Json<Vec<APIPokemonCard>>, ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_pokemon()?;
 
-        match ret
-            .search_cards(input.into(), query.skip.into(), query.limit.into())
+        ret.search_cards(input.into(), query.skip.into(), query.limit.into())
             .await
-        {
-            Ok(result) => Ok(Json(
-                result
-                    .iter()
-                    .filter_map(|c| match c {
-                        Card::Pokemon(p) => Some(p.clone().into()),
-                        _ => None,
-                    })
-                    .collect(),
-            )),
-            Err(_) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: "Failed to search cards".into(),
-                }),
-            )),
-        }
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to search cards. {e}"),
+                    }),
+                )
+            })
+            .map(|result| {
+                Json(
+                    result
+                        .iter()
+                        .filter_map(|c| match c {
+                            Card::Pokemon(p) => Some(p.clone().into()),
+                            _ => None,
+                        })
+                        .collect(),
+                )
+            })
     }
 
     #[derive(Deserialize, JsonSchema)]
@@ -76,16 +73,17 @@ pub fn pokemon_routes() -> ApiRouter<GathersState> {
     async fn retrieve_pokemon_cards(
         State(state): State<GathersState>,
         Query(query): Query<PokemonRetrieveQuery>,
-    ) -> Result<Json<HashMap<String, APIPokemonCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.0.lock().await.retrieval;
+    ) -> Result<Json<HashMap<String, APIPokemonCard>>, ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_pokemon()?;
 
         ret.get_cards_by_ids(query.ids)
             .await
-            .map_err(|_| {
+            .map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorPayload {
-                        error: "Oof".into(),
+                        error: format!("Failed to retrieve cards. {e}"),
                     }),
                 )
             })
@@ -100,18 +98,17 @@ pub fn pokemon_routes() -> ApiRouter<GathersState> {
             .map(Json)
     }
 
-    async fn get_sets(
-        State(state): State<GathersState>,
-    ) -> Result<Json<Vec<String>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.0.lock().await.retrieval;
+    async fn get_sets(State(state): State<GathersState>) -> Result<Json<Vec<String>>, ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_pokemon()?;
 
         ret.get_sets()
             .await
-            .map_err(|_| {
+            .map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorPayload {
-                        error: "Oof".into(),
+                        error: format!("Failed to get sets. {e}"),
                     }),
                 )
             })

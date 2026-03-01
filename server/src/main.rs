@@ -1,11 +1,13 @@
 use aide::axum::{ApiRouter, routing::get};
 use aide::openapi::{Info, OpenApi};
 use aide::swagger::Swagger;
+use axum::http::StatusCode;
 use axum::{Extension, Json, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
 use retrieval::{RetrievalSystem, RetrievalSystemTrait};
 use schemars::JsonSchema;
+use serde::Serialize;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
@@ -23,18 +25,34 @@ mod mtg_api;
 mod pokemon_api;
 mod riftbound_api;
 
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct ErrorPayload {
+    pub error: String,
+}
+
+/// Convenience alias for the standard API error response.
+pub type ApiError = (StatusCode, Json<ErrorPayload>);
+
 #[derive(Debug, Clone, serde::Serialize, JsonSchema)]
 pub struct SystemInfo {
+    /// Primary system (for backward compatibility).
     pub system: Systems,
+    /// All configured systems.
+    pub systems: Vec<Systems>,
 }
 
 type GathersState = (Arc<Mutex<RetrievalState>>, Arc<Mutex<StorageState>>);
 
 #[derive(Debug, Clone)]
 pub struct RetrievalState {
-    retrieval: RetrievalSystem,
-    system: Systems,
-    retrieval_db_path: Option<String>,
+    pub mtg: Option<RetrievalSystem>,
+    pub riftbound: Option<RetrievalSystem>,
+    pub pokemon: Option<RetrievalSystem>,
+    /// Which MTG system variant is active (Scryfall or Sql), for reload support.
+    mtg_system_type: Option<Systems>,
+    mtg_db_path: Option<String>,
+    riftbound_db_path: Option<String>,
+    pokemon_db_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,12 +62,40 @@ pub struct StorageState {
 }
 
 impl RetrievalState {
-    pub fn new(system: Systems, retrieval_db_path: Option<String>) -> eyre::Result<RetrievalState> {
-        Ok(RetrievalState {
-            retrieval: RetrievalState::new_retrieval(system, retrieval_db_path.clone())?,
-            system,
-            retrieval_db_path,
-        })
+    pub fn new(
+        systems: Vec<Systems>,
+        mtg_db_path: Option<String>,
+        riftbound_db_path: Option<String>,
+        pokemon_db_path: Option<String>,
+    ) -> eyre::Result<RetrievalState> {
+        let mut state = RetrievalState {
+            mtg: None,
+            riftbound: None,
+            pokemon: None,
+            mtg_system_type: None,
+            mtg_db_path: mtg_db_path.clone(),
+            riftbound_db_path: riftbound_db_path.clone(),
+            pokemon_db_path: pokemon_db_path.clone(),
+        };
+
+        for system in systems {
+            let db_path = match system {
+                Systems::Scryfall | Systems::Sql => mtg_db_path.clone(),
+                Systems::RiftboundSql => riftbound_db_path.clone(),
+                Systems::PokemonSql => pokemon_db_path.clone(),
+            };
+            let retrieval = Self::new_retrieval(system, db_path)?;
+            match system {
+                Systems::Scryfall | Systems::Sql => {
+                    state.mtg = Some(retrieval);
+                    state.mtg_system_type = Some(system);
+                }
+                Systems::RiftboundSql => state.riftbound = Some(retrieval),
+                Systems::PokemonSql => state.pokemon = Some(retrieval),
+            }
+        }
+
+        Ok(state)
     }
 
     pub fn new_retrieval(
@@ -72,15 +118,96 @@ impl RetrievalState {
         })
     }
 
-    pub async fn get_system_info(&self) -> SystemInfo {
-        SystemInfo {
-            system: self.system,
+    pub fn active_systems(&self) -> Vec<Systems> {
+        let mut systems = Vec::new();
+        if let Some(s) = self.mtg_system_type {
+            systems.push(s);
+        }
+        if self.riftbound.is_some() {
+            systems.push(Systems::RiftboundSql);
+        }
+        if self.pokemon.is_some() {
+            systems.push(Systems::PokemonSql);
+        }
+        systems
+    }
+
+    /// Returns the primary system for webui compatibility.
+    /// Prefers MTG, then Riftbound, then Pokemon.
+    pub fn primary_system(&self) -> Systems {
+        if let Some(s) = self.mtg_system_type {
+            s
+        } else if self.riftbound.is_some() {
+            Systems::RiftboundSql
+        } else {
+            Systems::PokemonSql
         }
     }
 
-    pub fn reload_retrieval(&mut self) -> eyre::Result<()> {
-        self.retrieval =
-            RetrievalState::new_retrieval(self.system, self.retrieval_db_path.clone())?;
+    pub async fn get_system_info(&self) -> SystemInfo {
+        SystemInfo {
+            system: self.primary_system(),
+            systems: self.active_systems(),
+        }
+    }
+
+    pub fn require_mtg(&self) -> Result<&RetrievalSystem, ApiError> {
+        self.mtg.as_ref().ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorPayload {
+                    error: "MTG system not configured".into(),
+                }),
+            )
+        })
+    }
+
+    pub fn require_riftbound(&self) -> Result<&RetrievalSystem, ApiError> {
+        self.riftbound.as_ref().ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorPayload {
+                    error: "Riftbound system not configured".into(),
+                }),
+            )
+        })
+    }
+
+    pub fn require_pokemon(&self) -> Result<&RetrievalSystem, ApiError> {
+        self.pokemon.as_ref().ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorPayload {
+                    error: "Pokemon system not configured".into(),
+                }),
+            )
+        })
+    }
+
+    pub fn reload_mtg(&mut self) -> eyre::Result<()> {
+        if let Some(system) = self.mtg_system_type {
+            self.mtg = Some(Self::new_retrieval(system, self.mtg_db_path.clone())?);
+        }
+        Ok(())
+    }
+
+    pub fn reload_riftbound(&mut self) -> eyre::Result<()> {
+        if self.riftbound.is_some() {
+            self.riftbound = Some(Self::new_retrieval(
+                Systems::RiftboundSql,
+                self.riftbound_db_path.clone(),
+            )?);
+        }
+        Ok(())
+    }
+
+    pub fn reload_pokemon(&mut self) -> eyre::Result<()> {
+        if self.pokemon.is_some() {
+            self.pokemon = Some(Self::new_retrieval(
+                Systems::PokemonSql,
+                self.pokemon_db_path.clone(),
+            )?);
+        }
         Ok(())
     }
 }
@@ -109,8 +236,10 @@ pub enum Systems {
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
-    #[clap(short, long, default_value = "scryfall")]
-    system: Systems,
+    /// Retrieval systems to enable. May be specified multiple times.
+    /// At least one is required. Supported values: scryfall, sql, riftbound-sql, pokemon-sql.
+    #[clap(short, long, required = true, num_args = 1..)]
+    system: Vec<Systems>,
 
     #[clap(short, long)]
     port: usize,
@@ -145,7 +274,7 @@ async fn main() -> eyre::Result<()> {
         )
     });
 
-    let retrieval_db_path = std::env::var("RETRIEVAL_DB_PATH").ok().or_else(|| {
+    let mtg_db_path = std::env::var("MTG_DB_PATH").ok().or_else(|| {
         Some(
             gathers_dir
                 .join("DB/AllPrintings.db")
@@ -154,31 +283,53 @@ async fn main() -> eyre::Result<()> {
         )
     });
 
+    let riftbound_db_path = std::env::var("RIFTBOUND_DB_PATH").ok().or_else(|| {
+        Some(
+            gathers_dir
+                .join("DB/riftbound.db")
+                .to_string_lossy()
+                .into_owned(),
+        )
+    });
+
+    let pokemon_db_path = std::env::var("POKEMON_DB_PATH").ok().or_else(|| {
+        Some(
+            gathers_dir
+                .join("DB/pokemon.db")
+                .to_string_lossy()
+                .into_owned(),
+        )
+    });
+
     if std::env::var("GATHERS_NO_AUTO_UPDATE").is_err() {
-        match args.system {
-            Systems::Sql => {
-                if let Some(ref path) = retrieval_db_path
-                    && !std::path::Path::new(path).exists()
-                {
-                    retrieval::download_mtg_db(path).await?;
+        for system in &args.system {
+            match system {
+                Systems::Sql => {
+                    if let Some(ref path) = mtg_db_path
+                        && !std::path::Path::new(path).exists()
+                    {
+                        retrieval::download_mtg_db(path).await?;
+                    }
                 }
-            }
-            Systems::RiftboundSql => {
-                if let Some(ref path) = retrieval_db_path
-                    && !std::path::Path::new(path).exists()
-                {
-                    let temp =
-                        RetrievalState::new_retrieval(args.system, retrieval_db_path.clone())?;
-                    temp.update_backend().await?;
+                Systems::RiftboundSql => {
+                    if let Some(ref path) = riftbound_db_path
+                        && !std::path::Path::new(path).exists()
+                    {
+                        let temp =
+                            RetrievalState::new_retrieval(*system, riftbound_db_path.clone())?;
+                        temp.update_backend().await?;
+                    }
                 }
+                _ => unimplemented!(),
             }
-            _ => {}
         }
     }
 
     let retrieval = Arc::new(Mutex::new(RetrievalState::new(
         args.system,
-        retrieval_db_path,
+        mtg_db_path,
+        riftbound_db_path,
+        pokemon_db_path,
     )?));
     let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
 

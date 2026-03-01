@@ -89,15 +89,24 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 continue;
             }
 
-            self.add_card_to_collection(
-                &c.collection,
-                &c.uuid,
-                -c.quantity,
-                -c.foil_quantity,
-                &c.time_added,
-                &c.provider,
-            )
-            .await?;
+            // The RETURNING clause gives us the stored provider even when the
+            // caller passes an empty string (e.g. from the move API endpoint).
+            let source_card = self
+                .add_card_to_collection(
+                    &c.collection,
+                    &c.uuid,
+                    -c.quantity,
+                    -c.foil_quantity,
+                    &c.time_added,
+                    &c.provider,
+                )
+                .await?;
+
+            let provider = if source_card.provider.is_empty() {
+                c.provider.clone()
+            } else {
+                source_card.provider.clone()
+            };
 
             self.add_card_to_collection(
                 &to_collection_id,
@@ -105,7 +114,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 c.quantity,
                 c.foil_quantity,
                 &c.time_added,
-                &c.provider,
+                &provider,
             )
             .await?;
         }
@@ -987,6 +996,162 @@ mod tests {
         // "Default" is seeded by migrations; re-adding it must also fail
         let result = p.add_collection(DEFAULT.to_string()).await;
         assert!(result.is_err());
+    }
+
+    /// Regression test: moving a card with an explicit provider must preserve
+    /// that provider in the destination collection, even when only some copies
+    /// are moved (source row survives).
+    #[tokio::test]
+    async fn test_move_partial_preserves_provider() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let col_a = p.add_collection("Collection A".to_string()).await.unwrap();
+        let col_b = p.add_collection("Collection B".to_string()).await.unwrap();
+
+        // Add card with a known provider
+        p.add_card_to_collection(
+            &col_a,
+            &"card1".to_string(),
+            5,
+            2,
+            "2023-01-01T00:00:00Z",
+            "mtg",
+        )
+        .await
+        .unwrap();
+
+        // Move 3 regular copies, 0 foil
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: "card1".to_string(),
+                quantity: 3,
+                foil_quantity: 0,
+                time_added: "2023-01-01T00:00:00Z".to_string(),
+                collection: col_a.clone(),
+                provider: "".to_string(), // simulates the API sending empty provider
+            }],
+            col_b.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Source: 2 regular, 2 foil remain
+        let src_cards = p
+            .get_cards_in_collection_paginated(&col_a, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(src_cards.len(), 1);
+        assert_eq!(src_cards[0].quantity, 2);
+        assert_eq!(src_cards[0].foil_quantity, 2);
+
+        // Destination: 3 regular, 0 foil — provider must be "mtg", not ""
+        let dst_cards = p
+            .get_cards_in_collection_paginated(&col_b, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(dst_cards.len(), 1);
+        assert_eq!(dst_cards[0].quantity, 3);
+        assert_eq!(dst_cards[0].foil_quantity, 0);
+        assert_eq!(dst_cards[0].provider, "mtg");
+    }
+
+    /// Regression test: moving ALL copies of a card (source row deleted) must
+    /// still write the correct provider in the destination.
+    #[tokio::test]
+    async fn test_move_all_copies_preserves_provider() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let col_a = p.add_collection("Collection A".to_string()).await.unwrap();
+        let col_b = p.add_collection("Collection B".to_string()).await.unwrap();
+
+        p.add_card_to_collection(
+            &col_a,
+            &"card1".to_string(),
+            4,
+            1,
+            "2023-01-01T00:00:00Z",
+            "riftbound",
+        )
+        .await
+        .unwrap();
+
+        // Move all copies; source row is deleted after subtract
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: "card1".to_string(),
+                quantity: 4,
+                foil_quantity: 1,
+                time_added: "2023-01-01T00:00:00Z".to_string(),
+                collection: col_a.clone(),
+                provider: "".to_string(), // simulates the API sending empty provider
+            }],
+            col_b.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Source must be empty
+        let src_cards = p
+            .get_cards_in_collection_paginated(&col_a, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(src_cards.len(), 0);
+
+        // Destination has the card with the correct provider
+        let dst_cards = p
+            .get_cards_in_collection_paginated(&col_b, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(dst_cards.len(), 1);
+        assert_eq!(dst_cards[0].quantity, 4);
+        assert_eq!(dst_cards[0].foil_quantity, 1);
+        assert_eq!(dst_cards[0].provider, "riftbound");
+    }
+
+    /// Regression test: moving a card to the same collection it is already in
+    /// must be a no-op (no data loss, no provider corruption).
+    #[tokio::test]
+    async fn test_move_same_collection_is_noop() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+
+        let col = p.add_collection("My Collection".to_string()).await.unwrap();
+
+        p.add_card_to_collection(
+            &col,
+            &"card1".to_string(),
+            5,
+            2,
+            "2023-01-01T00:00:00Z",
+            "mtg",
+        )
+        .await
+        .unwrap();
+
+        // Move card to the same collection (simulates the UI bug where
+        // destinationCollection stays as the current collection)
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: "card1".to_string(),
+                quantity: 5,
+                foil_quantity: 2,
+                time_added: "2023-01-01T00:00:00Z".to_string(),
+                collection: col.clone(),
+                provider: "".to_string(),
+            }],
+            col.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Card must still be present with original quantities and correct provider
+        let cards = p
+            .get_cards_in_collection_paginated(&col, 0, 10)
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].quantity, 5);
+        assert_eq!(cards[0].foil_quantity, 2);
+        assert_eq!(cards[0].provider, "mtg");
     }
 
     #[tokio::test]

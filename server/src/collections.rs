@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use aide::axum::{
     ApiRouter,
     routing::{get, post},
 };
+use axum::http::StatusCode;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -9,13 +12,10 @@ use axum::{
 use chrono::{DateTime, Utc};
 use models::Card;
 use persistence::{PersistenceSystem, PersistenceSystemTrait};
-use reqwest::StatusCode;
-use retrieval::{NamedRetrievalSystem as _, RetrievalSystemTrait};
-use schemars::JsonSchema;
-use serde::Serialize;
+use retrieval::{NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
 
 use crate::{
-    GathersState,
+    ApiError, ErrorPayload, GathersState,
     collections::collections_models::{
         APICardSearchFilters, CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard,
         CollectionCardsQuery, CollectionRemoveResponse, CollectionsSearchQuery, ResultCard,
@@ -26,15 +26,23 @@ pub mod collections_models;
 
 use crate::collections::collections_models::Collection;
 
-#[derive(Serialize, JsonSchema)]
-struct ErrorPayload {
-    error: String,
+/// Returns all configured retrieval systems, cloned out of the state lock,
+/// keyed by their provider name.
+async fn clone_retrieval_systems_by_name(state: &GathersState) -> HashMap<String, RetrievalSystem> {
+    let guard = state.0.lock().await;
+    [
+        guard.mtg.clone(),
+        guard.riftbound.clone(),
+        guard.pokemon.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|s| (s.name().to_string(), s))
+    .collect()
 }
 
 pub fn collection_routes() -> ApiRouter<GathersState> {
-    async fn list(
-        State(state): State<GathersState>,
-    ) -> Result<Json<Vec<Collection>>, (StatusCode, Json<ErrorPayload>)> {
+    async fn list(State(state): State<GathersState>) -> Result<Json<Vec<Collection>>, ApiError> {
         let storage = &state.1.lock().await.storage;
 
         match storage.list_collections(None).await {
@@ -56,7 +64,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
     async fn add(
         State(state): State<GathersState>,
         Json(input): Json<Collection>,
-    ) -> Result<Json<CollectionAddResponse>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<CollectionAddResponse>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
 
         match storage.add_collection(input.id.clone()).await {
@@ -76,7 +84,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
     async fn remove(
         State(state): State<GathersState>,
         Path(id): Path<String>,
-    ) -> Result<Json<CollectionRemoveResponse>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<CollectionRemoveResponse>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
 
         // TODO: allow setting the "move to collection" instead of None
@@ -96,7 +104,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Path(to_collection_id): Path<String>,
         Json(input): Json<Vec<CollectionCard>>,
-    ) -> Result<Json<()>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<()>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
 
         let cards: Vec<models::CollectionCard> = input.iter().map(|card| card.into()).collect();
@@ -142,7 +150,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         quantity: i32,
         foil_quantity: i32,
         provider: String,
-    ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
         let now = chrono::Utc::now();
         let now_str = now.to_rfc3339();
 
@@ -179,9 +187,21 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
         Json(input): Json<CardToAdd>,
-    ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
+        // Identify the provider by finding which configured system has this card.
+        let systems = clone_retrieval_systems_by_name(&state).await;
+        let card_ids = vec![input.id.clone()];
+        let mut provider = String::new();
+        for (name, system) in &systems {
+            if let Ok(found) = system.get_cards_by_ids(card_ids.clone()).await
+                && !found.is_empty()
+            {
+                provider = name.clone();
+                break;
+            }
+        }
+
         let storage = &mut state.1.lock().await.storage;
-        let provider = state.0.lock().await.retrieval.name().to_string();
 
         if let Err(e) = validate_collection(storage, &collection_id).await {
             return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
@@ -202,7 +222,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
         Json(input): Json<CardToAdd>,
-    ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
 
         if let Err(e) = validate_collection(storage, &collection_id).await {
@@ -224,7 +244,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
         Query(query): Query<CollectionCardsQuery>,
-    ) -> Result<Json<Vec<CollectionCard>>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
         let raw_cards = state
             .1
             .lock()
@@ -245,15 +265,24 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             return Ok(Json(vec![]));
         }
 
-        let ids: Vec<String> = raw_cards.iter().map(|c| c.uuid.clone()).collect();
-        let found = state
-            .0
-            .lock()
-            .await
-            .retrieval
-            .get_cards_by_ids(ids)
-            .await
-            .unwrap_or_default();
+        // Group card IDs by their stored provider, then fetch from the matching system.
+        let systems = clone_retrieval_systems_by_name(&state).await;
+        let mut cards_by_provider: HashMap<String, Vec<String>> = HashMap::new();
+        for card in &raw_cards {
+            cards_by_provider
+                .entry(card.provider.clone())
+                .or_default()
+                .push(card.uuid.clone());
+        }
+
+        let mut found = HashMap::new();
+        for (provider, ids) in cards_by_provider {
+            if let Some(system) = systems.get(&provider)
+                && let Ok(cards) = system.get_cards_by_ids(ids).await
+            {
+                found.extend(cards);
+            }
+        }
 
         let response_cards = raw_cards
             .into_iter()
@@ -275,7 +304,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
     async fn collection_cards_count(
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
-    ) -> Result<Json<usize>, (StatusCode, Json<ErrorPayload>)> {
+    ) -> Result<Json<usize>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
 
         match storage.get_cards_in_collection_count(collection_id).await {
@@ -293,8 +322,9 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Query(query): Query<CollectionsSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
-    ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
-        let ret = &state.0.lock().await.retrieval;
+    ) -> Result<Json<Vec<ResultCard>>, ApiError> {
+        let guard = state.0.lock().await;
+        let ret = guard.require_mtg()?;
 
         match ret
             .search_cards(input.into(), query.offset.into(), query.page_size.into())
