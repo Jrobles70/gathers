@@ -83,14 +83,11 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         cards: &[CollectionCard],
         to_collection_id: CollectionID,
     ) -> eyre::Result<()> {
-        // TODO: use add_cards_ instead
         for c in cards {
             if c.quantity == 0 && c.foil_quantity == 0 {
                 continue;
             }
 
-            // The RETURNING clause gives us the stored provider even when the
-            // caller passes an empty string (e.g. from the move API endpoint).
             let source_card = self
                 .add_card_to_collection(
                     &c.collection,

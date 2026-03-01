@@ -8,7 +8,13 @@ name = "card_search_benchmark"
 harness = false
 path = "src/card_search_benchmark.rs"
 
+[[bench]]
+name = "csv_import_benchmark"
+harness = false
+path = "src/csv_import_benchmark.rs"
+
 [dependencies]
 criterion.workspace = true
 models = { path = "../models" }
+persistence = { path = "../persistence" }
 retrieval = { path = "../retrieval" }
