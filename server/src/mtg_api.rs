@@ -15,8 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    GathersState,
-    collections::collections_models::APICardSearchFilters,
+    GathersState, collections::collections_models::APICardSearchFilters,
     mtg_api::mtg_api_models::APICard,
 };
 pub mod mtg_api_models;
@@ -32,7 +31,7 @@ fn default_limit() -> usize {
 
 pub fn mtg_routes() -> ApiRouter<GathersState> {
     #[derive(Deserialize, JsonSchema)]
-    struct SearchQuery {
+    struct MagicSearchQuery {
         #[serde(default)]
         skip: usize,
         #[serde(default = "default_limit")]
@@ -41,7 +40,7 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
 
     async fn search_mtg_cards(
         State(state): State<GathersState>,
-        Query(query): Query<SearchQuery>,
+        Query(query): Query<MagicSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
     ) -> Result<Json<Vec<APICard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
@@ -69,14 +68,14 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
     }
 
     #[derive(Deserialize, JsonSchema)]
-    struct RetrieveQuery {
+    struct MagicRetrieveQuery {
         #[serde(default)]
         ids: Vec<String>,
     }
 
     async fn retrieve_cards(
         State(state): State<GathersState>,
-        Query(query): Query<RetrieveQuery>,
+        Query(query): Query<MagicRetrieveQuery>,
     ) -> Result<Json<HashMap<String, APICard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
 

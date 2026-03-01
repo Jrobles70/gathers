@@ -18,7 +18,8 @@ use crate::{
     GathersState,
     collections::collections_models::{
         APICardSearchFilters, CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard,
-        CollectionCardsQuery, CollectionRemoveResponse, ResultCard, ResultCardInner, SearchQuery,
+        CollectionCardsQuery, CollectionRemoveResponse, CollectionsSearchQuery, ResultCard,
+        ResultCardInner,
     },
 };
 pub mod collections_models;
@@ -290,7 +291,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
 
     async fn search_temp(
         State(state): State<GathersState>,
-        Query(query): Query<SearchQuery>,
+        Query(query): Query<CollectionsSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
     ) -> Result<Json<Vec<ResultCard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;

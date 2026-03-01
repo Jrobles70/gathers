@@ -4,7 +4,10 @@ use aide::axum::{
     ApiRouter,
     routing::{get, post},
 };
-use axum::{Json, extract::{Query, State}};
+use axum::{
+    Json,
+    extract::{Query, State},
+};
 use models::Card;
 use reqwest::StatusCode;
 use retrieval::RetrievalSystemTrait;
@@ -12,8 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    GathersState,
-    collections::collections_models::APICardSearchFilters,
+    GathersState, collections::collections_models::APICardSearchFilters,
     pokemon_api::pokemon_api_models::APIPokemonCard,
 };
 pub mod pokemon_api_models;
@@ -29,7 +31,7 @@ fn default_limit() -> usize {
 
 pub fn pokemon_routes() -> ApiRouter<GathersState> {
     #[derive(Deserialize, JsonSchema)]
-    struct SearchQuery {
+    struct PokemonSearchQuery {
         #[serde(default)]
         skip: usize,
         #[serde(default = "default_limit")]
@@ -38,7 +40,7 @@ pub fn pokemon_routes() -> ApiRouter<GathersState> {
 
     async fn search_pokemon_cards(
         State(state): State<GathersState>,
-        Query(query): Query<SearchQuery>,
+        Query(query): Query<PokemonSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
     ) -> Result<Json<Vec<APIPokemonCard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
@@ -66,14 +68,14 @@ pub fn pokemon_routes() -> ApiRouter<GathersState> {
     }
 
     #[derive(Deserialize, JsonSchema)]
-    struct RetrieveQuery {
+    struct PokemonRetrieveQuery {
         #[serde(default)]
         ids: Vec<String>,
     }
 
     async fn retrieve_pokemon_cards(
         State(state): State<GathersState>,
-        Query(query): Query<RetrieveQuery>,
+        Query(query): Query<PokemonRetrieveQuery>,
     ) -> Result<Json<HashMap<String, APIPokemonCard>>, (StatusCode, Json<ErrorPayload>)> {
         let ret = &state.0.lock().await.retrieval;
 

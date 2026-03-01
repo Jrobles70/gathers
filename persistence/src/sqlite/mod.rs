@@ -1,10 +1,10 @@
 use crate::CollectionCard;
 use crate::PersistenceSystemTrait;
 use eyre::eyre;
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 use models::CardID;
 use models::CollectionID;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use rusqlite_migration::Migrations;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -837,19 +837,13 @@ mod tests {
         p.add_collection("Gamma".to_string()).await.unwrap();
 
         // Filter matching two collections
-        let collections = p
-            .list_collections(Some("Test".to_string()))
-            .await
-            .unwrap();
+        let collections = p.list_collections(Some("Test".to_string())).await.unwrap();
         assert_eq!(collections.len(), 2);
         assert!(collections.contains(&"Test Alpha".to_string()));
         assert!(collections.contains(&"Test Beta".to_string()));
 
         // Filter matching exactly one collection
-        let collections = p
-            .list_collections(Some("Alpha".to_string()))
-            .await
-            .unwrap();
+        let collections = p.list_collections(Some("Alpha".to_string())).await.unwrap();
         assert_eq!(collections.len(), 1);
         assert!(collections.contains(&"Test Alpha".to_string()));
 
@@ -956,7 +950,9 @@ mod tests {
         add_card_to_collection(&mut p, &col1, &"unique_card".to_string(), 5, 0).await;
 
         // Remove col1, moving its cards into col2
-        p.remove_collection(&col1, Some(col2.clone())).await.unwrap();
+        p.remove_collection(&col1, Some(col2.clone()))
+            .await
+            .unwrap();
 
         let collections = p.list_collections(None).await.unwrap();
         assert!(!collections.contains(&col1));

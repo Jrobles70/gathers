@@ -42,12 +42,16 @@ impl From<APICardSearchFilters> for models::filters::CardSearchFilters {
             subtypes: value.subtypes,
             supertypes: value.supertypes,
             types: value.types,
-            domains: value
-                .domains
-                .map(|v| v.into_iter().map(models::riftbound::CardDomain::from).collect()),
-            energy_types: value
-                .energy_types
-                .map(|v| v.into_iter().map(models::pokemon::EnergyType::from).collect()),
+            domains: value.domains.map(|v| {
+                v.into_iter()
+                    .map(models::riftbound::CardDomain::from)
+                    .collect()
+            }),
+            energy_types: value.energy_types.map(|v| {
+                v.into_iter()
+                    .map(models::pokemon::EnergyType::from)
+                    .collect()
+            }),
         }
     }
 }
@@ -114,7 +118,7 @@ fn default_limit() -> usize {
 }
 
 #[derive(Deserialize, JsonSchema)]
-pub struct SearchQuery {
+pub struct CollectionsSearchQuery {
     #[serde(default)]
     pub offset: usize,
     #[serde(default = "default_limit")]
