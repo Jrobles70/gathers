@@ -173,6 +173,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 time_added: DateTime::parse_from_rfc3339(&card.time_added)
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now()),
+                provider: card.provider,
             }])),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -245,7 +246,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         Path(collection_id): Path<String>,
         Query(query): Query<CollectionCardsQuery>,
     ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
-        let raw_cards = state
+        let cards = state
             .1
             .lock()
             .await
@@ -261,32 +262,8 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 )
             })?;
 
-        if raw_cards.is_empty() {
-            return Ok(Json(vec![]));
-        }
-
-        // Group card IDs by their stored provider, then fetch from the matching system.
-        let systems = clone_retrieval_systems_by_name(&state).await;
-        let mut cards_by_provider: HashMap<String, Vec<String>> = HashMap::new();
-        for card in &raw_cards {
-            cards_by_provider
-                .entry(card.provider.clone())
-                .or_default()
-                .push(card.uuid.clone());
-        }
-
-        let mut found = HashMap::new();
-        for (provider, ids) in cards_by_provider {
-            if let Some(system) = systems.get(&provider)
-                && let Ok(cards) = system.get_cards_by_ids(ids).await
-            {
-                found.extend(cards);
-            }
-        }
-
-        let response_cards = raw_cards
+        let response_cards = cards
             .into_iter()
-            .filter(|card| found.contains_key(&card.uuid))
             .map(|card| CollectionCard {
                 id: card.uuid,
                 quantity: card.quantity,
@@ -295,6 +272,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 time_added: DateTime::parse_from_rfc3339(&card.time_added)
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now()),
+                provider: card.provider,
             })
             .collect();
 

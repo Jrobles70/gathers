@@ -11,7 +11,11 @@ use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
 #[derive(Debug, Clone)]
 pub struct ScryfallRetrievalSystem {}
 
-impl NamedRetrievalSystem for ScryfallRetrievalSystem {}
+impl NamedRetrievalSystem for ScryfallRetrievalSystem {
+    fn name(&self) -> &str {
+        "Scryfall"
+    }
+}
 
 impl ScryfallRetrievalSystem {
     pub fn new() -> eyre::Result<Self> {

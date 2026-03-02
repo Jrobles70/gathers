@@ -1,15 +1,31 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useOperations } from "../OperationsContext";
 
-const SystemTypeContext = createContext(null);
+const SystemTypeContext = createContext({
+  systemType: null,
+  systems: [],
+  selectedSearchSystem: null,
+  setSelectedSearchSystem: () => {},
+});
 
 export function useSystemType() {
-  return useContext(SystemTypeContext);
+  return useContext(SystemTypeContext).systemType;
+}
+
+export function useSystems() {
+  return useContext(SystemTypeContext).systems;
+}
+
+export function useSelectedSearchSystem() {
+  const ctx = useContext(SystemTypeContext);
+  return [ctx.selectedSearchSystem, ctx.setSelectedSearchSystem];
 }
 
 export function SystemTypeProvider({ children }) {
   const ops = useOperations();
   const [systemType, setSystemType] = useState(null);
+  const [systems, setSystems] = useState([]);
+  const [selectedSearchSystem, setSelectedSearchSystem] = useState(null);
 
   useEffect(() => {
     ops
@@ -17,17 +33,26 @@ export function SystemTypeProvider({ children }) {
       .then((r) => {
         if (r && r.system) {
           setSystemType(r.system);
+          const allSystems = r.systems && r.systems.length > 0 ? r.systems : [r.system];
+          setSystems(allSystems);
+          setSelectedSearchSystem(r.system);
         } else {
-          setSystemType("Sql");
+          setSystemType("MagicSQLite");
+          setSystems(["MagicSQLite"]);
+          setSelectedSearchSystem("MagicSQLite");
         }
       })
       .catch(() => {
-        setSystemType("Sql");
+        setSystemType("MagicSQLite");
+        setSystems(["MagicSQLite"]);
+        setSelectedSearchSystem("MagicSQLite");
       });
   }, []);
 
   return (
-    <SystemTypeContext.Provider value={systemType}>
+    <SystemTypeContext.Provider
+      value={{ systemType, systems, selectedSearchSystem, setSelectedSearchSystem }}
+    >
       {children}
     </SystemTypeContext.Provider>
   );

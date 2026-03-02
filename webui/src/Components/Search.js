@@ -1,36 +1,68 @@
 import React from "react";
-import { useSearchParams } from "react-router-dom";
 import SearchMagic from "./SearchMagic";
 import SearchRiftbound from "./SearchRiftbound";
 import SearchPokemon from "./SearchPokemon";
-import { useSystemType } from "./SystemTypeContext";
+import { useSystems, useSelectedSearchSystem } from "./SystemTypeContext";
+
+function systemLabel(system) {
+  if (system === "RiftboundSQLite") return "Riftbound";
+  if (system === "PokemonSQLite") return "Pokémon";
+  if (system === "Scryfall") return "MTG (Scryfall)";
+  return "MTG";
+}
 
 function Search({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
-  const systemType = useSystemType();
-  const [searchParams] = useSearchParams();
+  const systems = useSystems();
+  const [selectedSystem, setSelectedSystem] = useSelectedSearchSystem();
 
-  if (systemType === "RiftboundSql" || searchParams.get("riftbound") === "true") {
+  const renderSearch = () => {
+    if (selectedSystem === "RiftboundSQLite") {
+      return (
+        <SearchRiftbound
+          startSearch={startSearch}
+          dedicatedPage={dedicatedPage}
+          sidePanel={sidePanel}
+        />
+      );
+    }
+    if (selectedSystem === "PokemonSQLite") {
+      return (
+        <SearchPokemon
+          startSearch={startSearch}
+          dedicatedPage={dedicatedPage}
+          sidePanel={sidePanel}
+        />
+      );
+    }
     return (
-      <SearchRiftbound
+      <SearchMagic
         startSearch={startSearch}
         dedicatedPage={dedicatedPage}
         sidePanel={sidePanel}
       />
     );
-  }
-
-  if (systemType === "PokemonSql") {
-    return (
-      <SearchPokemon
-        startSearch={startSearch}
-        dedicatedPage={dedicatedPage}
-        sidePanel={sidePanel}
-      />
-    );
-  }
+  };
 
   return (
-    <SearchMagic startSearch={startSearch} dedicatedPage={dedicatedPage} sidePanel={sidePanel} />
+    <>
+      {systems.length > 1 && (
+        <div className="system-switcher btn-group mb-2" role="group">
+          {systems.map((sys) => (
+            <button
+              key={sys}
+              type="button"
+              className={`btn btn-sm ${
+                selectedSystem === sys ? "btn-primary" : "btn-outline-secondary"
+              }`}
+              onClick={() => setSelectedSystem(sys)}
+            >
+              {systemLabel(sys)}
+            </button>
+          ))}
+        </div>
+      )}
+      {renderSearch()}
+    </>
   );
 }
 

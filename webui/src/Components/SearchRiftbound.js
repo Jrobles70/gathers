@@ -329,6 +329,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
                     id={card.id}
                     card={card}
                     details={card.details}
+                    provider="RiftboundSQLite"
                   />
                 ))}
               </div>

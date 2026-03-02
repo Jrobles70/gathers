@@ -5,10 +5,8 @@ use aide::axum::{
     routing::{get, post},
 };
 use axum::http::StatusCode;
-use axum::{
-    Json,
-    extract::{Query, State},
-};
+use axum::{Json, extract::State};
+use axum_extra::extract::Query;
 use models::Card;
 use retrieval::RetrievalSystemTrait;
 use schemars::JsonSchema;

@@ -8,6 +8,12 @@ export function useCardLoader() {
   return useContext(CardLoaderContext);
 }
 
+function endpointForProvider(provider) {
+  if (provider === "RiftboundSQLite") return "/riftbound/cards";
+  if (provider === "PokemonSQLite") return "/pokemon/cards";
+  return "/mtg/cards";
+}
+
 export function CardLoaderProvider({ children }) {
   const DataLoader = require("dataloader");
   const ops = useOperations();
@@ -16,32 +22,38 @@ export function CardLoaderProvider({ children }) {
   const systemTypeRef = useRef(systemType);
   systemTypeRef.current = systemType;
 
-  function getCardEndpoint() {
-    if (systemTypeRef.current === "RiftboundSql") return "/riftbound/cards";
-    if (systemTypeRef.current === "PokemonSql") return "/pokemon/cards";
-    return "/mtg/cards";
+  function makeLoader(endpoint) {
+    return new DataLoader(async (keys) => {
+      const params = new URLSearchParams(keys.map((k) => ["ids", k]));
+      const results = await ops
+        .fetch(
+          "Bulk updating details for cards",
+          {},
+          endpoint + "?" + params.toString(),
+        )
+        .then((data) => data);
+      return keys.map((key) => results[key] || new Error(`No card for ${key}`));
+    });
   }
 
-  async function batchFunction(keys) {
-    const params = new URLSearchParams(keys.map((k) => ["ids", k]));
-    const results = await ops
-      .fetch(
-        "Bulk updating details for cards",
-        {},
-        getCardEndpoint() + "?" + params.toString(),
-      )
-      .then((data) => data);
-    return keys.map((key) => results[key] || new Error(`No card for ${key}`));
+  const mtgLoader = makeLoader("/mtg/cards");
+  const riftboundLoader = makeLoader("/riftbound/cards");
+  const pokemonLoader = makeLoader("/pokemon/cards");
+
+  function getLoader(provider) {
+    if (provider === "RiftboundSQLite") return riftboundLoader;
+    if (provider === "PokemonSQLite") return pokemonLoader;
+    return mtgLoader;
   }
 
-  const cardLoader = new DataLoader((keys) => batchFunction(keys));
-
-  async function loadCard(id) {
-    if (cache[id]) {
-      return cache[id];
+  async function loadCard(id, provider) {
+    const effectiveProvider = provider || systemTypeRef.current || "MagicSQLite";
+    const cacheKey = effectiveProvider + ":" + id;
+    if (cache[cacheKey]) {
+      return cache[cacheKey];
     }
-    const card = await cardLoader.load(id);
-    dispatch({ type: "ADD-TO-CACHE", id: id, data: card });
+    const card = await getLoader(effectiveProvider).load(id);
+    dispatch({ type: "ADD-TO-CACHE", id: cacheKey, data: card });
     return card;
   }
 

@@ -19,7 +19,11 @@ use tokio::sync::Mutex;
 
 use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
 
-impl NamedRetrievalSystem for MagicSQLiteRetrievalSystem {}
+impl NamedRetrievalSystem for MagicSQLiteRetrievalSystem {
+    fn name(&self) -> &str {
+        "MagicSQLite"
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct MagicSQLiteRetrievalSystem {

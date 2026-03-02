@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Card from "./Card";
 import RiftboundCard from "./RiftboundCard";
 import PokemonCard from "./PokemonCard";
@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useCollection, usePageNumber } from "./CollectionContext";
 import { useOperations } from "../OperationsContext";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
-import { useSystemType } from "./SystemTypeContext";
+import { useSystemType, useSystems } from "./SystemTypeContext";
 import ReactPaginate from "react-paginate";
 import {
   useCards,
@@ -19,12 +19,13 @@ import {
 } from "./CardListContexts/RefreshCardListContext";
 
 function CardComponent({ systemType, id, details }) {
-  if (systemType === "RiftboundSql") {
-    return <RiftboundCard id={id} details={details} />;
-  } else if (systemType === "PokemonSql") {
-    return <PokemonCard id={id} details={details} />;
+  const effectiveSystem = details?.provider || systemType;
+  if (effectiveSystem === "RiftboundSQLite") {
+    return <RiftboundCard id={id} details={details} provider={effectiveSystem} />;
+  } else if (effectiveSystem === "PokemonSQLite") {
+    return <PokemonCard id={id} details={details} provider={effectiveSystem} />;
   }
-  return <Card id={id} details={details} />;
+  return <Card id={id} details={details} provider={effectiveSystem} />;
 }
 
 export default function CardList() {
@@ -34,6 +35,7 @@ export default function CardList() {
   const pageNumber = usePageNumber();
   const selectedDispatch = useSelectedCardsDispatch();
   const systemType = useSystemType();
+  const systems = useSystems();
   const refresh = useRefresh();
   const setRefresh = useRefreshCardList();
 
@@ -82,14 +84,21 @@ export default function CardList() {
           <p>Loading...</p>
         ) : (
           <React.Fragment>
-            {cards.map((card) => (
-              <CardComponent
-                systemType={systemType}
-                id={card.id}
-                details={card}
-                key={card.collectionId + "-" + card.id}
-              />
-            ))}
+            {cards
+              .filter(
+                (card) =>
+                  systems.length === 0 ||
+                  !card.provider ||
+                  systems.includes(card.provider),
+              )
+              .map((card) => (
+                <CardComponent
+                  systemType={systemType}
+                  id={card.id}
+                  details={card}
+                  key={card.collectionId + "-" + card.id}
+                />
+              ))}
           </React.Fragment>
         )}
       </div>

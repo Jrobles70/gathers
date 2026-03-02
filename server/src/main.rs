@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::{Extension, Json, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
-use retrieval::{RetrievalSystem, RetrievalSystemTrait};
+use retrieval::{NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
 use schemars::JsonSchema;
 use serde::Serialize;
 use std::{sync::Arc, time::Duration};
@@ -35,10 +35,11 @@ pub type ApiError = (StatusCode, Json<ErrorPayload>);
 
 #[derive(Debug, Clone, serde::Serialize, JsonSchema)]
 pub struct SystemInfo {
-    /// Primary system (for backward compatibility).
-    pub system: Systems,
-    /// All configured systems.
-    pub systems: Vec<Systems>,
+    /// Primary active system, identified by NamedRetrievalSystem::name().
+    pub system: String,
+    /// All active systems, identified by NamedRetrievalSystem::name().
+    /// These strings also match the `provider` field stored on collection cards.
+    pub systems: Vec<String>,
 }
 
 type GathersState = (Arc<Mutex<RetrievalState>>, Arc<Mutex<StorageState>>);
@@ -145,10 +146,13 @@ impl RetrievalState {
     }
 
     pub async fn get_system_info(&self) -> SystemInfo {
-        SystemInfo {
-            system: self.primary_system(),
-            systems: self.active_systems(),
-        }
+        let systems: Vec<String> = [self.mtg.as_ref(), self.riftbound.as_ref(), self.pokemon.as_ref()]
+            .into_iter()
+            .flatten()
+            .map(|s| s.name().to_string())
+            .collect();
+        let system = systems.first().cloned().unwrap_or_default();
+        SystemInfo { system, systems }
     }
 
     pub fn require_mtg(&self) -> Result<&RetrievalSystem, ApiError> {

@@ -12,7 +12,11 @@ use crate::{
     NamedRetrievalSystem, RetrievalSystemTrait, systems::riftsqlite::update::RiftboundCardFetcher,
 };
 
-impl NamedRetrievalSystem for RiftboundSQLiteRetrievalSystem {}
+impl NamedRetrievalSystem for RiftboundSQLiteRetrievalSystem {
+    fn name(&self) -> &str {
+        "RiftboundSQLite"
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct RiftboundSQLiteRetrievalSystem {
@@ -126,7 +130,7 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
         let conn = self.connection.lock().await;
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
-            "SELECT id, name, set_id, rarity, artists, domains, text, image, code FROM cards WHERE id IN ({})",
+            "SELECT id, name, set_id, rarity, artists, domains, text, image_url, code FROM cards WHERE id IN ({})",
             placeholders
         );
         let mut stmt = conn.prepare(&query)?;

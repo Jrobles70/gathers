@@ -3,7 +3,7 @@ import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 
-export default function MtGCard({ id, card = null, details = null }) {
+export default function MtGCard({ id, card = null, details = null, provider = null }) {
   const [_card, setCard] = useState(card);
   const [selected, setSelected] = useState(false);
 
@@ -22,13 +22,9 @@ export default function MtGCard({ id, card = null, details = null }) {
 
   useEffect(() => {
     if (_card == null) {
-      async function execute() {
-        const receivedCard = await loader(id);
-        setCard(receivedCard);
-      }
-      execute();
+      loader(id, provider).then(setCard).catch(() => {});
     }
-  }, [id, _card, details]);
+  }, [id, _card, details, provider]);
 
   let imagePath =
     _card != null && _card.cardIdentifiers != null

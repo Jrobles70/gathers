@@ -11,7 +11,11 @@ use tokio::sync::Mutex;
 
 use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
 
-impl NamedRetrievalSystem for PokemonSQLiteRetrievalSystem {}
+impl NamedRetrievalSystem for PokemonSQLiteRetrievalSystem {
+    fn name(&self) -> &str {
+        "PokemonSQLite"
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PokemonSQLiteRetrievalSystem {

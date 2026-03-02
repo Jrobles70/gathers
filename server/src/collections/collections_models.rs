@@ -99,6 +99,8 @@ pub struct CollectionCard {
     pub collection_id: String,
     #[serde(rename = "timeAdded")]
     pub time_added: DateTime<Utc>,
+    #[serde(default)]
+    pub provider: String,
 }
 
 impl From<&CollectionCard> for models::CollectionCard {

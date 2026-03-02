@@ -1,6 +1,5 @@
 mod systems;
 
-use std::any::type_name;
 use std::collections::HashMap;
 
 use enum_dispatch::enum_dispatch;
@@ -42,10 +41,7 @@ pub trait RetrievalSystemTrait {
     async fn update_backend(&self) -> eyre::Result<bool>;
 }
 
+#[enum_dispatch(RetrievalSystem)]
 pub trait NamedRetrievalSystem {
-    fn name(&self) -> &str {
-        type_name::<Self>()
-    }
+    fn name(&self) -> &str;
 }
-
-impl NamedRetrievalSystem for RetrievalSystem {}
