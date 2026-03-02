@@ -53,7 +53,55 @@ impl CardSearchFilters {
         self
     }
 
-    // TODO: finish these and actually use them
+    pub fn with_set_code(mut self, set_code: impl Into<String>) -> Self {
+        self.set_code = Some(set_code.into());
+        self
+    }
+
+    pub fn with_collector_number(mut self, collector_number: impl Into<String>) -> Self {
+        self.collector_number = Some(collector_number.into());
+        self
+    }
+
+    pub fn with_artist(mut self, artist: impl Into<String>) -> Self {
+        self.artist = Some(artist.into());
+        self
+    }
+
+    pub fn with_text(mut self, text: impl Into<String>) -> Self {
+        self.text = Some(text.into());
+        self
+    }
+
+    pub fn with_rarity(mut self, rarity: Rarity) -> Self {
+        self.rarity = Some(rarity);
+        self
+    }
+
+    pub fn with_subtypes(mut self, subtypes: Vec<String>) -> Self {
+        self.subtypes = Some(subtypes);
+        self
+    }
+
+    pub fn with_supertypes(mut self, supertypes: impl Into<String>) -> Self {
+        self.supertypes = Some(supertypes.into());
+        self
+    }
+
+    pub fn with_types(mut self, types: Vec<String>) -> Self {
+        self.types = Some(types);
+        self
+    }
+
+    pub fn with_domains(mut self, domains: Vec<CardDomain>) -> Self {
+        self.domains = Some(domains);
+        self
+    }
+
+    pub fn with_energy_types(mut self, energy_types: Vec<EnergyType>) -> Self {
+        self.energy_types = Some(energy_types);
+        self
+    }
 }
 
 fn empty_string_to_none<'de, D>(deserializer: D) -> Result<Option<Rarity>, D::Error>

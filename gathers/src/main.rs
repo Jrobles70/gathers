@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use models::{Card, CardColour, Rarity, riftbound::CardDomain};
+use models::{Card, CardColour, Rarity, pokemon::EnergyType, riftbound::CardDomain};
 use retrieval::{RetrievalSystem, RetrievalSystemTrait};
 use std::path::PathBuf;
 
@@ -57,7 +57,7 @@ struct Args {
     domain: Vec<String>,
 
     #[clap(long)]
-    energy: Option<String>,
+    energy: Vec<String>,
 
     #[clap(short, long)]
     download: bool,
@@ -151,7 +151,11 @@ async fn main() -> eyre::Result<()> {
         Some(args.domain.into_iter().map(CardDomain::from).collect())
     };
 
-    // TODO: energy
+    let energy_types: Option<Vec<EnergyType>> = if args.energy.is_empty() {
+        None
+    } else {
+        Some(args.energy.into_iter().map(EnergyType::from).collect())
+    };
 
     let rarity: Option<Rarity> = args.rarity.map(|r| r.into());
 
@@ -169,7 +173,7 @@ async fn main() -> eyre::Result<()> {
                 supertypes: args.supertype,
                 types: args.types,
                 domains,
-                energy_types: None, // TODO
+                energy_types,
             },
             Some(args.offset),
             Some(args.limit),

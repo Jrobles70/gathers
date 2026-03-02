@@ -12,10 +12,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 1: Simple name search
     group.bench_function("search_by_name", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                name: Some("Lightning Bolt".to_string()),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_name("Lightning Bolt");
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -24,10 +21,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 2: Search with color identity filter
     group.bench_function("search_by_color_identity", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                color_identities: Some(vec![CardColour::Red]),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_color_identities(vec![CardColour::Red]);
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -36,10 +30,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 3: Search with artist filter
     group.bench_function("search_by_artist", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                artist: Some("Jason Chan".to_string()),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_artist("Jason Chan");
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -48,10 +39,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 4: Search with text filter
     group.bench_function("search_by_text", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                text: Some("destroy target enchantment".to_string()),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_text("destroy target enchantment");
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -60,10 +48,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 5: Search with set code filter
     group.bench_function("search_by_set_code", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                set_code: Some("M20".to_string()),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_set_code("M20");
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -72,10 +57,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 6: Search with rarity filter
     group.bench_function("search_by_rarity", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                rarity: Some(Rarity::Rare),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_rarity(Rarity::Rare);
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -84,12 +66,10 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 7: Search with multiple filters
     group.bench_function("search_with_multiple_filters", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                name: Some("Black Lotus".to_string()),
-                color_identities: Some(vec![CardColour::Black]),
-                rarity: Some(Rarity::Rare),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new()
+                .with_name("Black Lotus")
+                .with_color_identities(vec![CardColour::Black])
+                .with_rarity(Rarity::Rare);
             let result = system.search_cards(black_box(filters), None, None).await;
             let _ = black_box(result);
         })
@@ -98,10 +78,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 8: Search with limit
     group.bench_function("search_with_limit", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                name: Some("Plains".to_string()),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_name("Plains");
             let result = system.search_cards(black_box(filters), None, Some(10)).await;
             let _ = black_box(result);
         })
@@ -110,10 +87,7 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     // Test 9: Search with skip
     group.bench_function("search_with_skip", |b| {
         b.to_async(&rt).iter(|| async {
-            let filters = CardSearchFilters {
-                name: Some("Forest".to_string()),
-                ..Default::default()
-            };
+            let filters = CardSearchFilters::new().with_name("Forest");
             let result = system.search_cards(black_box(filters), Some(100), None).await;
             let _ = black_box(result);
         })
