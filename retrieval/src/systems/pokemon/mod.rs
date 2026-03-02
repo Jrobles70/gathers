@@ -440,10 +440,7 @@ mod tests {
     #[tokio::test]
     async fn test_named_retrieval_system_trait() {
         let system = setup_test_db().await;
-        assert_eq!(
-            system.name(),
-            "retrieval::systems::pokemon::PokemonSQLiteRetrievalSystem"
-        );
+        assert_eq!(system.name(), "PokemonSQLite");
     }
 
     #[tokio::test]

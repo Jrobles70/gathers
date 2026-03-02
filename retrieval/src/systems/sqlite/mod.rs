@@ -504,9 +504,6 @@ mod tests {
     async fn test_named_retrieval_system_trait() {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let name = system.name();
-        assert_eq!(
-            name,
-            "retrieval::systems::sqlite::MagicSQLiteRetrievalSystem"
-        );
+        assert_eq!(name, "MagicSQLite");
     }
 }
