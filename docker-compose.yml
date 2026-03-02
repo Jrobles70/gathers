@@ -4,10 +4,21 @@ services:
     ports:
       - "5234:5234"
     volumes:
-      - ./data/:/home/app/.local/share/gathers/DB/:rw
+      - gathers-data:/home/app/.local/share/gathers/DB/:rw
     environment:
       - STORAGE_DB_PATH=/home/app/.local/share/gathers/DB/storage.db
       - MTG_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
       - RIFTBOUND_DB_PATH=/home/app/.local/share/gathers/DB/riftbound.db
       - POKEMON_DB_PATH=/home/app/.local/share/gathers/DB/pokemon.db
     restart: unless-stopped
+
+  webui:
+    build: ./webui
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  gathers-data:

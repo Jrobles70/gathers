@@ -146,11 +146,15 @@ impl RetrievalState {
     }
 
     pub async fn get_system_info(&self) -> SystemInfo {
-        let systems: Vec<String> = [self.mtg.as_ref(), self.riftbound.as_ref(), self.pokemon.as_ref()]
-            .into_iter()
-            .flatten()
-            .map(|s| s.name().to_string())
-            .collect();
+        let systems: Vec<String> = [
+            self.mtg.as_ref(),
+            self.riftbound.as_ref(),
+            self.pokemon.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|s| s.name().to_string())
+        .collect();
         let system = systems.first().cloned().unwrap_or_default();
         SystemInfo { system, systems }
     }
@@ -319,9 +323,11 @@ async fn main() -> eyre::Result<()> {
                     if let Some(ref path) = riftbound_db_path
                         && !std::path::Path::new(path).exists()
                     {
+                        println!("Updating DB");
                         let temp =
                             RetrievalState::new_retrieval(*system, riftbound_db_path.clone())?;
                         temp.update_backend().await?;
+                        println!("Done updating DB");
                     }
                 }
                 _ => unimplemented!(),

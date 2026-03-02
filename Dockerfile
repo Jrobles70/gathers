@@ -23,13 +23,13 @@ RUN cargo build --release --bin server
 
 FROM ubuntu:24.04
 
-RUN apt-get update && apt-get install -y libsqlite3-0
+RUN apt-get update && apt-get install -y ca-certificates libsqlite3-0
 
 RUN useradd --create-home --shell /bin/bash app
 USER app
 WORKDIR /home/app
 
-RUN mkdir -p /home/app/.local/share/hometg/DB
+RUN mkdir -p /home/app/.local/share/gathers/DB
 
 COPY --from=builder /app/target/release/server .
 

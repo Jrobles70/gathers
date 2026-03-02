@@ -79,7 +79,9 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     group.bench_function("search_with_limit", |b| {
         b.to_async(&rt).iter(|| async {
             let filters = CardSearchFilters::new().with_name("Plains");
-            let result = system.search_cards(black_box(filters), None, Some(10)).await;
+            let result = system
+                .search_cards(black_box(filters), None, Some(10))
+                .await;
             let _ = black_box(result);
         })
     });
@@ -88,7 +90,9 @@ fn bench_card_search_benchmark(c: &mut Criterion) {
     group.bench_function("search_with_skip", |b| {
         b.to_async(&rt).iter(|| async {
             let filters = CardSearchFilters::new().with_name("Forest");
-            let result = system.search_cards(black_box(filters), Some(100), None).await;
+            let result = system
+                .search_cards(black_box(filters), Some(100), None)
+                .await;
             let _ = black_box(result);
         })
     });
