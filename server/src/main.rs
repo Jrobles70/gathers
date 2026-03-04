@@ -232,7 +232,17 @@ impl StorageState {
 }
 
 #[derive(
-    Copy, Clone, ValueEnum, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize, JsonSchema,
+    Copy,
+    Clone,
+    ValueEnum,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    JsonSchema,
 )]
 pub enum Systems {
     Scryfall,
@@ -241,16 +251,31 @@ pub enum Systems {
     PokemonSql,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct ServerConfig {
+    system: Vec<Systems>,
+    port: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mtg_db_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    riftbound_db_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pokemon_db_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    storage_db_path: Option<String>,
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
     /// Retrieval systems to enable. May be specified multiple times.
-    /// At least one is required. Supported values: scryfall, sql, riftbound-sql, pokemon-sql.
-    #[clap(short, long, required = true, num_args = 1..)]
+    /// Required when no config file exists. Supported values: scryfall, sql, riftbound-sql, pokemon-sql.
+    #[clap(short, long, num_args = 1..)]
     system: Vec<Systems>,
 
+    /// Port to listen on. Required when no config file exists.
     #[clap(short, long)]
-    port: usize,
+    port: Option<usize>,
 }
 
 async fn get_system_info(
@@ -268,49 +293,72 @@ async fn serve_api(Extension(api): Extension<OpenApi>) -> impl axum::response::I
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
-    let port = args.port;
-
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let gathers_dir = std::path::Path::new(&home).join(".local/share/gathers");
+    let db_dir = gathers_dir.join("DB");
+    let config_path = gathers_dir.join("server.toml");
 
-    let storage_db_path = std::env::var("STORAGE_DB_PATH").ok().or_else(|| {
-        Some(
-            gathers_dir
-                .join("DB/storage.db")
-                .to_string_lossy()
-                .into_owned(),
-        )
-    });
+    // Load or create config file
+    let mut config = if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)?;
+        toml::from_str::<ServerConfig>(&content)
+            .map_err(|e| eyre::eyre!("Failed to parse {}: {e}", config_path.display()))?
+    } else {
+        if args.system.is_empty() {
+            eyre::bail!(
+                "--system is required when no config file exists at {}",
+                config_path.display()
+            );
+        }
+        let port = args.port.ok_or_else(|| {
+            eyre::eyre!(
+                "--port is required when no config file exists at {}",
+                config_path.display()
+            )
+        })?;
+        let cfg = ServerConfig {
+            system: args.system.clone(),
+            port,
+            mtg_db_path: Some(
+                db_dir
+                    .join("AllPrintings.db")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            riftbound_db_path: Some(db_dir.join("riftbound.db").to_string_lossy().into_owned()),
+            pokemon_db_path: Some(db_dir.join("pokemon.db").to_string_lossy().into_owned()),
+            storage_db_path: Some(db_dir.join("storage.db").to_string_lossy().into_owned()),
+        };
+        std::fs::create_dir_all(&gathers_dir)?;
+        std::fs::write(&config_path, toml::to_string_pretty(&cfg)?)?;
+        println!("Created config file at {}", config_path.display());
+        cfg
+    };
 
-    let mtg_db_path = std::env::var("MTG_DB_PATH").ok().or_else(|| {
-        Some(
-            gathers_dir
-                .join("DB/AllPrintings.db")
-                .to_string_lossy()
-                .into_owned(),
-        )
-    });
+    // CLI args override config for this session
+    if !args.system.is_empty() {
+        config.system = args.system;
+    }
+    if let Some(port) = args.port {
+        config.port = port;
+    }
 
-    let riftbound_db_path = std::env::var("RIFTBOUND_DB_PATH").ok().or_else(|| {
-        Some(
-            gathers_dir
-                .join("DB/riftbound.db")
-                .to_string_lossy()
-                .into_owned(),
-        )
-    });
+    // Env vars override config for DB paths
+    let mtg_db_path = std::env::var("MTG_DB_PATH").ok().or(config.mtg_db_path);
+    let riftbound_db_path = std::env::var("RIFTBOUND_DB_PATH")
+        .ok()
+        .or(config.riftbound_db_path);
+    let pokemon_db_path = std::env::var("POKEMON_DB_PATH")
+        .ok()
+        .or(config.pokemon_db_path);
+    let storage_db_path = std::env::var("STORAGE_DB_PATH")
+        .ok()
+        .or(config.storage_db_path);
 
-    let pokemon_db_path = std::env::var("POKEMON_DB_PATH").ok().or_else(|| {
-        Some(
-            gathers_dir
-                .join("DB/pokemon.db")
-                .to_string_lossy()
-                .into_owned(),
-        )
-    });
+    let port = config.port;
 
     if std::env::var("GATHERS_NO_AUTO_UPDATE").is_err() {
-        for system in &args.system {
+        for system in &config.system {
             match system {
                 Systems::Sql => {
                     if let Some(ref path) = mtg_db_path
@@ -336,7 +384,7 @@ async fn main() -> eyre::Result<()> {
     }
 
     let retrieval = Arc::new(Mutex::new(RetrievalState::new(
-        args.system,
+        config.system,
         mtg_db_path,
         riftbound_db_path,
         pokemon_db_path,
