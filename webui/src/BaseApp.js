@@ -12,7 +12,6 @@ export default function BaseApp({ mode = "full" }) {
         <BrowserRouter>
           <Routes>
             <Route
-              exact
               path="/"
               element={
                 isSearchOnly ? <Navigate to="/search" /> : <CardListView />

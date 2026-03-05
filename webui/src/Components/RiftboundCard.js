@@ -24,6 +24,7 @@ export default function RiftboundCard({ id, card = null, details = null, provide
     if (_card == null) {
       loader(id, provider).then(setCard).catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, _card, details, provider]);
 
   let imagePath =
@@ -38,10 +39,9 @@ export default function RiftboundCard({ id, card = null, details = null, provide
       ) : (
         <div className={"card" + (selected ? " border border-primary" : "")}>
           <img
-            className="lazyload"
             src={imagePath}
             alt={_card.name}
-            lazyload="on"
+            loading="lazy"
           />
           <CardDetails
             id={id}

@@ -24,6 +24,7 @@ export default function PokemonCard({ id, card = null, details = null, provider 
     if (_card == null) {
       loader(id, provider).then(setCard).catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, _card, details, provider]);
 
   let imagePath = _card != null && _card.image != null ? _card.image : "";
@@ -35,10 +36,9 @@ export default function PokemonCard({ id, card = null, details = null, provider 
       ) : (
         <div className={"card" + (selected ? " border border-primary" : "")}>
           <img
-            className="lazyload"
             src={imagePath}
             alt={_card.name}
-            lazyload="on"
+            loading="lazy"
           />
           <CardDetails
             id={id}

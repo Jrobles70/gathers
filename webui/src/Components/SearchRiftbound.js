@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import RiftboundCard from "./RiftboundCard";
 import { useOperations } from "../OperationsContext";
 import ReactPaginate from "react-paginate";
-import { useCollections } from "./CollectionContext";
 
 function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const ops = useOperations();
@@ -11,8 +10,6 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
   const [loading, setLoading] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
   const [shouldSearch, setShouldSearch] = useState(startSearch);
-
-  const collections = useCollections();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchOptions, setSearchOptions] = useState({
@@ -33,8 +30,6 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
         ? searchParams.getAll("colorIdentities")
         : [],
   });
-  const [searchCollection, setSearchCollection] = useState("");
-
   let pageSize = 24;
 
   useEffect(() => {
@@ -63,6 +58,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
           setShouldSearch(false);
         });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber, shouldSearch]);
 
   const handleSearchInput = (event, field) => {
@@ -81,15 +77,11 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
       ];
     } else {
       newState["colorIdentities"] = newState["colorIdentities"].filter(
-        (c) => c != event.target.value,
+        (c) => c !== event.target.value,
       );
     }
     setSearchOptions(newState);
     setSearchParams(newState);
-  };
-
-  const handleCollectionInput = (event) => {
-    setSearchCollection(event.target.value);
   };
 
   const handlePageChange = (event) => {
@@ -292,27 +284,6 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
             >
               Search
             </button>
-            <select
-              onChange={(e) => handleCollectionInput(e)}
-              className="form-control"
-              id="searchInCollection"
-            >
-              <option key={"searchincol-empty"} dropdown="in Riftbound database" value={""}>
-                in Riftbound database
-              </option>
-              <option
-                key={"searchincol-collections"}
-                dropdown="in all collections"
-                value={"skipNotOwned"}
-              >
-                in all collections
-              </option>
-              {collections.map((c) => (
-                <option key={"searchincol-" + c.id} dropdown={c.id} value={c.id}>
-                  {"in " + c.id}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="search-results" id="search-results">
             {loading ? (

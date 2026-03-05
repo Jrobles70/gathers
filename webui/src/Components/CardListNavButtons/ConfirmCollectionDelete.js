@@ -38,7 +38,7 @@ const ConfirmCollectionDelete = ({
             </p>
             <select ref={inputRef} className="form-control" defaultValue="">
               {collections.map((c) => (
-                <option key={"confirm" + c.id} dropdown={c.id} value={c.id}>
+                <option key={"confirm" + c.id} value={c.id}>
                   {c.id}
                 </option>
               ))}

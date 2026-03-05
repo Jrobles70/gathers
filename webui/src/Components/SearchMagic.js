@@ -68,6 +68,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
           setShouldSearch(false);
         });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber, shouldSearch]);
 
   const handleSearchInput = (event, field) => {
@@ -86,7 +87,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
       ];
     } else {
       newState["colorIdentities"] = newState["colorIdentities"].filter(
-        (c) => c != event.target.value,
+        (c) => c !== event.target.value,
       );
     }
     setSearchOptions(newState);
@@ -295,18 +296,17 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               className="form-control"
               id="searchInCollection"
             >
-              <option key={"searchincol-empty"} dropdown="in MtG database" value={""}>
+              <option key={"searchincol-empty"} value={""}>
                 in MtG database
               </option>
               <option
                 key={"searchincol-collections"}
-                dropdown="in all collections"
                 value={"skipNotOwned"}
               >
                 in all collections
               </option>
               {collections.map((c) => (
-                <option key={"searchincol-" + c.id} dropdown={c.id} value={c.id}>
+                <option key={"searchincol-" + c.id} value={c.id}>
                   {"in " + c.id}
                 </option>
               ))}

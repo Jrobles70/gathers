@@ -56,7 +56,7 @@ export default function MoveCards() {
           id="exampleFormControlSelect1"
         >
           {collections.map((c) => (
-            <option key={"cardlistcol-" + c.id} dropdown={c.id} value={c.id}>
+            <option key={"cardlistcol-" + c.id} value={c.id}>
               {c.id}
             </option>
           ))}

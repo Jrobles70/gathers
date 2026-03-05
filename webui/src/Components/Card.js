@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
@@ -24,6 +24,7 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
     if (_card == null) {
       loader(id, provider).then(setCard).catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, _card, details, provider]);
 
   let imagePath =
@@ -40,10 +41,9 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
       ) : (
         <div className={"card" + (selected ? " border border-primary" : "")}>
           <img
-            className="lazyload"
             src={imagePath}
             alt={_card.name}
-            lazyload="on"
+            loading="lazy"
           />
           <CardDetails
             id={id}
