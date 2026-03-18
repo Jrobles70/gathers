@@ -77,6 +77,7 @@ impl PersistenceSystem {
     pub async fn import_csv(
         &mut self,
         filename: String,
+        collection_name: String,
         retrieval: &RetrievalSystem,
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
     ) -> eyre::Result<()> {
@@ -115,7 +116,7 @@ impl PersistenceSystem {
         let total: f32 = cta.len() as f32;
         let now = chrono::Utc::now();
         let time_added = now.to_rfc3339();
-        let collection_id = self.add_collection("New Collection".to_string()).await?;
+        let collection_id = self.add_collection(collection_name).await?;
         for g in cta.chunks(50) {
             let cards: Vec<CollectionCard> = g
                 .iter()
@@ -203,7 +204,7 @@ mod tests {
         let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
-        s.import_csv("../data/test.csv".to_string(), &r, Some(sender))
+        s.import_csv("../data/test.csv".to_string(), "New Collection".to_string(), &r, Some(sender))
             .await
             .unwrap();
 

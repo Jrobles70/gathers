@@ -43,7 +43,7 @@ impl SQLitePersistenceSystem {
 impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn add_collection(&mut self, name: CollectionID) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
-        let query = "INSERT INTO collection (name, can_remove) VALUES (?1, ?2)";
+        let query = "INSERT OR IGNORE INTO collection (name, can_remove) VALUES (?1, ?2)";
         conn.execute(query, params![name, true])?;
 
         Ok(name)
@@ -999,18 +999,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_collection_duplicate_name_errors() {
+    async fn test_add_collection_duplicate_name_is_idempotent() {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
         p.add_collection("My Collection".to_string()).await.unwrap();
 
-        // Same name again — PRIMARY KEY violation
+        // Same name again — should succeed and return the same name
         let result = p.add_collection("My Collection".to_string()).await;
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "My Collection");
 
-        // "Default" is seeded by migrations; re-adding it must also fail
+        // "Default" is seeded by migrations; re-adding it must also succeed
         let result = p.add_collection(DEFAULT.to_string()).await;
-        assert!(result.is_err());
+        assert!(result.is_ok());
+
+        // Total collection count must not have grown
+        let collections = p.list_collections(None).await.unwrap();
+        assert_eq!(collections.len(), 2); // Default + My Collection
     }
 
     /// Regression test: moving a card with an explicit provider must preserve

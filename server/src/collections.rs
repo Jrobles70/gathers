@@ -4,6 +4,7 @@ use aide::axum::{
     ApiRouter,
     routing::{get, post},
 };
+use axum::extract::Multipart;
 use axum::http::StatusCode;
 use axum::{
     Json,
@@ -336,6 +337,99 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         }
     }
 
+    async fn import(
+        State(state): State<GathersState>,
+        mut multipart: Multipart,
+    ) -> Result<Json<()>, ApiError> {
+        let mut file_bytes: Option<Vec<u8>> = None;
+        let mut collection_name: Option<String> = None;
+
+        while let Some(field) = multipart.next_field().await.map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: format!("Failed to read multipart field: {e}"),
+                }),
+            )
+        })? {
+            match field.name() {
+                Some("file") => {
+                    file_bytes = Some(field.bytes().await.map_err(|e| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            Json(ErrorPayload {
+                                error: format!("Failed to read file bytes: {e}"),
+                            }),
+                        )
+                    })?.to_vec());
+                }
+                Some("collection") => {
+                    collection_name = Some(field.text().await.map_err(|e| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            Json(ErrorPayload {
+                                error: format!("Failed to read collection field: {e}"),
+                            }),
+                        )
+                    })?);
+                }
+                _ => {}
+            }
+        }
+
+        let bytes = file_bytes.ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "No file provided".to_string(),
+                }),
+            )
+        })?;
+
+        let collection_name = collection_name.unwrap_or_else(|| "New Collection".to_string());
+
+        let mut tmp = tempfile::NamedTempFile::new().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to create temp file: {e}"),
+                }),
+            )
+        })?;
+        std::io::Write::write_all(&mut tmp, &bytes).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to write temp file: {e}"),
+                }),
+            )
+        })?;
+        let tmp_path = tmp.path().to_string_lossy().to_string();
+
+        let retrieval = {
+            let guard = state.0.lock().await;
+            guard.require_mtg()?.clone()
+        };
+
+        state
+            .1
+            .lock()
+            .await
+            .storage
+            .import_csv(tmp_path, collection_name, &retrieval, None)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Import failed: {e}"),
+                    }),
+                )
+            })?;
+
+        Ok(Json(()))
+    }
+
     ApiRouter::new()
         .api_route("/list", get(list))
         .api_route("/add", post(add))
@@ -346,4 +440,5 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         .api_route("/search", post(search_temp))
         .api_route("/cards/{id}/add", post(cards_add))
         .api_route("/cards/{id}/delete", post(cards_remove))
+        .route("/import", axum::routing::post(import))
 }
