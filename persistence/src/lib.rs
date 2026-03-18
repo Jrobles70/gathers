@@ -78,47 +78,72 @@ impl PersistenceSystem {
         &mut self,
         filename: String,
         collection_name: String,
-        retrieval: &RetrievalSystem,
+        retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
     ) -> eyre::Result<()> {
-        let mut rdr = csv::Reader::from_path(filename)?;
-        let mut cards = vec![];
-        for result in rdr.deserialize() {
-            let record: csv_models::CSVCard = result?;
-            cards.push(record);
-        }
+        const DEFAULT_PROVIDER: &str = "MagicSQLite";
         const BULK_CHUNK_SIZE: usize = 500;
-        let input: Vec<(String, String)> = cards
-            .iter()
-            .map(|c| (c.set_code.clone(), c.collector_number.clone()))
-            .collect();
-        let mut card_ids = vec![];
-        for chunk in input.chunks(BULK_CHUNK_SIZE) {
-            let chunk_result = retrieval.bulk_search_cards(chunk.to_vec()).await?;
-            card_ids.extend(chunk_result);
+
+        let mut rdr = csv::Reader::from_path(filename)?;
+        let mut cards: Vec<csv_models::CSVCard> = vec![];
+        for result in rdr.deserialize() {
+            cards.push(result?);
         }
 
-        let cta: Vec<(String, u32, u32)> = card_ids
-            .iter()
-            .map(|c| {
-                let card = cards
-                    .iter()
-                    .find(|s| s.set_code == c.1 && s.collector_number == c.2);
-                match card {
-                    Some(s) => (c.0.clone(), s.quantity, s.foil_quantity),
-                    None => (c.0.clone(), 0, 0),
-                }
-            })
-            .collect();
+        let systems_by_name: std::collections::HashMap<&str, &RetrievalSystem> =
+            retrievals.iter().map(|r| (r.name(), r)).collect();
 
-        let provider = retrieval.name().to_string();
-        let mut i: f32 = 0.0;
-        let total: f32 = cta.len() as f32;
+        // Group cards by provider, treating an empty provider as DEFAULT_PROVIDER.
+        let mut groups: std::collections::HashMap<&str, Vec<&csv_models::CSVCard>> =
+            Default::default();
+        for card in &cards {
+            let provider = if card.provider.is_empty() {
+                DEFAULT_PROVIDER
+            } else {
+                card.provider.as_str()
+            };
+            groups.entry(provider).or_default().push(card);
+        }
+
+        // Resolve each group against its retrieval system, falling back to the
+        // first available system when the named provider is not configured.
+        // (uuid, quantity, foil_quantity, provider_name)
+        let mut cta: Vec<(String, u32, u32, String)> = vec![];
+        for (provider, group) in &groups {
+            let system = systems_by_name
+                .get(provider)
+                .copied()
+                .or_else(|| retrievals.first())
+                .ok_or_else(|| eyre::eyre!("No retrieval system available for import"))?;
+
+            let input: Vec<(String, String)> = group
+                .iter()
+                .map(|c| (c.set_code.clone(), c.collector_number.clone()))
+                .collect();
+
+            let mut resolved = vec![];
+            for chunk in input.chunks(BULK_CHUNK_SIZE) {
+                resolved.extend(system.bulk_search_cards(chunk.to_vec()).await?);
+            }
+
+            for (set_code, collector_number, uuid) in resolved {
+                if let Some(c) = group
+                    .iter()
+                    .find(|c| c.set_code == set_code && c.collector_number == collector_number)
+                {
+                    cta.push((uuid, c.quantity, c.foil_quantity, system.name().to_string()));
+                }
+            }
+        }
+
         let now = chrono::Utc::now();
         let time_added = now.to_rfc3339();
         let collection_id = self.add_collection(collection_name).await?;
+        let total = cta.len() as f32;
+        let mut i: f32 = 0.0;
+
         for g in cta.chunks(50) {
-            let cards: Vec<CollectionCard> = g
+            let batch: Vec<CollectionCard> = g
                 .iter()
                 .map(|c| CollectionCard {
                     uuid: c.0.clone(),
@@ -126,12 +151,12 @@ impl PersistenceSystem {
                     foil_quantity: c.2 as i32,
                     collection: collection_id.clone(),
                     time_added: time_added.clone(),
-                    provider: provider.clone(),
+                    provider: c.3.clone(),
                 })
                 .collect();
-            self.add_cards_to_collection(&collection_id, &cards).await?;
+            self.add_cards_to_collection(&collection_id, &batch).await?;
 
-            i += cards.len() as f32;
+            i += batch.len() as f32;
             if let Some(ref sender) = progress_sender {
                 sender.send(i / total)?;
             }
@@ -143,8 +168,11 @@ impl PersistenceSystem {
     pub async fn export_collection(
         &self,
         collection_id: &CollectionID,
-        retrieval: &RetrievalSystem,
+        retrievals: &[RetrievalSystem],
     ) -> eyre::Result<String> {
+        let systems_by_name: std::collections::HashMap<&str, &RetrievalSystem> =
+            retrievals.iter().map(|r| (r.name(), r)).collect();
+
         let mut wtr = csv::Writer::from_writer(vec![]);
         let mut offset = 0;
         let limit = 100;
@@ -156,23 +184,56 @@ impl PersistenceSystem {
                 break;
             }
 
-            let card_ids = cards.iter().map(|c| c.uuid.clone()).collect();
-            let searched_cards = retrieval.get_cards_by_ids(card_ids).await?;
-            let csv_cards: Vec<CSVCard> = cards
-                .iter()
-                .filter_map(|c| {
-                    let searched = searched_cards.get(&c.uuid);
-                    searched.map(|s| CSVCard {
-                        set_code: s.get_set(),
-                        collector_number: s.get_collector_number(),
-                        quantity: c.quantity as u32,
-                        foil_quantity: c.foil_quantity as u32,
-                    })
-                })
-                .collect();
+            // Group UUIDs by stored provider so we issue one lookup per system.
+            let mut ids_by_provider: std::collections::HashMap<&str, Vec<String>> =
+                Default::default();
+            for card in &cards {
+                ids_by_provider
+                    .entry(card.provider.as_str())
+                    .or_default()
+                    .push(card.uuid.clone());
+            }
 
-            for card in csv_cards {
-                wtr.serialize(card)?;
+            let mut looked_up: std::collections::HashMap<String, (models::Card, String)> =
+                Default::default();
+            for (provider, ids) in &ids_by_provider {
+                if let Some(system) = systems_by_name.get(provider) {
+                    if let Ok(result) = system.get_cards_by_ids(ids.clone()).await {
+                        for (uuid, card) in result {
+                            looked_up.insert(uuid, (card, system.name().to_string()));
+                        }
+                    }
+                }
+            }
+
+            // Fall back: try every system for cards not yet resolved.
+            let unfound: Vec<String> = cards
+                .iter()
+                .filter(|c| !looked_up.contains_key(&c.uuid))
+                .map(|c| c.uuid.clone())
+                .collect();
+            if !unfound.is_empty() {
+                for system in retrievals {
+                    if let Ok(result) = system.get_cards_by_ids(unfound.clone()).await {
+                        for (uuid, card) in result {
+                            looked_up
+                                .entry(uuid)
+                                .or_insert_with(|| (card, system.name().to_string()));
+                        }
+                    }
+                }
+            }
+
+            for card in &cards {
+                if let Some((searched, provider)) = looked_up.get(&card.uuid) {
+                    wtr.serialize(CSVCard {
+                        set_code: searched.get_set(),
+                        collector_number: searched.get_collector_number(),
+                        quantity: card.quantity as u32,
+                        foil_quantity: card.foil_quantity as u32,
+                        provider: provider.clone(),
+                    })?;
+                }
             }
 
             offset += limit;
@@ -204,7 +265,7 @@ mod tests {
         let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
-        s.import_csv("../data/test.csv".to_string(), "New Collection".to_string(), &r, Some(sender))
+        s.import_csv("../data/test.csv".to_string(), "New Collection".to_string(), &[r.clone()], Some(sender))
             .await
             .unwrap();
 
@@ -241,14 +302,17 @@ mod tests {
         assert_eq!(*latest_progress_update, 1.0);
 
         let export = s
-            .export_collection(new_collection, &r)
+            .export_collection(new_collection, &[r])
             .await
             .expect("Should work");
 
         println!("{export}");
+        let provider = "MagicSQLite";
         assert!(
-            export == "Set,CollectorNumber,Quantity,FoilQuantity\nM13,39,2,1\nISD,173,0,4\n"
-                || export == "Set,CollectorNumber,Quantity,FoilQuantity\nISD,173,0,4\nM13,39,2,1\n"
+            export
+                == format!("Set,CollectorNumber,Quantity,FoilQuantity,Provider\nM13,39,2,1,{provider}\nISD,173,0,4,{provider}\n")
+                || export
+                    == format!("Set,CollectorNumber,Quantity,FoilQuantity,Provider\nISD,173,0,4,{provider}\nM13,39,2,1,{provider}\n")
         );
     }
 }

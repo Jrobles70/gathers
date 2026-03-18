@@ -178,7 +178,7 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
         })?;
         Ok(iter
             .flatten()
-            .map(|c: (String, String, String)| c)
+            .map(|(id, set, num): (String, String, String)| (set, num, id))
             .collect())
     }
 

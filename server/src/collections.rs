@@ -5,7 +5,8 @@ use aide::axum::{
     routing::{get, post},
 };
 use axum::extract::Multipart;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::response::Response;
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -337,6 +338,48 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         }
     }
 
+    async fn export(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+    ) -> Result<Response, ApiError> {
+        let retrievals: Vec<RetrievalSystem> = {
+            let guard = state.0.lock().await;
+            [guard.mtg.clone(), guard.riftbound.clone(), guard.pokemon.clone()]
+                .into_iter()
+                .flatten()
+                .collect()
+        };
+
+        let csv = state
+            .1
+            .lock()
+            .await
+            .storage
+            .export_collection(&collection_id, &retrievals)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Export failed: {e}"),
+                    }),
+                )
+            })?;
+
+        let filename = format!("attachment; filename=\"{collection_id}.csv\"");
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, HeaderValue::from_static("text/csv"))
+            .header(
+                header::CONTENT_DISPOSITION,
+                HeaderValue::from_str(&filename).unwrap_or_else(|_| {
+                    HeaderValue::from_static("attachment; filename=\"collection.csv\"")
+                }),
+            )
+            .body(axum::body::Body::from(csv))
+            .unwrap())
+    }
+
     async fn import(
         State(state): State<GathersState>,
         mut multipart: Multipart,
@@ -406,9 +449,12 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         })?;
         let tmp_path = tmp.path().to_string_lossy().to_string();
 
-        let retrieval = {
+        let retrievals: Vec<RetrievalSystem> = {
             let guard = state.0.lock().await;
-            guard.require_mtg()?.clone()
+            [guard.mtg.clone(), guard.riftbound.clone(), guard.pokemon.clone()]
+                .into_iter()
+                .flatten()
+                .collect()
         };
 
         state
@@ -416,7 +462,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             .lock()
             .await
             .storage
-            .import_csv(tmp_path, collection_name, &retrieval, None)
+            .import_csv(tmp_path, collection_name, &retrievals, None)
             .await
             .map_err(|e| {
                 (
@@ -441,4 +487,5 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         .api_route("/cards/{id}/add", post(cards_add))
         .api_route("/cards/{id}/delete", post(cards_remove))
         .route("/import", axum::routing::post(import))
+        .route("/export/{id}", axum::routing::get(export))
 }

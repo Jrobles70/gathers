@@ -10,4 +10,6 @@ pub struct CSVCard {
     pub quantity: u32,
     #[serde(rename = "FoilQuantity")]
     pub foil_quantity: u32,
+    #[serde(rename = "Provider", default)]
+    pub provider: String,
 }
