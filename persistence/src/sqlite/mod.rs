@@ -57,13 +57,14 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         let conn = self.connection.lock().await;
 
         if let Some(target_collection_id) = move_to {
-            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, provider)
-            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, provider FROM
+            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider)
+            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as timeupdated, provider FROM
 	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded, provider FROM cards WHERE collection = ?2) WHERE true
             ON CONFLICT (uuid, collection)
             DO UPDATE SET
                 quantity = cards.quantity + EXCLUDED.quantity,
-                foilquantity = cards.foilquantity + EXCLUDED.foilquantity;";
+                foilquantity = cards.foilquantity + EXCLUDED.foilquantity,
+                timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');";
             conn.execute(query, params![target_collection_id, name])?;
         }
 
@@ -202,7 +203,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         let placeholders = cards
             .iter()
-            .map(|_| "(?, ?, ?, ?, ?, ?)")
+            .map(|_| "(?, ?, ?, ?, ?, ?, ?)")
             .collect::<Vec<_>>()
             .join(",");
         let mut params = vec![];
@@ -212,15 +213,17 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             params.push(c.quantity.to_string());
             params.push(c.foil_quantity.to_string());
             params.push(c.time_added.clone());
+            params.push(c.time_added.clone()); // timeupdated = timeadded on creation
             params.push(c.provider.clone());
         });
         let query = format!(
             "
-INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, provider) 
+INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider)
 VALUES {}
-ON CONFLICT (uuid, collection) DO UPDATE SET 
+ON CONFLICT (uuid, collection) DO UPDATE SET
  quantity = max(cards.quantity + EXCLUDED.quantity, 0),
- foilquantity = max(cards.foilquantity + EXCLUDED.foilquantity, 0)
+ foilquantity = max(cards.foilquantity + EXCLUDED.foilquantity, 0),
+ timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
 ",
             placeholders
@@ -289,10 +292,25 @@ mod tests {
     use super::*;
 
     const DEFAULT: &str = "Default";
+    const OLD_TIME: &str = "2023-01-01T00:00:00Z";
 
     #[test]
     fn migrations_test() {
         assert!(MIGRATIONS.validate().is_ok());
+    }
+
+    async fn get_time_updated(
+        persistence: &SQLitePersistenceSystem,
+        collection_id: &str,
+        card_uuid: &str,
+    ) -> Option<String> {
+        let conn = persistence.connection.lock().await;
+        conn.query_row(
+            "SELECT timeupdated FROM cards WHERE collection = ?1 AND uuid = ?2",
+            params![collection_id, card_uuid],
+            |row| row.get(0),
+        )
+        .ok()
     }
 
     async fn add_card_to_collection(
@@ -308,7 +326,7 @@ mod tests {
                 card_id,
                 quantity,
                 foil_quantity,
-                "2023-01-01T00:00:00Z",
+                OLD_TIME,
                 "",
             )
             .await
@@ -1173,5 +1191,136 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_timeupdated_equals_timeadded_on_create() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card1".to_string(), 2, 1, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        let time_updated = get_time_updated(&p, &col, "card1").await.unwrap();
+        assert_eq!(time_updated, OLD_TIME);
+    }
+
+    #[tokio::test]
+    async fn test_timeupdated_changes_on_quantity_modification() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card1".to_string(), 2, 1, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        // Modify quantity — timeupdated should become current time, not OLD_TIME
+        p.add_card_to_collection(&col, &"card1".to_string(), 3, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        let time_updated = get_time_updated(&p, &col, "card1").await.unwrap();
+        assert_ne!(time_updated, OLD_TIME);
+    }
+
+    #[tokio::test]
+    async fn test_timeupdated_changes_on_foil_quantity_modification() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card1".to_string(), 2, 1, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        p.add_card_to_collection(&col, &"card1".to_string(), 0, -1, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        let time_updated = get_time_updated(&p, &col, "card1").await.unwrap();
+        assert_ne!(time_updated, OLD_TIME);
+    }
+
+    #[tokio::test]
+    async fn test_timeupdated_updated_on_move_source() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col_a = p.add_collection("Collection A".to_string()).await.unwrap();
+        let col_b = p.add_collection("Collection B".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col_a, &"card1".to_string(), 5, 2, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: "card1".to_string(),
+                quantity: 3,
+                foil_quantity: 1,
+                time_added: OLD_TIME.to_string(),
+                collection: col_a.clone(),
+                provider: "".to_string(),
+            }],
+            col_b.clone(),
+        )
+        .await
+        .unwrap();
+
+        // Source row quantity was reduced — timeupdated must reflect the move
+        let time_updated = get_time_updated(&p, &col_a, "card1").await.unwrap();
+        assert_ne!(time_updated, OLD_TIME);
+    }
+
+    #[tokio::test]
+    async fn test_timeupdated_updated_on_move_destination_existing_card() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col_a = p.add_collection("Collection A".to_string()).await.unwrap();
+        let col_b = p.add_collection("Collection B".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col_a, &"card1".to_string(), 5, 2, OLD_TIME, "")
+            .await
+            .unwrap();
+        // card1 also already exists in col_b — move hits the UPDATE path
+        p.add_card_to_collection(&col_b, &"card1".to_string(), 1, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        p.move_cards_between_collections(
+            &[CollectionCard {
+                uuid: "card1".to_string(),
+                quantity: 2,
+                foil_quantity: 1,
+                time_added: OLD_TIME.to_string(),
+                collection: col_a.clone(),
+                provider: "".to_string(),
+            }],
+            col_b.clone(),
+        )
+        .await
+        .unwrap();
+
+        let time_updated = get_time_updated(&p, &col_b, "card1").await.unwrap();
+        assert_ne!(time_updated, OLD_TIME);
+    }
+
+    #[tokio::test]
+    async fn test_timeupdated_updated_on_remove_collection_merge() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col_a = p.add_collection("Collection A".to_string()).await.unwrap();
+        let col_b = p.add_collection("Collection B".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col_a, &"card1".to_string(), 3, 1, OLD_TIME, "")
+            .await
+            .unwrap();
+        // card1 exists in both collections to exercise the ON CONFLICT UPDATE path
+        p.add_card_to_collection(&col_b, &"card1".to_string(), 2, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+
+        p.remove_collection(&col_a, Some(col_b.clone()))
+            .await
+            .unwrap();
+
+        let time_updated = get_time_updated(&p, &col_b, "card1").await.unwrap();
+        assert_ne!(time_updated, OLD_TIME);
     }
 }

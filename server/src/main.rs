@@ -378,7 +378,9 @@ async fn main() -> eyre::Result<()> {
                         println!("Done updating DB");
                     }
                 }
-                _ => unimplemented!(),
+                _ => {
+                    println!("Not implemented");
+                }
             }
         }
     }
