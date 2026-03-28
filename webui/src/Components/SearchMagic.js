@@ -19,22 +19,13 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchOptions, setSearchOptions] = useState({
-    name: searchParams.get("name") != null ? searchParams.get("name") : "",
-    setCode:
-      searchParams.get("setCode") != null ? searchParams.get("setCode") : "",
-    artist:
-      searchParams.get("artist") != null ? searchParams.get("artist") : "",
-    collectorNumber:
-      searchParams.get("collectorNumber") != null
-        ? searchParams.get("collectorNumber")
-        : "",
-    text: searchParams.get("text") != null ? searchParams.get("text") : "",
-    rarity:
-      searchParams.get("rarity") != null ? searchParams.get("rarity") : "",
-    colorIdentities:
-      searchParams.getAll("colorIdentities") != null
-        ? searchParams.getAll("colorIdentities")
-        : [],
+    name: searchParams.get("name") ?? "",
+    setCode: searchParams.get("setCode") ?? "",
+    artist: searchParams.get("artist") ?? "",
+    collectorNumber: searchParams.get("collectorNumber") ?? "",
+    text: searchParams.get("text") ?? "",
+    rarity: searchParams.get("rarity") ?? "",
+    colorIdentities: searchParams.getAll("colorIdentities"),
   });
   const [searchCollection, setSearchCollection] = useState("");
 
@@ -89,24 +80,17 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
   }, [pageNumber, shouldSearch]);
 
   const handleSearchInput = (event, field) => {
-    let newState = Object.assign({}, searchOptions);
-    newState[field] = event.target.value;
+    const newState = { ...searchOptions, [field]: event.target.value };
     setSearchOptions(newState);
     setSearchParams(newState);
   };
 
   const handleColourIdentitiesInput = (event) => {
-    let newState = Object.assign({}, searchOptions);
-    if (event.target.checked) {
-      newState["colorIdentities"] = [
-        ...newState["colorIdentities"].filter((c) => c !== event.target.value),
-        event.target.value,
-      ];
-    } else {
-      newState["colorIdentities"] = newState["colorIdentities"].filter(
-        (c) => c !== event.target.value,
-      );
-    }
+    const filtered = searchOptions.colorIdentities.filter((c) => c !== event.target.value);
+    const newState = {
+      ...searchOptions,
+      colorIdentities: event.target.checked ? [...filtered, event.target.value] : filtered,
+    };
     setSearchOptions(newState);
     setSearchParams(newState);
   };
@@ -121,8 +105,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
   };
 
   return (
-    <React.Fragment>
-      <div
+    <div
         className={dedicatedPage === true || sidePanel === true ? "" : "collapse"}
         id={dedicatedPage ? "main-search" : "search"}
       >
@@ -249,58 +232,6 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               </div>
             </>
           </div>
-          {false ? (
-            <div className="input-group">
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio1"
-                  value="C"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio1">
-                  Common
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio2"
-                  value="U"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio2">
-                  Uncommon
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio3"
-                  value="R"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio3">
-                  Rare
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio4"
-                  value="M"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio4">
-                  Mythic
-                </label>
-              </div>
-            </div>
-          ) : null}
           <div className="input-group">
             <button
               onClick={(event) => {
@@ -387,7 +318,6 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
         </div>
         <hr />
       </div>
-    </React.Fragment>
   );
 }
 

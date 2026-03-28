@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from "react";
+import React, { useState } from "react";
 import { useOperations } from "../../OperationsContext";
 import { useCollection } from "../CollectionContext";
 import { useRefreshCardList } from "../CardListContexts/RefreshCardListContext";
@@ -34,25 +34,23 @@ export default function ImportCards() {
   };
 
   return (
-    <Fragment>
-      <form className="d-flex">
-        <div className="input-group">
-          <input
-            onChange={handleFileChange}
-            type="file"
-            className="form-control"
-            id="inputGroupFile02"
-          />
-          <button
-            onClick={handleUploadClick}
-            className="btn btn-outline-secondary"
-            type="button"
-            id="inputGroupFileAddon04"
-          >
-            Import
-          </button>
-        </div>
-      </form>
-    </Fragment>
+    <form className="d-flex">
+      <div className="input-group">
+        <input
+          onChange={handleFileChange}
+          type="file"
+          className="form-control"
+          id="inputGroupFile02"
+        />
+        <button
+          onClick={handleUploadClick}
+          className="btn btn-outline-secondary"
+          type="button"
+          id="inputGroupFileAddon04"
+        >
+          Import
+        </button>
+      </div>
+    </form>
   );
 }

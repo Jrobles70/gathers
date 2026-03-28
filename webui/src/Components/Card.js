@@ -35,7 +35,7 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
       : "";
 
   return (
-    <React.Fragment>
+    <>
       {_card == null ? (
         <p>Loading...</p>
       ) : (
@@ -67,6 +67,6 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
           </div>
         </div>
       )}
-    </React.Fragment>
+    </>
   );
 }

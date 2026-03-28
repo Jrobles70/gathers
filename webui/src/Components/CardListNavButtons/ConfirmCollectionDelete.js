@@ -16,11 +16,7 @@ const ConfirmCollectionDelete = ({
   const inputRef = useRef();
 
   const handleOnClick = () => {
-    return () => {
-      proceed({
-        input: inputRef.current != null ? inputRef.current.value : null,
-      });
-    };
+    proceed({ input: inputRef.current?.value ?? null });
   };
 
   return (

@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import PokemonCard from "./PokemonCard";
 import { useOperations } from "../OperationsContext";
 import ReactPaginate from "react-paginate";
-import { useCollections } from "./CollectionContext";
 
 function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const ops = useOperations();
@@ -12,21 +11,12 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
   const [pageNumber, setPageNumber] = useState(1);
   const [shouldSearch, setShouldSearch] = useState(startSearch);
 
-  const collections = useCollections();
-
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchOptions, setSearchOptions] = useState({
-    name: searchParams.get("name") != null ? searchParams.get("name") : "",
-    setCode:
-      searchParams.get("setCode") != null ? searchParams.get("setCode") : "",
-    collectorNumber:
-      searchParams.get("collectorNumber") != null
-        ? searchParams.get("collectorNumber")
-        : "",
-    energyTypes:
-      searchParams.getAll("energyTypes") != null
-        ? searchParams.getAll("energyTypes")
-        : [],
+    name: searchParams.get("name") ?? "",
+    setCode: searchParams.get("setCode") ?? "",
+    collectorNumber: searchParams.get("collectorNumber") ?? "",
+    energyTypes: searchParams.getAll("energyTypes"),
   });
 
   let pageSize = 24;
@@ -56,27 +46,21 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
           setShouldSearch(false);
         });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber, shouldSearch]);
 
   const handleSearchInput = (event, field) => {
-    let newState = Object.assign({}, searchOptions);
-    newState[field] = event.target.value;
+    const newState = { ...searchOptions, [field]: event.target.value };
     setSearchOptions(newState);
     setSearchParams(newState);
   };
 
   const handleEnergyTypeInput = (event) => {
-    let newState = Object.assign({}, searchOptions);
-    if (event.target.checked) {
-      newState["energyTypes"] = [
-        ...newState["energyTypes"],
-        event.target.value,
-      ];
-    } else {
-      newState["energyTypes"] = newState["energyTypes"].filter(
-        (e) => e !== event.target.value,
-      );
-    }
+    const filtered = searchOptions.energyTypes.filter((e) => e !== event.target.value);
+    const newState = {
+      ...searchOptions,
+      energyTypes: event.target.checked ? [...filtered, event.target.value] : filtered,
+    };
     setSearchOptions(newState);
     setSearchParams(newState);
   };

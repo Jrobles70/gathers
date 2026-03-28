@@ -1,4 +1,4 @@
-﻿import React, { Fragment } from "react";
+import React from "react";
 import SelectionTracker from "./CardListNavButtons/SelectionTracker";
 import DeleteCards from "./CardListNavButtons/DeleteCards";
 import MoveCards from "./CardListNavButtons/MoveCards";
@@ -9,21 +9,19 @@ import QuickSearch from "./CardListNavButtons/QuickSearch";
 
 export default function CardListNav({ onToggleSearch, searchOpen }) {
   return (
-    <Fragment>
-      <nav
-        className="navbar navbar-expand-md bg-body-tertiary"
-        data-bs-theme="dark"
-      >
-        <div className="container-fluid">
-          <QuickSearch onToggle={onToggleSearch} isOpen={searchOpen} />
-          <SelectionTracker />
-          <DeleteCards />
-          <MoveCards />
-          <ImportCards />
-          <ExportCollection />
-          <DeleteCollection />
-        </div>
-      </nav>
-    </Fragment>
+    <nav
+      className="navbar navbar-expand-md bg-body-tertiary"
+      data-bs-theme="dark"
+    >
+      <div className="container-fluid">
+        <QuickSearch onToggle={onToggleSearch} isOpen={searchOpen} />
+        <SelectionTracker />
+        <DeleteCards />
+        <MoveCards />
+        <ImportCards />
+        <ExportCollection />
+        <DeleteCollection />
+      </div>
+    </nav>
   );
 }

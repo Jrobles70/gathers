@@ -30,7 +30,7 @@ export default function PokemonCard({ id, card = null, details = null, provider 
   let imagePath = _card != null && _card.image != null ? _card.image : "";
 
   return (
-    <React.Fragment>
+    <>
       {_card == null ? (
         <p>Loading...</p>
       ) : (
@@ -62,6 +62,6 @@ export default function PokemonCard({ id, card = null, details = null, provider 
           </div>
         </div>
       )}
-    </React.Fragment>
+    </>
   );
 }

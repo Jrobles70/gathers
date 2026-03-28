@@ -1,4 +1,4 @@
-import React, { Fragment } from "react";
+import React from "react";
 import { confirm } from "./ConfirmCollectionDelete";
 import { useOperations } from "../../OperationsContext";
 import { useCollection } from "../CollectionContext";
@@ -42,10 +42,8 @@ export default function DeleteCards() {
   };
 
   return (
-    <Fragment>
-      <button onClick={deleteCards} type="button" className="btn btn-danger">
-        🗑️
-      </button>
-    </Fragment>
+    <button onClick={deleteCards} type="button" className="btn btn-danger">
+      🗑️
+    </button>
   );
 }

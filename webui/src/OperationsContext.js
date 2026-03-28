@@ -1,5 +1,4 @@
 import { createContext, useState, useContext } from "react";
-import uuid from "react-native-uuid";
 
 export const ModeContext = createContext({ mode: "full", collectionsEnabled: false });
 
@@ -33,7 +32,7 @@ export function OperationsProvider({ children }) {
   };
 
   const opsFetch = async (message, defaultValue, ...args) => {
-    let opId = uuid.v4();
+    let opId = crypto.randomUUID();
     addOperation(opId, { message: message });
     const result = await fetch(...args).then((response) => {
       if (response.status === 200) {

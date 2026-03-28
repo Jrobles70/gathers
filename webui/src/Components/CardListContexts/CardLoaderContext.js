@@ -8,11 +8,6 @@ export function useCardLoader() {
   return useContext(CardLoaderContext);
 }
 
-function endpointForProvider(provider) {
-  if (provider === "RiftboundSQLite") return "/riftbound/cards";
-  if (provider === "PokemonSQLite") return "/pokemon/cards";
-  return "/mtg/cards";
-}
 
 export function CardLoaderProvider({ children }) {
   const DataLoader = require("dataloader");
@@ -30,8 +25,7 @@ export function CardLoaderProvider({ children }) {
           "Bulk updating details for cards",
           {},
           endpoint + "?" + params.toString(),
-        )
-        .then((data) => data);
+        );
       return keys.map((key) => results[key] || new Error(`No card for ${key}`));
     });
   }

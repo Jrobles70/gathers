@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from "react";
+import React, { useState } from "react";
 import { useOperations } from "../../OperationsContext";
 import { useCollection, useCollections } from "../CollectionContext";
 import {
@@ -40,28 +40,26 @@ export default function MoveCards() {
   };
 
   return (
-    <Fragment>
-      <form className="d-flex">
-        <button
-          onClick={moveCards}
-          type="button"
-          className="btn btn-outline-info"
-        >
-          Move
-        </button>
-        <select
-          value={destinationCollection}
-          onChange={(e) => setDestinationCollection(e.target.value)}
-          className="form-control"
-          id="exampleFormControlSelect1"
-        >
-          {collections.map((c) => (
-            <option key={"cardlistcol-" + c.id} value={c.id}>
-              {c.id}
-            </option>
-          ))}
-        </select>
-      </form>
-    </Fragment>
+    <form className="d-flex">
+      <button
+        onClick={moveCards}
+        type="button"
+        className="btn btn-outline-info"
+      >
+        Move
+      </button>
+      <select
+        value={destinationCollection}
+        onChange={(e) => setDestinationCollection(e.target.value)}
+        className="form-control"
+        id="exampleFormControlSelect1"
+      >
+        {collections.map((c) => (
+          <option key={"cardlistcol-" + c.id} value={c.id}>
+            {c.id}
+          </option>
+        ))}
+      </select>
+    </form>
   );
 }

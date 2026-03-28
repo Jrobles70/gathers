@@ -33,7 +33,7 @@ export default function RiftboundCard({ id, card = null, details = null, provide
       : "";
 
   return (
-    <React.Fragment>
+    <>
       {_card == null ? (
         <p>Loading...</p>
       ) : (
@@ -65,6 +65,6 @@ export default function RiftboundCard({ id, card = null, details = null, provide
           </div>
         </div>
       )}
-    </React.Fragment>
+    </>
   );
 }

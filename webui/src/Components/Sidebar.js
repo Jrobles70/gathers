@@ -11,18 +11,6 @@ export default function Sidebar() {
   const { mode, collectionsEnabled } = useMode();
   const isSearchOnly = mode === "search-only";
 
-  const renderCollections = () => {
-    return collections.map((c) => (
-      <Link
-        to={"/c/" + c.id + "/1"}
-        key={c.id}
-        className={"nav-link" + (c.id === collection ? " active" : "")}
-      >
-        {c.id}
-      </Link>
-    ));
-  };
-
   return (
     <header>
       <nav id="sidebarMenu" className="d-lg-block sidebar bg-white">
@@ -51,7 +39,15 @@ export default function Sidebar() {
           >
             {!isSearchOnly && collectionsEnabled && (
               <React.Fragment>
-                {renderCollections(collections)}
+                {collections.map((c) => (
+                  <Link
+                    to={"/c/" + c.id + "/1"}
+                    key={c.id}
+                    className={"nav-link" + (c.id === collection ? " active" : "")}
+                  >
+                    {c.id}
+                  </Link>
+                ))}
                 <hr />
                 <AddCollectionForm />
                 <hr />

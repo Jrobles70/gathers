@@ -13,22 +13,13 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchOptions, setSearchOptions] = useState({
-    name: searchParams.get("name") != null ? searchParams.get("name") : "",
-    setCode:
-      searchParams.get("setCode") != null ? searchParams.get("setCode") : "",
-    artist:
-      searchParams.get("artist") != null ? searchParams.get("artist") : "",
-    collectorNumber:
-      searchParams.get("collectorNumber") != null
-        ? searchParams.get("collectorNumber")
-        : "",
-    text: searchParams.get("text") != null ? searchParams.get("text") : "",
-    rarity:
-      searchParams.get("rarity") != null ? searchParams.get("rarity") : "",
-    colorIdentities:
-      searchParams.getAll("colorIdentities") != null
-        ? searchParams.getAll("colorIdentities")
-        : [],
+    name: searchParams.get("name") ?? "",
+    setCode: searchParams.get("setCode") ?? "",
+    artist: searchParams.get("artist") ?? "",
+    collectorNumber: searchParams.get("collectorNumber") ?? "",
+    text: searchParams.get("text") ?? "",
+    rarity: searchParams.get("rarity") ?? "",
+    colorIdentities: searchParams.getAll("colorIdentities"),
   });
   let pageSize = 24;
 
@@ -62,24 +53,17 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
   }, [pageNumber, shouldSearch]);
 
   const handleSearchInput = (event, field) => {
-    let newState = Object.assign({}, searchOptions);
-    newState[field] = event.target.value;
+    const newState = { ...searchOptions, [field]: event.target.value };
     setSearchOptions(newState);
     setSearchParams(newState);
   };
 
-  const handleColourIdentitiesInput = (event, colour) => {
-    let newState = Object.assign({}, searchOptions);
-    if (event.target.checked) {
-      newState["colorIdentities"] = [
-        ...newState["colorIdentities"],
-        event.target.value,
-      ];
-    } else {
-      newState["colorIdentities"] = newState["colorIdentities"].filter(
-        (c) => c !== event.target.value,
-      );
-    }
+  const handleColourIdentitiesInput = (event) => {
+    const filtered = searchOptions.colorIdentities.filter((c) => c !== event.target.value);
+    const newState = {
+      ...searchOptions,
+      colorIdentities: event.target.checked ? [...filtered, event.target.value] : filtered,
+    };
     setSearchOptions(newState);
     setSearchParams(newState);
   };
@@ -90,8 +74,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
   };
 
   return (
-    <React.Fragment>
-      <div
+    <div
         className={dedicatedPage === true || sidePanel === true ? "" : "collapse"}
         id={dedicatedPage ? "main-search" : "search"}
       >
@@ -144,134 +127,22 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
             />
           </div>
           <div className="input-group">
-            {/* Riftbound domains (Calm, Chaos, Fury, Mind, Body, Order) */}
-            <>
-              <div className="form-check form-check-inline">
+            {["Calm", "Chaos", "Fury", "Mind", "Body", "Order"].map((domain, i) => (
+              <div key={domain} className="form-check form-check-inline">
                 <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "Calm")}
+                  onChange={handleColourIdentitiesInput}
                   className="form-check-input"
                   type="checkbox"
-                  id="inlineCheckbox1"
-                  value="Calm"
+                  id={"inlineCheckbox" + (i + 1)}
+                  value={domain}
+                  checked={searchOptions.colorIdentities.includes(domain)}
                 />
-                <label className="form-check-label" htmlFor="inlineCheckbox1">
-                  Calm
+                <label className="form-check-label" htmlFor={"inlineCheckbox" + (i + 1)}>
+                  {domain}
                 </label>
               </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "Chaos")}
-                  className="form-check-input"
-                  type="checkbox"
-                  id="inlineCheckbox2"
-                  value="Chaos"
-                />
-                <label className="form-check-label" htmlFor="inlineCheckbox2">
-                  Chaos
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "Fury")}
-                  className="form-check-input"
-                  type="checkbox"
-                  id="inlineCheckbox3"
-                  value="Fury"
-                />
-                <label className="form-check-label" htmlFor="inlineCheckbox3">
-                  Fury
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "Mind")}
-                  className="form-check-input"
-                  type="checkbox"
-                  id="inlineCheckbox4"
-                  value="Mind"
-                />
-                <label className="form-check-label" htmlFor="inlineCheckbox4">
-                  Mind
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "Body")}
-                  className="form-check-input"
-                  type="checkbox"
-                  id="inlineCheckbox5"
-                  value="Body"
-                />
-                <label className="form-check-label" htmlFor="inlineCheckbox5">
-                  Body
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "Order")}
-                  className="form-check-input"
-                  type="checkbox"
-                  id="inlineCheckbox6"
-                  value="Order"
-                />
-                <label className="form-check-label" htmlFor="inlineCheckbox6">
-                  Order
-                </label>
-              </div>
-            </>
+            ))}
           </div>
-          {false ? (
-            <div className="input-group">
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio1"
-                  value="C"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio1">
-                  Common
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio2"
-                  value="U"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio2">
-                  Uncommon
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio3"
-                  value="R"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio3">
-                  Rare
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  onChange={(e) => handleSearchInput(e, "rarity")}
-                  className="form-check-input"
-                  type="radio"
-                  id="rarityRadio4"
-                  value="M"
-                />
-                <label className="form-check-label" htmlFor="rarityRadio4">
-                  Mythic
-                </label>
-              </div>
-            </div>
-          ) : null}
           <div className="input-group">
             <button
               onClick={(event) => {
@@ -331,7 +202,6 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
         </div>
         <hr />
       </div>
-    </React.Fragment>
   );
 }
 
