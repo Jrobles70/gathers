@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import Card from "./Card";
-import { useOperations } from "../OperationsContext";
+import { useOperations, useMode } from "../OperationsContext";
 import ReactPaginate from "react-paginate";
 import { useCardSets } from "./ReusableConstants/CardSets";
 import { useCollections } from "./CollectionContext";
@@ -15,6 +15,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
 
   const cardSets = useCardSets();
   const collections = useCollections();
+  const { collectionsEnabled } = useMode();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchOptions, setSearchOptions] = useState({
@@ -43,14 +44,30 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
     if (shouldSearch) {
       setLoading(true);
 
-      let url =
-        searchCollection !== "" && searchCollection !== "skipNotOwned"
-          ? "/collection/cards/" + searchCollection + "/search?pageSize="
-          : "/collection/search?pageSize=";
-      url = url + pageSize + "&offset=" + (pageNumber - 1) * pageSize;
-
-      if (searchCollection === "skipNotOwned") {
-        url = url + "&skipNotOwned=true";
+      let url;
+      if (!collectionsEnabled) {
+        url =
+          "/mtg/cards/search?limit=" +
+          pageSize +
+          "&skip=" +
+          (pageNumber - 1) * pageSize;
+      } else if (searchCollection !== "" && searchCollection !== "skipNotOwned") {
+        url =
+          "/collection/cards/" +
+          searchCollection +
+          "/search?pageSize=" +
+          pageSize +
+          "&offset=" +
+          (pageNumber - 1) * pageSize;
+      } else {
+        url =
+          "/collection/search?pageSize=" +
+          pageSize +
+          "&offset=" +
+          (pageNumber - 1) * pageSize;
+        if (searchCollection === "skipNotOwned") {
+          url = url + "&skipNotOwned=true";
+        }
       }
 
       ops
@@ -78,11 +95,11 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
     setSearchParams(newState);
   };
 
-  const handleColourIdentitiesInput = (event, colour) => {
+  const handleColourIdentitiesInput = (event) => {
     let newState = Object.assign({}, searchOptions);
     if (event.target.checked) {
       newState["colorIdentities"] = [
-        ...newState["colorIdentities"],
+        ...newState["colorIdentities"].filter((c) => c !== event.target.value),
         event.target.value,
       ];
     } else {
@@ -167,11 +184,12 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
             <>
               <div className="form-check form-check-inline">
                 <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "W")}
+                  onChange={handleColourIdentitiesInput}
                   className="form-check-input"
                   type="checkbox"
                   id="inlineCheckbox1"
-                  value="W"
+                  value="White"
+                  checked={searchOptions.colorIdentities.includes("White")}
                 />
                 <label className="form-check-label" htmlFor="inlineCheckbox1">
                   W
@@ -179,11 +197,12 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               </div>
               <div className="form-check form-check-inline">
                 <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "U")}
+                  onChange={handleColourIdentitiesInput}
                   className="form-check-input"
                   type="checkbox"
                   id="inlineCheckbox2"
-                  value="U"
+                  value="Blue"
+                  checked={searchOptions.colorIdentities.includes("Blue")}
                 />
                 <label className="form-check-label" htmlFor="inlineCheckbox2">
                   U
@@ -191,11 +210,12 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               </div>
               <div className="form-check form-check-inline">
                 <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "B")}
+                  onChange={handleColourIdentitiesInput}
                   className="form-check-input"
                   type="checkbox"
                   id="inlineCheckbox3"
-                  value="B"
+                  value="Black"
+                  checked={searchOptions.colorIdentities.includes("Black")}
                 />
                 <label className="form-check-label" htmlFor="inlineCheckbox3">
                   B
@@ -203,11 +223,12 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               </div>
               <div className="form-check form-check-inline">
                 <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "R")}
+                  onChange={handleColourIdentitiesInput}
                   className="form-check-input"
                   type="checkbox"
                   id="inlineCheckbox4"
-                  value="R"
+                  value="Red"
+                  checked={searchOptions.colorIdentities.includes("Red")}
                 />
                 <label className="form-check-label" htmlFor="inlineCheckbox4">
                   R
@@ -215,11 +236,12 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               </div>
               <div className="form-check form-check-inline">
                 <input
-                  onChange={(e) => handleColourIdentitiesInput(e, "G")}
+                  onChange={handleColourIdentitiesInput}
                   className="form-check-input"
                   type="checkbox"
                   id="inlineCheckbox5"
-                  value="G"
+                  value="Green"
+                  checked={searchOptions.colorIdentities.includes("Green")}
                 />
                 <label className="form-check-label" htmlFor="inlineCheckbox5">
                   G
@@ -291,46 +313,52 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
             >
               Search
             </button>
-            <select
-              onChange={(e) => handleCollectionInput(e)}
-              className="form-control"
-              id="searchInCollection"
-            >
-              <option key={"searchincol-empty"} value={""}>
-                in MtG database
-              </option>
-              <option
-                key={"searchincol-collections"}
-                value={"skipNotOwned"}
+            {collectionsEnabled && (
+              <select
+                onChange={(e) => handleCollectionInput(e)}
+                className="form-control"
+                id="searchInCollection"
               >
-                in all collections
-              </option>
-              {collections.map((c) => (
-                <option key={"searchincol-" + c.id} value={c.id}>
-                  {"in " + c.id}
+                <option key={"searchincol-empty"} value={""}>
+                  in MtG database
                 </option>
-              ))}
-            </select>
+                <option
+                  key={"searchincol-collections"}
+                  value={"skipNotOwned"}
+                >
+                  in all collections
+                </option>
+                {collections.map((c) => (
+                  <option key={"searchincol-" + c.id} value={c.id}>
+                    {"in " + c.id}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="search-results" id="search-results">
             {loading ? (
               <p>Loading...</p>
             ) : (
               <div className="card-grid list">
-                {cards.map((card) => (
-                  <Card
-                    key={
-                      card.mtGCard.id +
-                      "-" +
-                      (card.mtGCard.details != null
-                        ? card.mtGCard.details.collectionId
-                        : "")
-                    }
-                    id={card.mtGCard.id}
-                    card={card.mtGCard}
-                    details={card.mtGCard.details}
-                  />
-                ))}
+                {collectionsEnabled
+                  ? cards.map((card) => (
+                      <Card
+                        key={
+                          card.mtGCard.id +
+                          "-" +
+                          (card.mtGCard.details != null
+                            ? card.mtGCard.details.collectionId
+                            : "")
+                        }
+                        id={card.mtGCard.id}
+                        card={card.mtGCard}
+                        details={card.mtGCard.details}
+                      />
+                    ))
+                  : cards.map((card) => (
+                      <Card key={card.id} id={card.id} card={card} details={null} />
+                    ))}
               </div>
             )}
           </div>

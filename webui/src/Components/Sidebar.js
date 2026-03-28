@@ -8,7 +8,7 @@ import { useMode } from "../OperationsContext";
 export default function Sidebar() {
   const collection = useCollection();
   const collections = useCollections();
-  const { mode } = useMode();
+  const { mode, collectionsEnabled } = useMode();
   const isSearchOnly = mode === "search-only";
 
   const renderCollections = () => {
@@ -49,7 +49,7 @@ export default function Sidebar() {
             role="tablist"
             aria-orientation="vertical"
           >
-            {!isSearchOnly && (
+            {!isSearchOnly && collectionsEnabled && (
               <React.Fragment>
                 {renderCollections(collections)}
                 <hr />

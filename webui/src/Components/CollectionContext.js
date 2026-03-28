@@ -5,7 +5,7 @@ import {
   useEffect,
   useReducer,
 } from "react";
-import { useOperations } from "../OperationsContext";
+import { useOperations, useMode } from "../OperationsContext";
 import { useParams } from "react-router-dom";
 
 export function CollectionsProvider({ children }) {
@@ -15,8 +15,13 @@ export function CollectionsProvider({ children }) {
   const [collections, collectionsDispatch] = useReducer(collectionsReducer, []);
 
   const ops = useOperations();
+  const { collectionsEnabled } = useMode();
 
   useEffect(() => {
+    if (!collectionsEnabled) {
+      setCollectionsLoading(false);
+      return;
+    }
     ops.fetch("Listing collections", [], "/collection/list").then((data) => {
       collectionsDispatch({
         type: "overwrite",
@@ -24,7 +29,7 @@ export function CollectionsProvider({ children }) {
       });
       setCollectionsLoading(false);
     });
-  }, [collection]);
+  }, [collection, collectionsEnabled]);
 
   return (
     <CollectionContext.Provider value={collection}>

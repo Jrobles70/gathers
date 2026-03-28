@@ -1,11 +1,11 @@
 import { createContext, useState, useContext } from "react";
 import uuid from "react-native-uuid";
 
-export const ModeContext = createContext({ mode: "full" });
+export const ModeContext = createContext({ mode: "full", collectionsEnabled: false });
 
-export function ModeProvider({ children, mode = "full" }) {
+export function ModeProvider({ children, mode = "full", collectionsEnabled = false }) {
   return (
-    <ModeContext.Provider value={{ mode }}>{children}</ModeContext.Provider>
+    <ModeContext.Provider value={{ mode, collectionsEnabled }}>{children}</ModeContext.Provider>
   );
 }
 

@@ -35,31 +35,31 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Query(query): Query<MagicSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
-    ) -> Result<(StatusCode, Json<Vec<APICard>>), ApiError> {
+    ) -> Result<Json<Vec<APICard>>, ApiError> {
         let guard = state.0.lock().await;
         let ret = guard.require_mtg()?;
 
-        match ret
-            .search_cards(input.into(), query.skip.into(), query.limit.into())
+        ret.search_cards(input.into(), query.skip.into(), query.limit.into())
             .await
-        {
-            Ok(result) => {
-                let cards: Vec<APICard> = result
-                    .iter()
-                    .filter_map(|c| match c {
-                        Card::Magic(m) => Some(m.clone().into()),
-                        _ => None,
-                    })
-                    .collect();
-                Ok((StatusCode::ACCEPTED, Json(cards)))
-            }
-            Err(e) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: format!("Failed to search cards. {e}"),
-                }),
-            )),
-        }
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to search cards. {e}"),
+                    }),
+                )
+            })
+            .map(|result| {
+                Json(
+                    result
+                        .iter()
+                        .filter_map(|c| match c {
+                            Card::Magic(p) => Some(p.clone().into()),
+                            _ => None,
+                        })
+                        .collect(),
+                )
+            })
     }
 
     #[derive(Deserialize, JsonSchema)]

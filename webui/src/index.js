@@ -5,7 +5,12 @@ import reportWebVitals from "./reportWebVitals";
 import BaseApp from "./BaseApp";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<BaseApp mode={process.env.REACT_APP_MODE || "full"} />);
+root.render(
+  <BaseApp
+    mode={process.env.REACT_APP_MODE || "full"}
+    collectionsEnabled={process.env.REACT_APP_COLLECTIONS_ENABLED === "true"}
+  />
+);
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

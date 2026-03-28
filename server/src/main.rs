@@ -379,7 +379,7 @@ async fn main() -> eyre::Result<()> {
                     }
                 }
                 _ => {
-                    println!("Not implemented");
+                    println!("Downloading updates not implemented for {system:?}");
                 }
             }
         }
