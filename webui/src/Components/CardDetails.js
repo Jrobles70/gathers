@@ -1,17 +1,21 @@
-import React from "react";
-import { useCollection } from "./CollectionContext";
+import React, { useState } from "react";
+import { useCollection, useCollections } from "./CollectionContext";
 import { useOperations } from "../OperationsContext";
 import { useCardsDispatch } from "../Components/CardListContexts/CardsContext";
 import { useRefreshCardList } from "./CardListContexts/RefreshCardListContext";
 
-export default function CardDetails({ id, details = null, toggleSelected }) {
+export default function CardDetails({ id, details = null, toggleSelected, showCollectionSelect = false }) {
   const ops = useOperations();
   const currentCollection = useCollection();
+  const collections = useCollections();
   const cardsDispatch = useCardsDispatch();
   const triggerRefresh = useRefreshCardList();
+  const [selectedCollection, setSelectedCollection] = useState(null);
 
   const updateQuantity = (delta, deltaFoil) => {
-    let collection = details == null ? currentCollection : details.collectionId;
+    let collection = details != null
+      ? details.collectionId
+      : (showCollectionSelect ? (selectedCollection ?? collections[0]?.id ?? currentCollection) : currentCollection);
     let add = parseInt(delta) >= 0 && parseInt(deltaFoil) >= 0;
     let url =
       "/collection/cards/" + collection + "/" + (add ? "add" : "delete");
@@ -75,6 +79,18 @@ export default function CardDetails({ id, details = null, toggleSelected }) {
             </React.Fragment>
           ) : (
             <React.Fragment>
+              {showCollectionSelect && collections.length > 0 && (
+                <select
+                  value={selectedCollection ?? collections[0]?.id ?? ""}
+                  onChange={(e) => setSelectedCollection(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="form-select form-select-sm"
+                >
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>{c.id}</option>
+                  ))}
+                </select>
+              )}
               <button
                 onClick={(e) => updateQuantity(1, 0)}
                 className="btn btn-sm btn-light"

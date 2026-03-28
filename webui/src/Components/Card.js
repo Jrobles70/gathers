@@ -3,7 +3,7 @@ import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 
-export default function MtGCard({ id, card = null, details = null, provider = null }) {
+export default function MtGCard({ id, card = null, details = null, provider = null, showCollectionSelect = false }) {
   const [_card, setCard] = useState(card);
   const [selected, setSelected] = useState(false);
 
@@ -49,6 +49,7 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
             id={id}
             details={details}
             toggleSelected={toggleSelected}
+            showCollectionSelect={showCollectionSelect}
           />
           <div className="card-info">
             <div className="row align-items-center">

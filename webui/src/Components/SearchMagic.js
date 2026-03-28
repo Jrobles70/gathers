@@ -285,6 +285,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
                         id={card.mtGCard.id}
                         card={card.mtGCard}
                         details={card.mtGCard.details}
+                        showCollectionSelect={dedicatedPage && card.mtGCard.details == null}
                       />
                     ))
                   : cards.map((card) => (
