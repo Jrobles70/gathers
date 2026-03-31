@@ -1,5 +1,8 @@
 FROM node:22-alpine as builder
 
+ARG REACT_APP_COLLECTIONS_ENABLED=false
+ENV REACT_APP_COLLECTIONS_ENABLED=$REACT_APP_COLLECTIONS_ENABLED
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./

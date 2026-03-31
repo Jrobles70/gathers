@@ -32,7 +32,7 @@ export function OperationsProvider({ children }) {
   };
 
   const opsFetch = async (message, defaultValue, ...args) => {
-    let opId = (crypto.randomUUID ?? (() => Math.random().toString(36).slice(2)))();
+    let opId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
     addOperation(opId, { message: message });
     const result = await fetch(...args).then((response) => {
       if (response.status === 200) {
