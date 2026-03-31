@@ -7,7 +7,7 @@ use models::{CardID, CollectorNumber, SetCode};
 pub use systems::pokemon::PokemonSQLiteRetrievalSystem;
 pub use systems::riftsqlite::RiftboundSQLiteRetrievalSystem;
 pub use systems::scryfall::ScryfallRetrievalSystem;
-pub use systems::sqlite::{MagicSQLiteRetrievalSystem, download_mtg_db};
+pub use systems::sqlite::{DownloadProgress, MagicSQLiteRetrievalSystem, download_mtg_db};
 
 #[enum_dispatch]
 #[derive(Debug, Clone)]

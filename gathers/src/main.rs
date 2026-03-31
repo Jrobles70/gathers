@@ -103,7 +103,7 @@ async fn main() -> eyre::Result<()> {
 
             match args.system {
                 Systems::Sql => {
-                    retrieval::download_mtg_db(path).await?;
+                    retrieval::download_mtg_db(path, None).await?;
                 }
                 Systems::RiftboundSql => {
                     let tmp = retrieval::RiftboundSQLiteRetrievalSystem::new(Some(path.clone()))?;

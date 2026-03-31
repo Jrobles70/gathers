@@ -5,10 +5,10 @@ use axum::http::StatusCode;
 use axum::{Extension, Json, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
-use retrieval::{NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
+use retrieval::{DownloadProgress, NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
 use schemars::JsonSchema;
 use serde::Serialize;
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::cors::CorsLayer;
@@ -34,12 +34,21 @@ pub struct ErrorPayload {
 pub type ApiError = (StatusCode, Json<ErrorPayload>);
 
 #[derive(Debug, Clone, serde::Serialize, JsonSchema)]
+pub struct DownloadProgressInfo {
+    pub downloaded: u64,
+    pub total: u64,
+    pub phase: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, JsonSchema)]
 pub struct SystemInfo {
     /// Primary active system, identified by NamedRetrievalSystem::name().
     pub system: String,
     /// All active systems, identified by NamedRetrievalSystem::name().
     /// These strings also match the `provider` field stored on collection cards.
     pub systems: Vec<String>,
+    /// Systems whose databases are currently being downloaded, with progress info.
+    pub downloading: HashMap<String, DownloadProgressInfo>,
 }
 
 type GathersState = (Arc<Mutex<RetrievalState>>, Arc<Mutex<StorageState>>);
@@ -54,6 +63,8 @@ pub struct RetrievalState {
     mtg_db_path: Option<String>,
     riftbound_db_path: Option<String>,
     pokemon_db_path: Option<String>,
+    /// Progress trackers for in-progress downloads, keyed by system name.
+    pub downloading: HashMap<String, Arc<Mutex<DownloadProgress>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +88,7 @@ impl RetrievalState {
             mtg_db_path: mtg_db_path.clone(),
             riftbound_db_path: riftbound_db_path.clone(),
             pokemon_db_path: pokemon_db_path.clone(),
+            downloading: HashMap::new(),
         };
 
         for system in systems {
@@ -85,6 +97,15 @@ impl RetrievalState {
                 Systems::RiftboundSql => riftbound_db_path.clone(),
                 Systems::PokemonSql => pokemon_db_path.clone(),
             };
+            // Skip file-based systems whose DB doesn't exist yet (downloading in background).
+            let needs_file = matches!(system, Systems::Sql | Systems::RiftboundSql | Systems::PokemonSql);
+            if needs_file {
+                if let Some(ref path) = db_path {
+                    if !std::path::Path::new(path).exists() {
+                        continue;
+                    }
+                }
+            }
             let retrieval = Self::new_retrieval(system, db_path)?;
             match system {
                 Systems::Scryfall | Systems::Sql => {
@@ -156,7 +177,16 @@ impl RetrievalState {
         .map(|s| s.name().to_string())
         .collect();
         let system = systems.first().cloned().unwrap_or_default();
-        SystemInfo { system, systems }
+        let mut downloading = HashMap::new();
+        for (key, progress) in &self.downloading {
+            let p = progress.lock().await;
+            downloading.insert(key.clone(), DownloadProgressInfo {
+                downloaded: p.downloaded,
+                total: p.total,
+                phase: p.phase.clone(),
+            });
+        }
+        SystemInfo { system, systems, downloading }
     }
 
     pub fn require_mtg(&self) -> Result<&RetrievalSystem, ApiError> {
@@ -196,6 +226,25 @@ impl RetrievalState {
         if let Some(system) = self.mtg_system_type {
             self.mtg = Some(Self::new_retrieval(system, self.mtg_db_path.clone())?);
         }
+        Ok(())
+    }
+
+    pub fn add_system(&mut self, system: Systems) -> eyre::Result<()> {
+        let db_path = match system {
+            Systems::Scryfall | Systems::Sql => self.mtg_db_path.clone(),
+            Systems::RiftboundSql => self.riftbound_db_path.clone(),
+            Systems::PokemonSql => self.pokemon_db_path.clone(),
+        };
+        let retrieval = Self::new_retrieval(system, db_path)?;
+        match system {
+            Systems::Scryfall | Systems::Sql => {
+                self.mtg = Some(retrieval);
+                self.mtg_system_type = Some(system);
+            }
+            Systems::RiftboundSql => self.riftbound = Some(retrieval),
+            Systems::PokemonSql => self.pokemon = Some(retrieval),
+        }
+        self.downloading.remove(&format!("{system:?}"));
         Ok(())
     }
 
@@ -357,6 +406,13 @@ async fn main() -> eyre::Result<()> {
 
     let port = config.port;
 
+    let retrieval = Arc::new(Mutex::new(RetrievalState::new(
+        config.system.clone(),
+        mtg_db_path.clone(),
+        riftbound_db_path.clone(),
+        pokemon_db_path.clone(),
+    )?));
+
     if std::env::var("GATHERS_NO_AUTO_UPDATE").is_err() {
         for system in &config.system {
             match system {
@@ -364,18 +420,59 @@ async fn main() -> eyre::Result<()> {
                     if let Some(ref path) = mtg_db_path
                         && !std::path::Path::new(path).exists()
                     {
-                        retrieval::download_mtg_db(path).await?;
+                        let path = path.clone();
+                        let retrieval = retrieval.clone();
+                        let progress = Arc::new(Mutex::new(DownloadProgress::default()));
+                        retrieval.lock().await.downloading.insert("Sql".to_string(), progress.clone());
+                        tokio::spawn(async move {
+                            println!("Downloading MTG DB in background...");
+                            match retrieval::download_mtg_db(&path, Some(progress)).await {
+                                Ok(_) => {
+                                    let mut state = retrieval.lock().await;
+                                    if let Err(e) = state.add_system(Systems::Sql) {
+                                        eprintln!("Failed to init MTG system after download: {e}");
+                                    } else {
+                                        println!("MTG DB ready.");
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to download MTG DB: {e}");
+                                    retrieval.lock().await.downloading.remove("Sql");
+                                }
+                            }
+                        });
                     }
                 }
                 Systems::RiftboundSql => {
                     if let Some(ref path) = riftbound_db_path
                         && !std::path::Path::new(path).exists()
                     {
-                        println!("Updating DB");
-                        let temp =
-                            RetrievalState::new_retrieval(*system, riftbound_db_path.clone())?;
-                        temp.update_backend().await?;
-                        println!("Done updating DB");
+                        let retrieval = retrieval.clone();
+                        let riftbound_db_path = riftbound_db_path.clone();
+                        retrieval.lock().await.downloading.insert("RiftboundSql".to_string(), Arc::new(Mutex::new(DownloadProgress::default())));
+                        tokio::spawn(async move {
+                            println!("Downloading Riftbound DB in background...");
+                            match RetrievalState::new_retrieval(Systems::RiftboundSql, riftbound_db_path) {
+                                Ok(temp) => match temp.update_backend().await {
+                                    Ok(_) => {
+                                        let mut state = retrieval.lock().await;
+                                        if let Err(e) = state.add_system(Systems::RiftboundSql) {
+                                            eprintln!("Failed to init Riftbound system after download: {e}");
+                                        } else {
+                                            println!("Riftbound DB ready.");
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to download Riftbound DB: {e}");
+                                        retrieval.lock().await.downloading.remove("RiftboundSql");
+                                    }
+                                },
+                                Err(e) => {
+                                    eprintln!("Failed to create Riftbound retrieval for download: {e}");
+                                    retrieval.lock().await.downloading.remove("RiftboundSql");
+                                }
+                            }
+                        });
                     }
                 }
                 _ => {
@@ -384,13 +481,6 @@ async fn main() -> eyre::Result<()> {
             }
         }
     }
-
-    let retrieval = Arc::new(Mutex::new(RetrievalState::new(
-        config.system,
-        mtg_db_path,
-        riftbound_db_path,
-        pokemon_db_path,
-    )?));
     let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
 
     let mut api = OpenApi {

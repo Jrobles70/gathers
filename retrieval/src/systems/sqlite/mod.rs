@@ -8,6 +8,13 @@ use std::{
     sync::Arc,
 };
 
+#[derive(Debug, Clone, Default)]
+pub struct DownloadProgress {
+    pub downloaded: u64,
+    pub total: u64,
+    pub phase: String,
+}
+
 use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -214,7 +221,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         let temp_dir = tempfile::tempdir()?;
         let crc_file_path = temp_dir.path().join("remote_crc.sha");
 
-        stream_to_file(CRC_URL, "SHA256 fetched", &crc_file_path).await?;
+        stream_to_file(CRC_URL, "SHA256 fetched", &crc_file_path, None, "checking").await?;
         let remote_crc = fs::read_to_string(&crc_file_path)?.trim().to_lowercase();
 
         let local_crc = if local_file_path.exists() {
@@ -234,7 +241,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
                 let download_file_path = temp_dir.path().join("downloaded_file");
 
                 println!("Download from {DOWNLOAD_URL:?} to {download_file_path:?}...");
-                stream_to_file(DOWNLOAD_URL, "Download complete", &download_file_path)
+                stream_to_file(DOWNLOAD_URL, "Download complete", &download_file_path, None, "downloading")
                     .await
                     .and_then(|_| calculate_sha256(&download_file_path))
                     .map(|downloaded_crc| {
@@ -255,9 +262,22 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
     }
 }
 
-async fn stream_to_file(url: &str, label: &str, path: &Path) -> eyre::Result<()> {
+async fn stream_to_file(
+    url: &str,
+    label: &str,
+    path: &Path,
+    progress: Option<&Arc<Mutex<DownloadProgress>>>,
+    phase: &str,
+) -> eyre::Result<()> {
     let response = reqwest::Client::new().get(url).send().await?;
     let total_size = response.content_length().unwrap_or(0);
+
+    if let Some(p) = progress {
+        let mut p = p.lock().await;
+        p.total = total_size;
+        p.downloaded = 0;
+        p.phase = phase.to_string();
+    }
 
     let pb = ProgressBar::new(total_size);
     pb.set_style(
@@ -271,7 +291,12 @@ async fn stream_to_file(url: &str, label: &str, path: &Path) -> eyre::Result<()>
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         file.write_all(&chunk)?;
-        pb.inc(chunk.len() as u64);
+        let len = chunk.len() as u64;
+        pb.inc(len);
+        if let Some(p) = progress {
+            let mut p = p.lock().await;
+            p.downloaded += len;
+        }
     }
     pb.finish_with_message(label.to_string());
     Ok(())
@@ -284,7 +309,10 @@ fn calculate_sha256(path: &Path) -> eyre::Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-pub async fn download_mtg_db(path: &str) -> eyre::Result<()> {
+pub async fn download_mtg_db(
+    path: &str,
+    progress: Option<Arc<Mutex<DownloadProgress>>>,
+) -> eyre::Result<()> {
     const DOWNLOAD_URL: &str = "https://mtgjson.com/api/v5/AllPrintings.sqlite";
     const CRC_URL: &str = "https://mtgjson.com/api/v5/AllPrintings.sqlite.sha256";
 
@@ -301,7 +329,7 @@ pub async fn download_mtg_db(path: &str) -> eyre::Result<()> {
 
     println!("Fetching remote SHA256 for AllPrintings.db...");
     let crc_path = temp_dir.path().join("remote.sha256");
-    stream_to_file(CRC_URL, "SHA256 fetched", &crc_path).await?;
+    stream_to_file(CRC_URL, "SHA256 fetched", &crc_path, progress.as_ref(), "checking").await?;
     let remote_crc = fs::read_to_string(&crc_path)?.trim().to_lowercase();
 
     if target.exists() && calculate_sha256(&target)? == remote_crc {
@@ -311,8 +339,11 @@ pub async fn download_mtg_db(path: &str) -> eyre::Result<()> {
 
     println!("Downloading AllPrintings.db to {target:?}...");
     let download_path = temp_dir.path().join("AllPrintings.db.download");
-    stream_to_file(DOWNLOAD_URL, "Download complete", &download_path).await?;
+    stream_to_file(DOWNLOAD_URL, "Download complete", &download_path, progress.as_ref(), "downloading").await?;
 
+    if let Some(p) = &progress {
+        p.lock().await.phase = "verifying".to_string();
+    }
     let downloaded_crc = calculate_sha256(&download_path)?;
     if downloaded_crc != remote_crc {
         eyre::bail!(
