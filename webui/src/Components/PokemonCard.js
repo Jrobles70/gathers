@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
@@ -48,7 +49,7 @@ export default function PokemonCard({ id, card = null, details = null, provider 
           <div className="card-info">
             <div className="row align-items-center">
               <span className="col-sm-8">
-                {_card.name}
+                <Link to={`/card/pokemon/${encodeURIComponent(id)}`}>{_card.name}</Link>
                 {details != null ? (
                   <span className="badge bg-secondary">
                     {details.collectionId}

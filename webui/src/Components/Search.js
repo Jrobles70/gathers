@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import SearchMagic from "./SearchMagic";
 import SearchRiftbound from "./SearchRiftbound";
 import SearchPokemon from "./SearchPokemon";
@@ -14,6 +15,17 @@ function systemLabel(system) {
 function Search({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const systems = useSystems();
   const [selectedSystem, setSelectedSystem] = useSelectedSearchSystem();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (systems.length === 0) return;
+    const urlSystem = searchParams.get("system");
+    if (urlSystem && systems.includes(urlSystem)) {
+      if (urlSystem !== selectedSystem) setSelectedSystem(urlSystem);
+    } else if (selectedSystem) {
+      setSearchParams((prev) => { prev.set("system", selectedSystem); return prev; }, { replace: true });
+    }
+  }, [systems, selectedSystem]);
 
   const renderSearch = () => {
     if (selectedSystem === "RiftboundSQLite") {
@@ -54,7 +66,10 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false 
               className={`btn btn-sm ${
                 selectedSystem === sys ? "btn-primary" : "btn-outline-secondary"
               }`}
-              onClick={() => setSelectedSystem(sys)}
+              onClick={() => {
+                setSelectedSystem(sys);
+                setSearchParams((prev) => { prev.set("system", sys); return prev; });
+              }}
             >
               {systemLabel(sys)}
             </button>

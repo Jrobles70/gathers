@@ -36,6 +36,15 @@ code {
         width: 100%;
     }
 
+.zoomable {
+    transition: transform 0.15s ease;
+    cursor: zoom-in;
+}
+
+.zoomable:hover {
+    transform: scale(2.5);
+}
+
     .card .card-info {
         position: absolute;
         bottom: 0;

@@ -10,15 +10,14 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
   const ops = useOperations();
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [shouldSearch, setShouldSearch] = useState(startSearch);
 
   const cardSets = useCardSets();
   const collections = useCollections();
   const { collectionsEnabled } = useMode();
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchOptions, setSearchOptions] = useState({
+  const [pageNumber, setPageNumber] = useState(parseInt(searchParams.get("page") ?? "1"));
+  const initialOptions = {
     name: searchParams.get("name") ?? "",
     setCode: searchParams.get("setCode") ?? "",
     artist: searchParams.get("artist") ?? "",
@@ -26,8 +25,14 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
     text: searchParams.get("text") ?? "",
     rarity: searchParams.get("rarity") ?? "",
     colorIdentities: searchParams.getAll("colorIdentities"),
-  });
+  };
+  const [searchOptions, setSearchOptions] = useState(initialOptions);
   const [searchCollection, setSearchCollection] = useState("");
+
+  const hasParams = Object.values(initialOptions).some((v) =>
+    Array.isArray(v) ? v.length > 0 : v !== ""
+  );
+  const [shouldSearch, setShouldSearch] = useState(startSearch || hasParams);
 
   let pageSize = 24;
 
@@ -82,7 +87,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
   const handleSearchInput = (event, field) => {
     const newState = { ...searchOptions, [field]: event.target.value };
     setSearchOptions(newState);
-    setSearchParams(newState);
+    setSearchParams({ ...newState, page: "1" });
   };
 
   const handleColourIdentitiesInput = (event) => {
@@ -92,7 +97,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
       colorIdentities: event.target.checked ? [...filtered, event.target.value] : filtered,
     };
     setSearchOptions(newState);
-    setSearchParams(newState);
+    setSearchParams({ ...newState, page: "1" });
   };
 
   const handleCollectionInput = (event) => {
@@ -100,8 +105,10 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
   };
 
   const handlePageChange = (event) => {
+    const newPage = parseInt(event.selected) + 1;
     setShouldSearch(true);
-    setPageNumber(parseInt(event.selected) + 1);
+    setPageNumber(newPage);
+    setSearchParams({ ...searchOptions, page: String(newPage) });
   };
 
   return (
@@ -237,6 +244,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               onClick={(event) => {
                 setPageNumber(1);
                 setShouldSearch(true);
+                setSearchParams({ ...searchOptions, page: "1" });
               }}
               className="btn btn-outline-secondary"
               type="button"

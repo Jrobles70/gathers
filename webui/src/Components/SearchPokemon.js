@@ -8,16 +8,21 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
   const ops = useOperations();
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [shouldSearch, setShouldSearch] = useState(startSearch);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchOptions, setSearchOptions] = useState({
+  const [pageNumber, setPageNumber] = useState(parseInt(searchParams.get("page") ?? "1"));
+  const initialOptions = {
     name: searchParams.get("name") ?? "",
     setCode: searchParams.get("setCode") ?? "",
     collectorNumber: searchParams.get("collectorNumber") ?? "",
     energyTypes: searchParams.getAll("energyTypes"),
-  });
+  };
+  const [searchOptions, setSearchOptions] = useState(initialOptions);
+
+  const hasParams = Object.values(initialOptions).some((v) =>
+    Array.isArray(v) ? v.length > 0 : v !== ""
+  );
+  const [shouldSearch, setShouldSearch] = useState(startSearch || hasParams);
 
   let pageSize = 24;
 
@@ -52,7 +57,7 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
   const handleSearchInput = (event, field) => {
     const newState = { ...searchOptions, [field]: event.target.value };
     setSearchOptions(newState);
-    setSearchParams(newState);
+    setSearchParams({ ...newState, page: "1" });
   };
 
   const handleEnergyTypeInput = (event) => {
@@ -62,12 +67,14 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
       energyTypes: event.target.checked ? [...filtered, event.target.value] : filtered,
     };
     setSearchOptions(newState);
-    setSearchParams(newState);
+    setSearchParams({ ...newState, page: "1" });
   };
 
   const handlePageChange = (event) => {
+    const newPage = parseInt(event.selected) + 1;
     setShouldSearch(true);
-    setPageNumber(parseInt(event.selected) + 1);
+    setPageNumber(newPage);
+    setSearchParams({ ...searchOptions, page: String(newPage) });
   };
 
   const energyTypes = [
@@ -143,6 +150,7 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
               onClick={() => {
                 setPageNumber(1);
                 setShouldSearch(true);
+                setSearchParams({ ...searchOptions, page: "1" });
               }}
               className="btn btn-outline-secondary"
               type="button"

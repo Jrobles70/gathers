@@ -8,11 +8,10 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
   const ops = useOperations();
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [shouldSearch, setShouldSearch] = useState(startSearch);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchOptions, setSearchOptions] = useState({
+  const [pageNumber, setPageNumber] = useState(parseInt(searchParams.get("page") ?? "1"));
+  const initialOptions = {
     name: searchParams.get("name") ?? "",
     setCode: searchParams.get("setCode") ?? "",
     artist: searchParams.get("artist") ?? "",
@@ -20,7 +19,13 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
     text: searchParams.get("text") ?? "",
     rarity: searchParams.get("rarity") ?? "",
     colorIdentities: searchParams.getAll("colorIdentities"),
-  });
+  };
+  const [searchOptions, setSearchOptions] = useState(initialOptions);
+
+  const hasParams = Object.values(initialOptions).some((v) =>
+    Array.isArray(v) ? v.length > 0 : v !== ""
+  );
+  const [shouldSearch, setShouldSearch] = useState(startSearch || hasParams);
   let pageSize = 24;
 
   useEffect(() => {
@@ -55,7 +60,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
   const handleSearchInput = (event, field) => {
     const newState = { ...searchOptions, [field]: event.target.value };
     setSearchOptions(newState);
-    setSearchParams(newState);
+    setSearchParams({ ...newState, page: "1" });
   };
 
   const handleColourIdentitiesInput = (event) => {
@@ -65,12 +70,14 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
       colorIdentities: event.target.checked ? [...filtered, event.target.value] : filtered,
     };
     setSearchOptions(newState);
-    setSearchParams(newState);
+    setSearchParams({ ...newState, page: "1" });
   };
 
   const handlePageChange = (event) => {
+    const newPage = parseInt(event.selected) + 1;
     setShouldSearch(true);
-    setPageNumber(parseInt(event.selected) + 1);
+    setPageNumber(newPage);
+    setSearchParams({ ...searchOptions, page: String(newPage) });
   };
 
   return (
@@ -148,6 +155,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
               onClick={(event) => {
                 setPageNumber(1);
                 setShouldSearch(true);
+                setSearchParams({ ...searchOptions, page: "1" });
               }}
               className="btn btn-outline-secondary"
               type="button"

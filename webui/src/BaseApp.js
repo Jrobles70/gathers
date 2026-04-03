@@ -3,6 +3,9 @@ import { OperationsProvider, ModeProvider } from "./OperationsContext";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import CardListView from "./Views/CardListView";
 import SearchView from "./Views/SearchView";
+import MtgCardDetailView from "./Views/MtgCardDetailView";
+import RiftboundCardDetailView from "./Views/RiftboundCardDetailView";
+import PokemonCardDetailView from "./Views/PokemonCardDetailView";
 
 export default function BaseApp({ mode = "full", collectionsEnabled = false }) {
   return (
@@ -12,6 +15,9 @@ export default function BaseApp({ mode = "full", collectionsEnabled = false }) {
           <Routes>
             <Route path="/" element={<Navigate to="/search" />} />
             <Route path="/search" element={<SearchView />} />
+            <Route path="/card/mtg/:id" element={<MtgCardDetailView />} />
+            <Route path="/card/riftbound/:id" element={<RiftboundCardDetailView />} />
+            <Route path="/card/pokemon/:id" element={<PokemonCardDetailView />} />
             {collectionsEnabled ? (
               <>
                 <Route path="/c/:collection" element={<CardListView />} />
