@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Card from "./Card";
 import RiftboundCard from "./RiftboundCard";
 import PokemonCard from "./PokemonCard";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useCollection, usePageNumber } from "./CollectionContext";
 import { useOperations } from "../OperationsContext";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
@@ -30,6 +30,7 @@ function CardComponent({ systemType, id, details }) {
 
 export default function CardList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const ops = useOperations();
   const collection = useCollection();
   const pageNumber = usePageNumber();
@@ -74,7 +75,7 @@ export default function CardList() {
   }, [collection, pageNumber, refresh]);
 
   const handlePageChange = (event) => {
-    navigate("/c/" + collection + "/" + (parseInt(event.selected) + 1));
+    navigate("/c/" + collection + "/" + (parseInt(event.selected) + 1) + location.search);
   };
 
   return (

@@ -19,13 +19,10 @@ export default function BaseApp({ mode = "full", collectionsEnabled = false }) {
             <Route path="/card/riftbound/:id" element={<RiftboundCardDetailView />} />
             <Route path="/card/pokemon/:id" element={<PokemonCardDetailView />} />
             {collectionsEnabled ? (
-              <>
-                <Route path="/c/:collection" element={<CardListView />} />
-                <Route
-                  path="/c/:collection/:pageNumber"
-                  element={<CardListView />}
-                />
-              </>
+              <Route path="/c/:collection">
+                <Route index element={<Navigate to="1" replace />} />
+                <Route path=":pageNumber" element={<CardListView />} />
+              </Route>
             ) : (
               <Route path="/c/*" element={<Navigate to="/search" />} />
             )}
