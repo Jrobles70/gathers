@@ -67,6 +67,8 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         State(state): State<GathersState>,
         Json(input): Json<Collection>,
     ) -> Result<Json<CollectionAddResponse>, ApiError> {
+        validate_collection_name(&input.id)?;
+
         let storage = &mut state.1.lock().await.storage;
 
         match storage.add_collection(input.id.clone()).await {
@@ -122,6 +124,34 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 }),
             )),
         }
+    }
+
+    fn validate_collection_name(name: &str) -> Result<(), ApiError> {
+        if name.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "Collection name cannot be empty".to_string(),
+                }),
+            ));
+        }
+        if name.len() > 255 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "Collection name too long (max 255 characters)".to_string(),
+                }),
+            ));
+        }
+        if name.chars().any(|c| c.is_control()) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "Collection name contains invalid characters".to_string(),
+                }),
+            ));
+        }
+        Ok(())
     }
 
     async fn validate_collection(
@@ -232,12 +262,29 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
         };
 
+        let neg_quantity = input.quantity.checked_neg().ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "Invalid quantity".to_string(),
+                }),
+            )
+        })?;
+        let neg_foil_quantity = input.foil_quantity.checked_neg().ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "Invalid foil quantity".to_string(),
+                }),
+            )
+        })?;
+
         mutate_card_quantities(
             storage,
             &collection_id,
             input.id,
-            -input.quantity,
-            -input.foil_quantity,
+            neg_quantity,
+            neg_foil_quantity,
             "".to_string(),
         )
         .await
@@ -253,7 +300,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             .lock()
             .await
             .storage
-            .get_cards_in_collection_paginated(&collection_id, query.offset, query.limit)
+            .get_cards_in_collection_paginated(&collection_id, query.offset, query.limit.min(1000))
             .await
             .map_err(|e| {
                 (
@@ -307,7 +354,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         let ret = guard.require_mtg()?;
 
         match ret
-            .search_cards(input.into(), query.offset.into(), query.page_size.into())
+            .search_cards(input.into(), query.offset.into(), query.page_size.min(1000).into())
             .await
         {
             Ok(result) => Ok(Json(
@@ -366,7 +413,11 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 )
             })?;
 
-        let filename = format!("attachment; filename=\"{collection_id}.csv\"");
+        let safe_filename: String = collection_id
+            .chars()
+            .filter(|c| *c != '"' && *c != '\\' && !c.is_control())
+            .collect();
+        let filename = format!("attachment; filename=\"{safe_filename}.csv\"");
         Ok(Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, HeaderValue::from_static("text/csv"))
@@ -430,6 +481,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         })?;
 
         let collection_name = collection_name.unwrap_or_else(|| "New Collection".to_string());
+        validate_collection_name(&collection_name)?;
 
         let mut tmp = tempfile::NamedTempFile::new().map_err(|e| {
             (

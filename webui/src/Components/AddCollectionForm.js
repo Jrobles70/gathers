@@ -6,26 +6,39 @@ import { useCollectionsDispatch } from "./CollectionContext";
 function AddCollectionForm() {
   const [showForm, setShowForm] = useState(false);
   const [newItem, setNewItem] = useState("");
+  const [error, setError] = useState(null);
 
   const collectionsDispatch = useCollectionsDispatch();
   const ops = useOperations();
 
-  const handleToggleForm = () => setShowForm(!showForm);
-  const handleHideForm = () => setShowForm(false);
+  const handleToggleForm = () => {
+    setShowForm(!showForm);
+    setError(null);
+  };
+  const handleHideForm = () => {
+    setShowForm(false);
+    setError(null);
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    setError(null);
     ops
       .fetch("Adding new collection", {}, "/collection/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: newItem }),
       })
-      .then((data) => {
+      .then(() => {
         collectionsDispatch({
           type: "added",
           item: { id: newItem },
         });
+        setNewItem("");
+        setShowForm(false);
+      })
+      .catch((e) => {
+        setError(e.message);
       });
   };
 
@@ -40,7 +53,9 @@ function AddCollectionForm() {
               value={newItem}
               placeholder="New Collection"
               onChange={(event) => setNewItem(event.target.value)}
+              isInvalid={!!error}
             />
+            <Form.Control.Feedback type="invalid">{error}</Form.Control.Feedback>
           </Form.Group>
           <Button variant="primary" type="submit">
             Submit

@@ -122,22 +122,27 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn list_collections(&self, filter: Option<String>) -> eyre::Result<Vec<CollectionID>> {
         let conn = self.connection.lock().await;
 
-        // TODO: not a fan of not limiting this at all
-        let mut stmt = conn.prepare(&format!(
-            "SELECT name FROM collection {}",
-            match filter {
-                Some(f) => format!("WHERE name LIKE '%{}%'", f),
-                None => "".to_string(),
-            }
-        ))?;
-        let collection_iter = stmt.query_map(params![], |row| {
-            let name: String = row.get(0)?;
-            Ok(name)
-        })?;
-
         let mut collections = Vec::new();
-        for collection in collection_iter {
-            collections.push(collection?);
+        if let Some(f) = filter {
+            let pattern = format!("%{}%", f);
+            let mut stmt =
+                conn.prepare("SELECT name FROM collection WHERE name LIKE ?1")?;
+            let collection_iter = stmt.query_map(params![pattern], |row| {
+                let name: String = row.get(0)?;
+                Ok(name)
+            })?;
+            for collection in collection_iter {
+                collections.push(collection?);
+            }
+        } else {
+            let mut stmt = conn.prepare("SELECT name FROM collection")?;
+            let collection_iter = stmt.query_map(params![], |row| {
+                let name: String = row.get(0)?;
+                Ok(name)
+            })?;
+            for collection in collection_iter {
+                collections.push(collection?);
+            }
         }
 
         Ok(collections)

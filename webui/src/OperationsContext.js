@@ -34,18 +34,25 @@ export function OperationsProvider({ children }) {
   const opsFetch = async (message, defaultValue, ...args) => {
     let opId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
     addOperation(opId, { message: message });
-    const result = await fetch(...args).then((response) => {
-      if (response.status === 200) {
-        return response.json();
+    try {
+      const response = await fetch(...args);
+      if (response.ok) {
+        const result = await response.json();
+        removeOperation(opId);
+        return result;
       } else {
-        console.log(
-          "Halp. Failed to get successful response from " + response.url,
-        );
-        return defaultValue;
+        let errorMessage = `Request failed (${response.status})`;
+        try {
+          const body = await response.json();
+          if (body?.error) errorMessage = body.error;
+        } catch (_) {}
+        removeOperation(opId);
+        throw new Error(errorMessage);
       }
-    });
-    removeOperation(opId);
-    return result;
+    } catch (e) {
+      removeOperation(opId);
+      throw e;
+    }
   };
 
   return (
