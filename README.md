@@ -28,3 +28,11 @@ Support small tech!
 # Info and Instructions and Ideas
 
 [Can be found on the Wiki!](https://codeberg.org/morosanmihail/gathers/wiki/Home)
+
+# Acknowledgements
+
+Pokemon database scraper thanks to [pokedata](https://github.com/poketrax/pokedata).
+GatheRs version is a Rust rewrite.
+
+Riftbound database scraper thanks to [vikkumar2021](https://github.com/vikkumar2021/RiftboundCardDatabase). 
+GatheRs version is a rust rewrite.
