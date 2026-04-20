@@ -1,6 +1,7 @@
 // Data retrieved from https://github.com/poketrax/pokedata
 
 mod models;
+mod scraper;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -177,7 +178,13 @@ impl RetrievalSystemTrait for PokemonSQLiteRetrievalSystem {
     }
 
     async fn update_backend(&self) -> eyre::Result<bool> {
-        Ok(false)
+        scraper::run(scraper::Options {
+            db_path: self._db_path.clone(),
+            recent: None,
+            fresh: false,
+        })
+        .await?;
+        Ok(true)
     }
 }
 

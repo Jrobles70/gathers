@@ -112,7 +112,12 @@ async fn main() -> eyre::Result<()> {
                         .await?;
                 }
                 Systems::Scryfall => unreachable!(),
-                Systems::Pokemon => todo!(),
+                Systems::Pokemon => {
+                    let tmp = retrieval::PokemonSQLiteRetrievalSystem::new(Some(path.clone()))?;
+                    RetrievalSystem::PokemonSQLiteRetrievalSystem(tmp)
+                        .update_backend()
+                        .await?;
+                }
             }
 
             if args.download {

@@ -475,6 +475,39 @@ async fn main() -> eyre::Result<()> {
                         });
                     }
                 }
+                Systems::PokemonSql => {
+                    if let Some(ref path) = pokemon_db_path
+                        && !std::path::Path::new(path).exists()
+                    {
+                        let path = path.clone();
+                        let retrieval = retrieval.clone();
+                        retrieval.lock().await.downloading.insert("PokemonSql".to_string(), Arc::new(Mutex::new(DownloadProgress::default())));
+                        tokio::spawn(async move {
+                            println!("Running pokedata scraper in background...");
+                            match RetrievalState::new_retrieval(Systems::PokemonSql, Some(path.clone())) {
+                                Ok(temp) => match temp.update_backend().await {
+                                    Ok(_) => {
+                                        let mut state = retrieval.lock().await;
+                                        if let Err(e) = state.add_system(Systems::PokemonSql) {
+                                            eprintln!("Failed to init Pokemon system after scrape: {e}");
+                                        } else {
+                                            println!("Pokemon DB ready.");
+                                        }
+                                        state.downloading.remove("PokemonSql");
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to run pokedata scraper: {e}");
+                                        retrieval.lock().await.downloading.remove("PokemonSql");
+                                    }
+                                },
+                                Err(e) => {
+                                    eprintln!("Failed to create Pokemon retrieval for scrape: {e}");
+                                    retrieval.lock().await.downloading.remove("PokemonSql");
+                                }
+                            }
+                        });
+                    }
+                }
                 _ => {
                     println!("Downloading updates not implemented for {system:?}");
                 }
