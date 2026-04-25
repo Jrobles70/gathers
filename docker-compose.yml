@@ -1,10 +1,10 @@
 services:
-  server:
+  gathers-api:
     build: .
     ports:
       - "5234:5234"
     volumes:
-      - gathers-data:/home/app/.local/share/gathers/DB/:rw
+      - gathers-data:/home/app/.local/share/gathers/:rw
     environment:
       - STORAGE_DB_PATH=/home/app/.local/share/gathers/DB/storage.db
       - MTG_DB_PATH=/home/app/.local/share/gathers/DB/AllPrintings.db
@@ -12,7 +12,7 @@ services:
       - POKEMON_DB_PATH=/home/app/.local/share/gathers/DB/pokemon.db
     restart: unless-stopped
 
-  webui:
+  gathers-webui:
     build:
       context: ./webui
       args:
@@ -20,7 +20,7 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - server
+      - gathers-api
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
