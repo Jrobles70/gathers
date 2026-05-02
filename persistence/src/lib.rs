@@ -30,7 +30,10 @@ pub struct CollectionCardsParams {
     pub limit: usize,
     pub sort_by: Option<CollectionSortField>,
     pub sort_order: Option<SortOrder>,
+    /// Filter to exactly one provider.
     pub provider: Option<String>,
+    /// Filter to any of these providers (ignored if `provider` is set).
+    pub providers: Vec<String>,
 }
 
 impl CollectionCardsParams {
@@ -41,6 +44,7 @@ impl CollectionCardsParams {
             sort_by: None,
             sort_order: None,
             provider: None,
+            providers: vec![],
         }
     }
 }
@@ -72,6 +76,7 @@ pub trait PersistenceSystemTrait {
     fn get_cards_in_collection_count(
         &self,
         collection_id: CollectionID,
+        providers: &[String],
     ) -> impl std::future::Future<Output = eyre::Result<usize>>;
 
     fn add_card_to_collection(

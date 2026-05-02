@@ -151,22 +151,26 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn get_cards_in_collection_count(
         &self,
         collection_id: CollectionID,
+        providers: &[String],
     ) -> eyre::Result<usize> {
         let conn = self.connection.lock().await;
 
-        let mut stmt = conn.prepare("SELECT COUNT(ALL uuid) FROM cards WHERE collection = ?1")?;
-        let mut card_iter = stmt.query_map(params![collection_id], |row| {
-            let count: u32 = row.get(0)?;
-            Ok(count)
-        })?;
+        let count: usize = if providers.is_empty() {
+            let mut stmt = conn.prepare("SELECT COUNT(ALL uuid) FROM cards WHERE collection = ?1")?;
+            stmt.query_row(params![collection_id], |row| row.get::<_, u32>(0))? as usize
+        } else {
+            let placeholders: Vec<String> = (2..=providers.len() + 1).map(|i| format!("?{i}")).collect();
+            let query = format!(
+                "SELECT COUNT(ALL uuid) FROM cards WHERE collection = ?1 AND provider IN ({})",
+                placeholders.join(", ")
+            );
+            let mut query_params: Vec<String> = vec![collection_id];
+            query_params.extend_from_slice(providers);
+            let mut stmt = conn.prepare(&query)?;
+            stmt.query_row(rusqlite::params_from_iter(query_params.iter()), |row| row.get::<_, u32>(0))? as usize
+        };
 
-        match card_iter.next() {
-            Some(count) => match count {
-                Ok(c) => Ok(c as usize),
-                _ => Err(eyre!("Oh no db")),
-            },
-            None => Err(eyre!("Oh no")),
-        }
+        Ok(count)
     }
 
     async fn add_card_to_collection(
@@ -271,6 +275,13 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
             conditions.push(format!("provider = ?{i}"));
             query_params.push(provider.clone());
             i += 1;
+        } else if !params.providers.is_empty() {
+            let placeholders: Vec<String> = params.providers.iter().enumerate()
+                .map(|(j, _)| format!("?{}", i + j))
+                .collect();
+            conditions.push(format!("provider IN ({})", placeholders.join(", ")));
+            query_params.extend(params.providers.clone());
+            i += params.providers.len();
         }
 
         let sort_col = match &params.sort_by {
@@ -628,14 +639,14 @@ mod tests {
             .unwrap();
         add_card_to_collection(&mut p, &collection_id, &"12345".to_string(), 5, 3).await;
         let c = p
-            .get_cards_in_collection_count(DEFAULT.into())
+            .get_cards_in_collection_count(DEFAULT.into(), &[])
             .await
             .unwrap();
         assert_eq!(c, 0);
 
         add_card_to_collection(&mut p, &DEFAULT.into(), &"12346".to_string(), 2, 8).await;
         let c = p
-            .get_cards_in_collection_count(DEFAULT.into())
+            .get_cards_in_collection_count(DEFAULT.into(), &[])
             .await
             .unwrap();
         assert_eq!(c, 1);

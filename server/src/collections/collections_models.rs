@@ -154,7 +154,11 @@ pub struct CollectionCardsQuery {
     pub limit: usize,
     pub sort_by: Option<APICollectionSortField>,
     pub sort_order: Option<APISortOrder>,
+    /// Single provider inclusion filter (legacy, takes precedence over `providers`).
     pub provider: Option<String>,
+    /// Multiple provider inclusion filter — comma-separated: `?providers=X,Y`.
+    #[serde(default)]
+    pub providers: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]

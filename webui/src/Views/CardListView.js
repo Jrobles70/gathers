@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Search from "../Components/Search";
 import CardListNav from "../Components/CardListNav";
 import CardList from "../Components/CardList";
+import CollectionFilterBar from "../Components/CollectionFilterBar";
 import ViewProviders from "./ViewProviders";
 import { useMode } from "../OperationsContext";
 
@@ -21,12 +22,14 @@ export default function CardListView({ showSearch = false }) {
           </div>
           <div className="collection-cards-panel">
             <CardListNav onToggleSearch={() => setSearchOpen(false)} searchOpen={searchOpen} />
+            <CollectionFilterBar />
             <CardList />
           </div>
         </div>
       ) : (
         <>
           <CardListNav onToggleSearch={() => setSearchOpen(true)} searchOpen={searchOpen} />
+          <CollectionFilterBar />
           <CardList />
         </>
       )}

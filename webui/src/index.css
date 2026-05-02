@@ -118,6 +118,115 @@ code {
     min-width: 0;
 }
 
+.card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0.5rem;
+}
+
+.card-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.card-list-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.card-list-item.selected {
+    background-color: rgba(13, 110, 253, 0.2);
+    border-color: #0d6efd;
+}
+
+.card-list-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.card-list-set {
+    width: 60px;
+    text-align: right;
+    font-size: 0.85em;
+}
+
+.card-list-rarity {
+    width: 80px;
+    font-size: 0.85em;
+}
+
+.collection-filter-bar {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* mana-font defines .ms-1::before … .ms-5::before with icon content,
+   colliding with Bootstrap's margin-start utilities.
+   Suppress the pseudo-element on any element that lacks the .ms base class. */
+:not(.ms).ms-1::before,
+:not(.ms).ms-2::before,
+:not(.ms).ms-3::before,
+:not(.ms).ms-4::before,
+:not(.ms).ms-5::before {
+    content: none !important;
+    display: none !important;
+}
+
+.mana-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid;
+    cursor: pointer;
+    padding: 0;
+    transition: opacity 0.15s, transform 0.15s, background-color 0.15s;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.mana-toggle-btn:hover {
+    opacity: 0.85 !important;
+}
+
+.collection-filter-bar input.form-control,
+.collection-filter-bar select.form-select {
+    background-color: #2b2b2b;
+    color: #f0f0f0;
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.collection-filter-bar input.form-control::placeholder {
+    color: #aaa;
+}
+
+.collection-filter-bar input.form-control:focus,
+.collection-filter-bar select.form-select:focus {
+    background-color: #333;
+    color: #fff;
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.collection-filter-bar select.form-select option {
+    background-color: #2b2b2b;
+    color: #f0f0f0;
+}
+
+.collection-filter-bar .form-check-label {
+    color: #ddd;
+}
+
 .sidebar-sticky {
     position: relative;
     top: 0;

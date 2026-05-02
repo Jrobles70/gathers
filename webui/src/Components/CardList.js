@@ -17,15 +17,66 @@ import {
   useRefresh,
   useRefreshCardList,
 } from "./CardListContexts/RefreshCardListContext";
+import { useCollectionFilters, collectionFiltersActive } from "./CollectionFilterBar";
 
-function CardComponent({ systemType, id, details }) {
+function CardComponent({ viewMode, systemType, id, details }) {
   const effectiveSystem = details?.provider || systemType;
   if (effectiveSystem === "RiftboundSQLite") {
-    return <RiftboundCard id={id} details={details} provider={effectiveSystem} />;
+    return <RiftboundCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
   } else if (effectiveSystem === "PokemonSQLite") {
-    return <PokemonCard id={id} details={details} provider={effectiveSystem} />;
+    return <PokemonCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
   }
-  return <Card id={id} details={details} provider={effectiveSystem} />;
+  return <Card id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
+}
+
+function buildListUrl(collection, filters, pageNumber, systems) {
+  const params = new URLSearchParams();
+  params.set("offset", String((pageNumber - 1) * pageSize));
+  params.set("limit", String(pageSize));
+  if (filters.sortBy && filters.sortBy !== "Name") params.set("sort_by", filters.sortBy);
+  if (filters.sortOrder && filters.sortOrder !== "Asc") params.set("sort_order", filters.sortOrder);
+  if (filters.provider) {
+    params.set("provider", filters.provider);
+  } else if (systems.length > 0) {
+    params.set("providers", systems.join(","));
+  }
+  return `/collection/cards/${collection}/list?${params.toString()}`;
+}
+
+function buildSearchBody(filters) {
+  const body = {};
+  if (filters.name)    body.name = filters.name;
+  if (filters.setCode) body.setCode = filters.setCode;
+  if (filters.rarity)  body.rarity = filters.rarity;
+  if (filters.artist)  body.artist = filters.artist;
+  if (filters.text)    body.text = filters.text;
+  if (filters.colorIdentities.length > 0) body.colorIdentities = filters.colorIdentities;
+  if (filters.domains.length > 0)         body.domains = filters.domains;
+  if (filters.energyTypes.length > 0)     body.energyTypes = filters.energyTypes;
+  if (filters.sortBy)    body.sortBy = filters.sortBy;
+  if (filters.sortOrder) body.sortOrder = filters.sortOrder;
+  return body;
+}
+
+function impliedProvider(filters) {
+  if (filters.colorIdentities.length > 0) return "MagicSQLite";
+  if (filters.domains.length > 0)         return "RiftboundSQLite";
+  if (filters.energyTypes.length > 0)     return "PokemonSQLite";
+  return null;
+}
+
+function buildSearchUrl(collection, filters, pageNumber, systems, isCount = false) {
+  const params = new URLSearchParams();
+  params.set("offset", String((pageNumber - 1) * pageSize));
+  params.set("limit", String(pageSize));
+  const provider = filters.provider || impliedProvider(filters);
+  if (provider) {
+    params.set("provider", provider);
+  } else if (systems.length > 0) {
+    params.set("providers", systems.join(","));
+  }
+  const base = `/collection/cards/${collection}/search`;
+  return isCount ? `${base}/count?${params.toString()}` : `${base}?${params.toString()}`;
 }
 
 export default function CardList() {
@@ -39,67 +90,98 @@ export default function CardList() {
   const systems = useSystems();
   const refresh = useRefresh();
   const setRefresh = useRefreshCardList();
+  const filters = useCollectionFilters();
+  const filtersActive = collectionFiltersActive(filters);
 
   const cards = useCards();
   const cardsDispatch = useCardsDispatch();
   const [loading, setLoading] = useState(true);
   const [cardCount, setCardCount] = useState(0);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filterDeps = [
+    filtersActive, filters.name, filters.setCode, filters.rarity, filters.artist,
+    filters.text, filters.provider, filters.sortBy, filters.sortOrder,
+    JSON.stringify(filters.colorIdentities),
+    JSON.stringify(filters.domains),
+    JSON.stringify(filters.energyTypes),
+  ];
+
   useEffect(() => {
-    ops
-      .fetch(
-        "Listing items in " + collection,
-        [],
-        "/collection/cards/" +
-          collection +
-          "/list?offset=" +
-          (pageNumber - 1) * pageSize +
-          "&pageSize=" +
-          pageSize,
-      )
-      .then((data) => {
-        cardsDispatch({ type: "overwrite", cards: data });
-        setLoading(false);
-        setRefresh(false);
-        selectedDispatch({ type: "empty" });
-      });
-    ops
-      .fetch(
-        "Getting card count in " + collection,
-        0,
-        "/collection/cards/" + collection + "/count",
-      )
-      .then((data) => {
-        setCardCount(data);
-      });
-  }, [collection, pageNumber, refresh]);
+    setLoading(true);
+
+    if (filtersActive) {
+      const body = buildSearchBody(filters);
+      const searchUrl = buildSearchUrl(collection, filters, pageNumber, systems);
+      const countUrl = buildSearchUrl(collection, filters, pageNumber, systems, true);
+
+      ops
+        .fetch("Filtering collection", [], searchUrl, {
+          method: "post",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        .then((data) => {
+          cardsDispatch({ type: "overwrite", cards: data });
+          setLoading(false);
+          setRefresh(false);
+          selectedDispatch({ type: "empty" });
+        });
+
+      ops
+        .fetch("Getting filtered count", 0, countUrl, {
+          method: "post",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        .then((data) => setCardCount(data));
+    } else {
+      const listUrl = buildListUrl(collection, filters, pageNumber, systems);
+
+      ops
+        .fetch("Listing items in " + collection, [], listUrl)
+        .then((data) => {
+          cardsDispatch({ type: "overwrite", cards: data });
+          setLoading(false);
+          setRefresh(false);
+          selectedDispatch({ type: "empty" });
+        });
+
+      const countParams = new URLSearchParams();
+      if (filters.provider) {
+        countParams.set("provider", filters.provider);
+      } else if (systems.length > 0) {
+        countParams.set("providers", systems.join(","));
+      }
+      ops
+        .fetch("Getting card count in " + collection, 0, `/collection/cards/${collection}/count?${countParams.toString()}`)
+        .then((data) => setCardCount(data));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collection, pageNumber, refresh, ...filterDeps]);
 
   const handlePageChange = (event) => {
     navigate("/c/" + collection + "/" + (parseInt(event.selected) + 1) + location.search);
   };
 
+  const viewMode = filters.viewMode;
+
   return (
     <>
-      <div className="card-grid list">
+      <div className={viewMode === "list" ? "card-list" : "card-grid list"}>
         {(loading || refresh) && cards.length === 0 ? (
           <p>Loading...</p>
         ) : (
           <React.Fragment>
-            {cards
-              .filter(
-                (card) =>
-                  systems.length === 0 ||
-                  !card.provider ||
-                  systems.includes(card.provider),
-              )
-              .map((card) => (
-                <CardComponent
-                  systemType={systemType}
-                  id={card.id}
-                  details={card}
-                  key={card.collectionId + "-" + card.id}
-                />
-              ))}
+            {cards.map((card) => (
+              <CardComponent
+                viewMode={viewMode}
+                systemType={systemType}
+                id={card.id}
+                details={card}
+                key={card.collectionId + "-" + card.id}
+              />
+            ))}
           </React.Fragment>
         )}
       </div>

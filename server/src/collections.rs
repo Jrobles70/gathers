@@ -24,6 +24,7 @@ use crate::{
         ResultCardInner,
     },
 };
+use models::CardTrait as _;
 pub mod collections_models;
 
 use crate::collections::collections_models::Collection;
@@ -41,6 +42,195 @@ async fn clone_retrieval_systems_by_name(state: &GathersState) -> HashMap<String
     .flatten()
     .map(|s| (s.name().to_string(), s))
     .collect()
+}
+
+fn matches_card_filters(card: &Card, filters: &APICardSearchFilters) -> bool {
+
+    let name_lower: String;
+    let set_lower: String;
+    let cn: String;
+
+    match card {
+        Card::Magic(m) => {
+            name_lower = m.name.to_lowercase();
+            set_lower = m.set_code.to_lowercase();
+            cn = m.collector_number.clone();
+        }
+        Card::Riftbound(r) => {
+            name_lower = r.name.to_lowercase();
+            set_lower = r.set_code.to_lowercase();
+            cn = r.collector_number.clone();
+        }
+        Card::Pokemon(p) => {
+            name_lower = p.name.to_lowercase();
+            set_lower = p.set_code.to_lowercase();
+            cn = p.collector_number.clone();
+        }
+    }
+
+    if let Some(ref v) = filters.name {
+        if !v.is_empty() && !name_lower.contains(&v.to_lowercase()) {
+            return false;
+        }
+    }
+    if let Some(ref v) = filters.set_code {
+        if !v.is_empty() && !set_lower.contains(&v.to_lowercase()) {
+            return false;
+        }
+    }
+    if let Some(ref v) = filters.collector_number {
+        if !v.is_empty() && cn != *v {
+            return false;
+        }
+    }
+
+    match card {
+        Card::Magic(m) => {
+            if let Some(ref v) = filters.artist {
+                if !v.is_empty() && !m.artist.to_lowercase().contains(&v.to_lowercase()) {
+                    return false;
+                }
+            }
+            if let Some(ref v) = filters.text {
+                if !v.is_empty() && !m.text.to_lowercase().contains(&v.to_lowercase()) {
+                    return false;
+                }
+            }
+            if let Some(ref rarity) = filters.rarity {
+                let filter_rarity = models::Rarity::from(rarity.clone());
+                if m.rarity != filter_rarity {
+                    return false;
+                }
+            }
+            if let Some(ref colors) = filters.color_identities {
+                if !colors.is_empty() {
+                    let filter_colors: Vec<models::CardColour> =
+                        colors.iter().map(|c| models::CardColour::from(c.clone())).collect();
+                    if !filter_colors.iter().all(|c| m.color_identity.contains(c)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        Card::Riftbound(r) => {
+            if let Some(ref v) = filters.artist {
+                if !v.is_empty()
+                    && !r.artists.iter().any(|a| a.to_lowercase().contains(&v.to_lowercase()))
+                {
+                    return false;
+                }
+            }
+            if let Some(ref v) = filters.text {
+                if !v.is_empty() && !r.text.to_lowercase().contains(&v.to_lowercase()) {
+                    return false;
+                }
+            }
+            if let Some(ref domains) = filters.domains {
+                if !domains.is_empty() {
+                    let filter_domains: Vec<models::riftbound::CardDomain> =
+                        domains.iter().map(|d| models::riftbound::CardDomain::from(d.clone())).collect();
+                    if !filter_domains.iter().all(|d| r.domains.contains(d)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        Card::Pokemon(p) => {
+            if let Some(ref energy) = filters.energy_types {
+                if !energy.is_empty() {
+                    let filter_energy: Vec<models::pokemon::EnergyType> =
+                        energy.iter().map(|e| models::pokemon::EnergyType::from(e.clone())).collect();
+                    if !filter_energy.iter().all(|e| p.energy_types.contains(e)) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    true
+}
+
+fn card_name(card: &Card) -> &str {
+    match card {
+        Card::Magic(m) => &m.name,
+        Card::Riftbound(r) => &r.name,
+        Card::Pokemon(p) => &p.name,
+    }
+}
+
+fn card_rarity_order(card: &Card) -> u8 {
+    match card {
+        Card::Magic(m) => match m.rarity {
+            models::Rarity::Common => 0,
+            models::Rarity::Uncommon => 1,
+            models::Rarity::Rare => 2,
+            models::Rarity::Mythic => 3,
+            _ => 4,
+        },
+        Card::Riftbound(r) => match r.rarity {
+            models::riftbound::RBRarity::Common => 0,
+            models::riftbound::RBRarity::Uncommon => 1,
+            models::riftbound::RBRarity::Rare => 2,
+            models::riftbound::RBRarity::Epic => 3,
+            _ => 4,
+        },
+        Card::Pokemon(p) => match p.rarity {
+            models::pokemon::PokemonRarity::Common => 0,
+            models::pokemon::PokemonRarity::Uncommon => 1,
+            models::pokemon::PokemonRarity::Rare => 2,
+            _ => 3,
+        },
+    }
+}
+
+fn sort_collection_cards(
+    cards: &mut Vec<&models::CollectionCard>,
+    card_data: &HashMap<String, Card>,
+    sort_by: &Option<crate::collections::collections_models::APISortField>,
+    sort_order: &Option<crate::collections::collections_models::APISortOrder>,
+) {
+    use crate::collections::collections_models::{APISortField, APISortOrder};
+    let desc = matches!(sort_order, Some(APISortOrder::Desc));
+
+    cards.sort_by(|a, b| {
+        let card_a = card_data.get(&a.uuid);
+        let card_b = card_data.get(&b.uuid);
+        let ord = match sort_by.as_ref().unwrap_or(&APISortField::Name) {
+            APISortField::Name => {
+                let na = card_a.map(card_name).unwrap_or("");
+                let nb = card_b.map(card_name).unwrap_or("");
+                na.cmp(nb)
+            }
+            APISortField::SetCode => {
+                let sa = card_a.map(|c| c.get_set()).unwrap_or_default();
+                let sb = card_b.map(|c| c.get_set()).unwrap_or_default();
+                sa.cmp(&sb)
+            }
+            APISortField::CollectorNumber => {
+                let ca = card_a.map(|c| c.get_collector_number()).unwrap_or_default();
+                let cb = card_b.map(|c| c.get_collector_number()).unwrap_or_default();
+                ca.cmp(&cb)
+            }
+            APISortField::Rarity => {
+                let ra = card_a.map(card_rarity_order).unwrap_or(0);
+                let rb = card_b.map(card_rarity_order).unwrap_or(0);
+                ra.cmp(&rb)
+            }
+            APISortField::Artist => {
+                let aa = match card_a {
+                    Some(Card::Magic(m)) => m.artist.as_str(),
+                    _ => "",
+                };
+                let ab = match card_b {
+                    Some(Card::Magic(m)) => m.artist.as_str(),
+                    _ => "",
+                };
+                aa.cmp(ab)
+            }
+        };
+        if desc { ord.reverse() } else { ord }
+    });
 }
 
 pub fn collection_routes() -> ApiRouter<GathersState> {
@@ -301,6 +491,10 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             sort_by: query.sort_by.map(persistence::CollectionSortField::from),
             sort_order: query.sort_order.map(models::filters::SortOrder::from),
             provider: query.provider,
+            providers: query.providers
+                .as_deref()
+                .map(|s| s.split(',').map(str::to_string).collect())
+                .unwrap_or_default(),
         };
         let cards = state
             .1
@@ -338,10 +532,19 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
     async fn collection_cards_count(
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
+        Query(query): Query<CollectionCardsQuery>,
     ) -> Result<Json<usize>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
+        let providers: Vec<String> = if let Some(p) = query.provider {
+            vec![p]
+        } else {
+            query.providers
+                .as_deref()
+                .map(|s| s.split(',').map(str::to_string).collect())
+                .unwrap_or_default()
+        };
 
-        match storage.get_cards_in_collection_count(collection_id).await {
+        match storage.get_cards_in_collection_count(collection_id, &providers).await {
             Ok(count) => Ok(Json(count)),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -535,6 +738,148 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         Ok(Json(()))
     }
 
+    async fn collection_cards_search(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+        Query(query): Query<CollectionCardsQuery>,
+        Json(filters): Json<APICardSearchFilters>,
+    ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
+        let retrieval_systems = clone_retrieval_systems_by_name(&state).await;
+
+        let all_params = CollectionCardsParams {
+            offset: 0,
+            limit: i64::MAX as usize,
+            sort_by: None,
+            sort_order: None,
+            provider: query.provider.clone(),
+            providers: query.providers.as_deref()
+                .map(|s| s.split(',').map(str::to_string).collect())
+                .unwrap_or_default(),
+        };
+
+        let collection_cards = state
+            .1
+            .lock()
+            .await
+            .storage
+            .get_cards_in_collection_paginated(&collection_id, all_params)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload { error: format!("Failed to get cards from collection. {e}") }),
+                )
+            })?;
+
+        let mut by_provider: HashMap<String, Vec<models::CollectionCard>> = HashMap::new();
+        for card in collection_cards {
+            by_provider.entry(card.provider.clone()).or_default().push(card);
+        }
+
+        let mut card_data: HashMap<String, Card> = HashMap::new();
+        for (provider, cards) in &by_provider {
+            if let Some(retrieval) = retrieval_systems.get(provider) {
+                let ids: Vec<String> = cards.iter().map(|c| c.uuid.clone()).collect();
+                if let Ok(data) = retrieval.get_cards_by_ids(ids).await {
+                    card_data.extend(data);
+                }
+            }
+        }
+
+        let mut matched: Vec<&models::CollectionCard> = by_provider
+            .values()
+            .flatten()
+            .filter(|cc| {
+                card_data
+                    .get(&cc.uuid)
+                    .map(|card| matches_card_filters(card, &filters))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        sort_collection_cards(&mut matched, &card_data, &filters.sort_by, &filters.sort_order);
+
+        let page: Vec<CollectionCard> = matched
+            .into_iter()
+            .skip(query.offset)
+            .take(query.limit)
+            .map(|cc| CollectionCard {
+                id: cc.uuid.clone(),
+                quantity: cc.quantity,
+                foil_quantity: cc.foil_quantity,
+                collection_id: collection_id.clone(),
+                time_added: DateTime::parse_from_rfc3339(&cc.time_added)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
+                provider: cc.provider.clone(),
+            })
+            .collect();
+
+        Ok(Json(page))
+    }
+
+    async fn collection_cards_search_count(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+        Query(query): Query<CollectionCardsQuery>,
+        Json(filters): Json<APICardSearchFilters>,
+    ) -> Result<Json<usize>, ApiError> {
+        let retrieval_systems = clone_retrieval_systems_by_name(&state).await;
+
+        let all_params = CollectionCardsParams {
+            offset: 0,
+            limit: i64::MAX as usize,
+            sort_by: None,
+            sort_order: None,
+            provider: query.provider.clone(),
+            providers: query.providers.as_deref()
+                .map(|s| s.split(',').map(str::to_string).collect())
+                .unwrap_or_default(),
+        };
+
+        let collection_cards = state
+            .1
+            .lock()
+            .await
+            .storage
+            .get_cards_in_collection_paginated(&collection_id, all_params)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload { error: format!("Failed to get cards from collection. {e}") }),
+                )
+            })?;
+
+        let mut by_provider: HashMap<String, Vec<models::CollectionCard>> = HashMap::new();
+        for card in collection_cards {
+            by_provider.entry(card.provider.clone()).or_default().push(card);
+        }
+
+        let mut card_data: HashMap<String, Card> = HashMap::new();
+        for (provider, cards) in &by_provider {
+            if let Some(retrieval) = retrieval_systems.get(provider) {
+                let ids: Vec<String> = cards.iter().map(|c| c.uuid.clone()).collect();
+                if let Ok(data) = retrieval.get_cards_by_ids(ids).await {
+                    card_data.extend(data);
+                }
+            }
+        }
+
+        let count = by_provider
+            .values()
+            .flatten()
+            .filter(|cc| {
+                card_data
+                    .get(&cc.uuid)
+                    .map(|card| matches_card_filters(card, &filters))
+                    .unwrap_or(false)
+            })
+            .count();
+
+        Ok(Json(count))
+    }
+
     ApiRouter::new()
         .api_route("/list", get(list))
         .api_route("/add", post(add))
@@ -542,6 +887,8 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         .api_route("/move/{id}", post(move_to))
         .api_route("/cards/{id}/list", get(cards_get))
         .api_route("/cards/{id}/count", get(collection_cards_count))
+        .api_route("/cards/{id}/search", post(collection_cards_search))
+        .api_route("/cards/{id}/search/count", post(collection_cards_search_count))
         .api_route("/search", post(search_temp))
         .api_route("/cards/{id}/add", post(cards_add))
         .api_route("/cards/{id}/delete", post(cards_remove))

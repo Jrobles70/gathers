@@ -5,6 +5,7 @@
   "dependencies": {
     "dataloader": "^2.2.2",
     "http-proxy-middleware": "^2.0.6",
+    "mana-font": "^1.18.0",
     "npm-check-updates": "^19.3.2",
     "react": "^18.2.0",
     "react-bootstrap": "^2.8.0",
