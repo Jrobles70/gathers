@@ -309,7 +309,7 @@ mod tests {
         let new_collection = collections.iter().find(|c| !"Default".eq(*c)).unwrap();
 
         let card_count = s
-            .get_cards_in_collection_count(new_collection.clone())
+            .get_cards_in_collection_count(new_collection.clone(), &[])
             .await
             .unwrap();
         assert_eq!(card_count, 2);

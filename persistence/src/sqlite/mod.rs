@@ -1382,6 +1382,7 @@ mod tests {
             sort_by: Some(CollectionSortField::Quantity),
             sort_order: Some(SortOrder::Asc),
             provider: None,
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
@@ -1406,6 +1407,7 @@ mod tests {
             sort_by: Some(CollectionSortField::Quantity),
             sort_order: Some(SortOrder::Desc),
             provider: None,
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
@@ -1430,6 +1432,7 @@ mod tests {
             sort_by: Some(CollectionSortField::FoilQuantity),
             sort_order: Some(SortOrder::Desc),
             provider: None,
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
@@ -1454,6 +1457,7 @@ mod tests {
             sort_by: None,
             sort_order: None,
             provider: Some("MagicSQLite".to_string()),
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
@@ -1474,6 +1478,7 @@ mod tests {
             sort_by: None,
             sort_order: None,
             provider: Some("PokemonSQLite".to_string()),
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
@@ -1495,6 +1500,7 @@ mod tests {
             sort_by: Some(CollectionSortField::Quantity),
             sort_order: Some(SortOrder::Asc),
             provider: Some("MagicSQLite".to_string()),
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
@@ -1518,6 +1524,7 @@ mod tests {
             sort_by: Some(CollectionSortField::Provider),
             sort_order: Some(SortOrder::Asc),
             provider: None,
+            providers: vec![],
         };
         let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
 
