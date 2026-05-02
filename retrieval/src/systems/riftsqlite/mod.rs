@@ -110,7 +110,7 @@ impl RetrievalSystemTrait for RiftboundSQLiteRetrievalSystem {
         let sort_col = match &filters.sort_by {
             Some(SortField::Rarity) => "rarity",
             Some(SortField::SetCode) => "set_id",
-            Some(SortField::CollectorNumber) => "code",
+            Some(SortField::CollectorNumber) => "CAST(code AS INTEGER)",
             Some(SortField::Artist) => "artists",
             _ => "name",
         };

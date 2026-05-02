@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { useCollection, useCollections } from "./CollectionContext";
-import { useOperations } from "../OperationsContext";
+import { useOperations, useMode } from "../OperationsContext";
 import { useCardsDispatch } from "../Components/CardListContexts/CardsContext";
 import { useRefreshCardList } from "./CardListContexts/RefreshCardListContext";
 
 export default function CardDetails({ id, details = null, toggleSelected, showCollectionSelect = false }) {
   const ops = useOperations();
+  const { collectionsEnabled } = useMode();
   const currentCollection = useCollection();
   const collections = useCollections();
   const cardsDispatch = useCardsDispatch();
@@ -77,7 +78,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
                 -
               </button>
             </React.Fragment>
-          ) : (
+          ) : collectionsEnabled ? (
             <React.Fragment>
               {showCollectionSelect && collections.length > 0 && (
                 <select
@@ -105,7 +106,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
                 Add Foil
               </button>
             </React.Fragment>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

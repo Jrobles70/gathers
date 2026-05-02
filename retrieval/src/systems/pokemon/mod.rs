@@ -100,7 +100,7 @@ impl RetrievalSystemTrait for PokemonSQLiteRetrievalSystem {
         let sort_col = match &filters.sort_by {
             Some(SortField::Rarity) => "rarity",
             Some(SortField::SetCode) => "expName",
-            Some(SortField::CollectorNumber) => "expCardNumber",
+            Some(SortField::CollectorNumber) => "CAST(expCardNumber AS INTEGER)",
             Some(SortField::Artist) => "name",
             _ => "name",
         };

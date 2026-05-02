@@ -3,8 +3,17 @@ import RiftboundCard from "./RiftboundCard";
 import { useOperations } from "../OperationsContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
+import SortControls from "./SortControls";
 
 const PAGE_SIZE = 24;
+
+const SORT_FIELDS = [
+  { value: "Name",            label: "Name" },
+  { value: "Rarity",         label: "Rarity" },
+  { value: "SetCode",        label: "Set Code" },
+  { value: "CollectorNumber",label: "Collector Number" },
+  { value: "Artist",         label: "Artist" },
+];
 
 function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const ops = useOperations();
@@ -17,18 +26,20 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
     searchOptions,
     handleSearchInput,
     handleArrayInput,
+    handleMultiInput,
     handlePageChange,
     triggerSearch,
   } = useCardSearch({
-    stringFields: ["name", "setCode", "artist", "collectorNumber", "text", "rarity"],
+    stringFields: ["name", "setCode", "artist", "collectorNumber", "text", "rarity", "sortBy", "sortOrder"],
     arrayFields: ["colorIdentities"],
     startSearch,
+    defaults: { sortBy: "Name", sortOrder: "Asc" },
   });
 
   useEffect(() => {
     if (!shouldSearch) return;
     setLoading(true);
-    const url = `/riftbound/cards/search?pageSize=${PAGE_SIZE}&offset=${(pageNumber - 1) * PAGE_SIZE}`;
+    const url = `/riftbound/cards/search?limit=${PAGE_SIZE}&skip=${(pageNumber - 1) * PAGE_SIZE}`;
     ops
       .fetch("Searching", [], url, {
         method: "post",
@@ -51,7 +62,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
       id={dedicatedPage ? "main-search" : "search"}
     >
       <h2>Search</h2>
-      <div className="list-group list-group-flush mx-3 mt-4">
+      <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
         <div className="input-group">
           <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
           <input onChange={(e) => handleSearchInput(e, "setCode")} className="form-control" placeholder="Set Code" value={searchOptions.setCode} />
@@ -79,6 +90,14 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
           ))}
         </div>
         <div className="input-group">
+          <SortControls
+            sortBy={searchOptions.sortBy}
+            sortOrder={searchOptions.sortOrder}
+            fields={SORT_FIELDS}
+            onChange={(field, order) => handleMultiInput({ sortBy: field, sortOrder: order }, { search: true })}
+          />
+        </div>
+        <div className="input-group">
           <button onClick={triggerSearch} className="btn btn-outline-secondary" type="button" id="button-addon2">
             Search
           </button>
@@ -101,7 +120,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
           )}
         </div>
         <SearchPagination cards={cards} pageSize={PAGE_SIZE} pageNumber={pageNumber} onPageChange={handlePageChange} />
-      </div>
+      </form>
       <hr />
     </div>
   );

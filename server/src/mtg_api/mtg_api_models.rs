@@ -83,6 +83,8 @@ pub struct APICard {
     pub name: String,
     #[serde(rename = "setCode")]
     pub set_code: String,
+    #[serde(rename = "collectorNumber")]
+    pub collector_number: String,
     pub rarity: APIRarity,
     pub artist: String,
     #[serde(rename = "colorIdentity")]
@@ -105,6 +107,7 @@ impl From<MagicCard> for APICard {
             id: value.id,
             name: value.name,
             set_code: value.set_code,
+            collector_number: value.collector_number,
             rarity: value.rarity.into(),
             artist: value.artist,
             color_identity: value.color_identity.into_iter().map(Into::into).collect(),

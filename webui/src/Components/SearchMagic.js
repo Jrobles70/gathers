@@ -5,8 +5,17 @@ import { useCardSets } from "./ReusableConstants/CardSets";
 import { useCollections } from "./CollectionContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
+import SortControls from "./SortControls";
 
 const PAGE_SIZE = 24;
+
+const SORT_FIELDS = [
+  { value: "Name",            label: "Name" },
+  { value: "Rarity",         label: "Rarity" },
+  { value: "SetCode",        label: "Set Code" },
+  { value: "CollectorNumber",label: "Collector Number" },
+  { value: "Artist",         label: "Artist" },
+];
 
 function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
   const ops = useOperations();
@@ -24,12 +33,14 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
     searchOptions,
     handleSearchInput,
     handleArrayInput,
+    handleMultiInput,
     handlePageChange,
     triggerSearch,
   } = useCardSearch({
-    stringFields: ["name", "setCode", "artist", "collectorNumber", "text", "rarity"],
+    stringFields: ["name", "setCode", "artist", "collectorNumber", "text", "rarity", "sortBy", "sortOrder"],
     arrayFields: ["colorIdentities"],
     startSearch,
+    defaults: { sortBy: "Name", sortOrder: "Asc" },
   });
 
   useEffect(() => {
@@ -74,7 +85,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
       id={dedicatedPage ? "main-search" : "search"}
     >
       <h2>Search</h2>
-      <div className="list-group list-group-flush mx-3 mt-4">
+      <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
         <div className="input-group">
           <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
           <input onChange={(e) => handleSearchInput(e, "setCode")} className="form-control" list="datalistOptions" placeholder="Set Code" value={searchOptions.setCode} />
@@ -103,6 +114,14 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
               <label className="form-check-label" htmlFor={`inlineCheckbox${i + 1}`}>{label}</label>
             </div>
           ))}
+        </div>
+        <div className="input-group">
+          <SortControls
+            sortBy={searchOptions.sortBy}
+            sortOrder={searchOptions.sortOrder}
+            fields={SORT_FIELDS}
+            onChange={(field, order) => handleMultiInput({ sortBy: field, sortOrder: order }, { search: true })}
+          />
         </div>
         <div className="input-group">
           <button onClick={triggerSearch} className="btn btn-outline-secondary" type="button" id="button-addon2">
@@ -140,7 +159,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
           )}
         </div>
         <SearchPagination cards={cards} pageSize={PAGE_SIZE} pageNumber={pageNumber} onPageChange={handlePageChange} />
-      </div>
+      </form>
       <hr />
     </div>
   );

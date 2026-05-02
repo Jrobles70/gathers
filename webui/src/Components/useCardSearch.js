@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-export default function useCardSearch({ stringFields, arrayFields = [], startSearch = false }) {
+export default function useCardSearch({ stringFields, arrayFields = [], startSearch = false, defaults = {} }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialOptions = {
-    ...Object.fromEntries(stringFields.map((f) => [f, searchParams.get(f) ?? ""])),
+    ...Object.fromEntries(stringFields.map((f) => [f, searchParams.get(f) ?? (defaults[f] ?? "")])),
     ...Object.fromEntries(arrayFields.map((f) => [f, searchParams.getAll(f)])),
   };
 
@@ -42,6 +42,16 @@ export default function useCardSearch({ stringFields, arrayFields = [], startSea
     setSearchParams({ ...searchOptions, page: String(newPage) });
   };
 
+  const handleMultiInput = (updates, { search = false } = {}) => {
+    const newState = { ...searchOptions, ...updates };
+    setSearchOptions(newState);
+    setSearchParams({ ...newState, page: "1" });
+    if (search) {
+      setPageNumber(1);
+      setShouldSearch(true);
+    }
+  };
+
   const triggerSearch = () => {
     setPageNumber(1);
     setShouldSearch(true);
@@ -56,6 +66,7 @@ export default function useCardSearch({ stringFields, arrayFields = [], startSea
     searchOptions,
     handleSearchInput,
     handleArrayInput,
+    handleMultiInput,
     handlePageChange,
     triggerSearch,
   };

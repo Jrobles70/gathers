@@ -3,12 +3,20 @@ import PokemonCard from "./PokemonCard";
 import { useOperations } from "../OperationsContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
+import SortControls from "./SortControls";
 
 const PAGE_SIZE = 24;
 
 const ENERGY_TYPES = [
   "Fire", "Water", "Grass", "Lightning", "Psychic",
   "Fighting", "Darkness", "Metal", "Dragon", "Fairy", "Colorless",
+];
+
+const SORT_FIELDS = [
+  { value: "Name",            label: "Name" },
+  { value: "Rarity",         label: "Rarity" },
+  { value: "SetCode",        label: "Set Code" },
+  { value: "CollectorNumber",label: "Collector Number" },
 ];
 
 function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
@@ -22,12 +30,14 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
     searchOptions,
     handleSearchInput,
     handleArrayInput,
+    handleMultiInput,
     handlePageChange,
     triggerSearch,
   } = useCardSearch({
-    stringFields: ["name", "setCode", "collectorNumber"],
+    stringFields: ["name", "setCode", "collectorNumber", "sortBy", "sortOrder"],
     arrayFields: ["energyTypes"],
     startSearch,
+    defaults: { sortBy: "Name", sortOrder: "Asc" },
   });
 
   useEffect(() => {
@@ -54,7 +64,7 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
       id={dedicatedPage ? "main-search" : "search"}
     >
       <h2>Search</h2>
-      <div className="list-group list-group-flush mx-3 mt-4">
+      <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
         <div className="input-group">
           <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
           <input onChange={(e) => handleSearchInput(e, "setCode")} className="form-control" placeholder="Set Code" value={searchOptions.setCode} />
@@ -76,6 +86,14 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
               <label className="form-check-label" htmlFor={"energy-" + type}>{type}</label>
             </div>
           ))}
+        </div>
+        <div className="input-group">
+          <SortControls
+            sortBy={searchOptions.sortBy}
+            sortOrder={searchOptions.sortOrder}
+            fields={SORT_FIELDS}
+            onChange={(field, order) => handleMultiInput({ sortBy: field, sortOrder: order }, { search: true })}
+          />
         </div>
         <div className="input-group">
           <button onClick={triggerSearch} className="btn btn-outline-secondary" type="button">
@@ -100,7 +118,7 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
           )}
         </div>
         <SearchPagination cards={cards} pageSize={PAGE_SIZE} pageNumber={pageNumber} onPageChange={handlePageChange} />
-      </div>
+      </form>
       <hr />
     </div>
   );

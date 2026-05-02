@@ -141,7 +141,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         let sort_col = match &filters.sort_by {
             Some(SortField::Rarity) => "a.rarity",
             Some(SortField::SetCode) => "a.setCode",
-            Some(SortField::CollectorNumber) => "a.number",
+            Some(SortField::CollectorNumber) => "CAST(a.number AS INTEGER)",
             Some(SortField::Artist) => "a.artist",
             _ => "a.name",
         };
