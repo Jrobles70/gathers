@@ -15,7 +15,7 @@ pub struct DownloadProgress {
     pub phase: String,
 }
 
-use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
+use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::{CardSearchFilters, SortField, SortOrder}};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use models::SqlCard;
@@ -138,6 +138,15 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             query.push_str(" WHERE ");
             query.push_str(&conditions.join(" AND "));
         }
+        let sort_col = match &filters.sort_by {
+            Some(SortField::Rarity) => "a.rarity",
+            Some(SortField::SetCode) => "a.setCode",
+            Some(SortField::CollectorNumber) => "a.number",
+            Some(SortField::Artist) => "a.artist",
+            _ => "a.name",
+        };
+        let sort_dir = if matches!(&filters.sort_order, Some(SortOrder::Desc)) { "DESC" } else { "ASC" };
+        query.push_str(&format!(" ORDER BY {sort_col} COLLATE NOCASE {sort_dir}"));
         if let Some(limit) = limit {
             query.push_str(format!(" LIMIT {limit} COLLATE NOCASE").as_str());
         } else {
@@ -536,5 +545,106 @@ mod tests {
         let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
         let name = system.name();
         assert_eq!(name, "MagicSQLite");
+    }
+
+    fn card_name(c: &::models::Card) -> String {
+        match c {
+            ::models::Card::Magic(m) => m.name.to_lowercase(),
+            _ => String::new(),
+        }
+    }
+
+    fn card_rarity(c: &::models::Card) -> String {
+        match c {
+            ::models::Card::Magic(m) => format!("{:?}", m.rarity).to_lowercase(),
+            _ => String::new(),
+        }
+    }
+
+    fn card_set_code(c: &::models::Card) -> String {
+        match c {
+            ::models::Card::Magic(m) => m.set_code.to_lowercase(),
+            _ => String::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_sort_by_name_asc() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            sort_by: Some(SortField::Name),
+            sort_order: Some(SortOrder::Asc),
+            ..Default::default()
+        };
+        let cards = system.search_cards(filters, None, Some(50)).await.unwrap();
+        assert!(!cards.is_empty());
+        let names: Vec<_> = cards.iter().map(card_name).collect();
+        for w in names.windows(2) {
+            assert!(w[0] <= w[1], "name order violated: {:?} > {:?}", w[0], w[1]);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_sort_by_name_desc() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            sort_by: Some(SortField::Name),
+            sort_order: Some(SortOrder::Desc),
+            ..Default::default()
+        };
+        let cards = system.search_cards(filters, None, Some(50)).await.unwrap();
+        assert!(!cards.is_empty());
+        let names: Vec<_> = cards.iter().map(card_name).collect();
+        for w in names.windows(2) {
+            assert!(w[0] >= w[1], "name desc order violated: {:?} < {:?}", w[0], w[1]);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_sort_by_rarity_asc() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            sort_by: Some(SortField::Rarity),
+            sort_order: Some(SortOrder::Asc),
+            ..Default::default()
+        };
+        let cards = system.search_cards(filters, None, Some(50)).await.unwrap();
+        assert!(!cards.is_empty());
+        let rarities: Vec<_> = cards.iter().map(card_rarity).collect();
+        for w in rarities.windows(2) {
+            assert!(w[0] <= w[1], "rarity order violated: {:?} > {:?}", w[0], w[1]);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_sort_by_set_code() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            sort_by: Some(SortField::SetCode),
+            sort_order: Some(SortOrder::Asc),
+            ..Default::default()
+        };
+        let cards = system.search_cards(filters, None, Some(50)).await.unwrap();
+        assert!(!cards.is_empty());
+        let set_codes: Vec<_> = cards.iter().map(card_set_code).collect();
+        for w in set_codes.windows(2) {
+            assert!(w[0] <= w[1], "set_code order violated: {:?} > {:?}", w[0], w[1]);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_default_sort_is_name_asc() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters_default = CardSearchFilters::default();
+        let filters_explicit = CardSearchFilters {
+            sort_by: Some(SortField::Name),
+            sort_order: Some(SortOrder::Asc),
+            ..Default::default()
+        };
+        let default_cards = system.search_cards(filters_default, None, Some(10)).await.unwrap();
+        let explicit_cards = system.search_cards(filters_explicit, None, Some(10)).await.unwrap();
+        let default_names: Vec<_> = default_cards.iter().map(card_name).collect();
+        let explicit_names: Vec<_> = explicit_cards.iter().map(card_name).collect();
+        assert_eq!(default_names, explicit_names);
     }
 }

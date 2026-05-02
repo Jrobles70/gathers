@@ -5,6 +5,45 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::mtg_api::mtg_api_models::{APICardColour, APIRarity};
 use crate::pokemon_api::pokemon_api_models::APIEnergyType;
 use crate::riftbound_api::riftbound_api_models::APICardDomain;
+use persistence;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema, PartialEq)]
+pub enum APISortField {
+    #[default]
+    Name,
+    Rarity,
+    SetCode,
+    CollectorNumber,
+    Artist,
+}
+
+impl From<APISortField> for models::filters::SortField {
+    fn from(value: APISortField) -> Self {
+        match value {
+            APISortField::Name => models::filters::SortField::Name,
+            APISortField::Rarity => models::filters::SortField::Rarity,
+            APISortField::SetCode => models::filters::SortField::SetCode,
+            APISortField::CollectorNumber => models::filters::SortField::CollectorNumber,
+            APISortField::Artist => models::filters::SortField::Artist,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema, PartialEq)]
+pub enum APISortOrder {
+    #[default]
+    Asc,
+    Desc,
+}
+
+impl From<APISortOrder> for models::filters::SortOrder {
+    fn from(value: APISortOrder) -> Self {
+        match value {
+            APISortOrder::Asc => models::filters::SortOrder::Asc,
+            APISortOrder::Desc => models::filters::SortOrder::Desc,
+        }
+    }
+}
 
 /// Server-local version of `models::filters::CardSearchFilters` with `JsonSchema`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
@@ -26,6 +65,10 @@ pub struct APICardSearchFilters {
     pub domains: Option<Vec<APICardDomain>>,
     #[serde(alias = "energyTypes")]
     pub energy_types: Option<Vec<APIEnergyType>>,
+    #[serde(alias = "sortBy")]
+    pub sort_by: Option<APISortField>,
+    #[serde(alias = "sortOrder")]
+    pub sort_order: Option<APISortOrder>,
 }
 
 impl From<APICardSearchFilters> for models::filters::CardSearchFilters {
@@ -53,6 +96,8 @@ impl From<APICardSearchFilters> for models::filters::CardSearchFilters {
                     .map(models::pokemon::EnergyType::from)
                     .collect()
             }),
+            sort_by: value.sort_by.map(models::filters::SortField::from),
+            sort_order: value.sort_order.map(models::filters::SortOrder::from),
         }
     }
 }
@@ -81,12 +126,35 @@ pub struct CardToAdd {
     pub foil_quantity: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema, PartialEq)]
+pub enum APICollectionSortField {
+    #[default]
+    TimeAdded,
+    Quantity,
+    FoilQuantity,
+    Provider,
+}
+
+impl From<APICollectionSortField> for persistence::CollectionSortField {
+    fn from(value: APICollectionSortField) -> Self {
+        match value {
+            APICollectionSortField::TimeAdded => persistence::CollectionSortField::TimeAdded,
+            APICollectionSortField::Quantity => persistence::CollectionSortField::Quantity,
+            APICollectionSortField::FoilQuantity => persistence::CollectionSortField::FoilQuantity,
+            APICollectionSortField::Provider => persistence::CollectionSortField::Provider,
+        }
+    }
+}
+
 #[derive(Deserialize, JsonSchema)]
 pub struct CollectionCardsQuery {
     #[serde(default)]
     pub offset: usize,
     #[serde(default = "default_limit")]
     pub limit: usize,
+    pub sort_by: Option<APICollectionSortField>,
+    pub sort_order: Option<APISortOrder>,
+    pub provider: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]

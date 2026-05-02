@@ -1,9 +1,9 @@
-use crate::CollectionCard;
-use crate::PersistenceSystemTrait;
+use crate::{CollectionCard, CollectionCardsParams, CollectionSortField, PersistenceSystemTrait};
 use eyre::eyre;
 use include_dir::{Dir, include_dir};
 use models::CardID;
 use models::CollectionID;
+use models::filters::SortOrder;
 use rusqlite::{Connection, params};
 use rusqlite_migration::Migrations;
 use std::sync::Arc;
@@ -259,29 +259,51 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
     async fn get_cards_in_collection_paginated(
         &self,
         collection_id: &CollectionID,
-        offset: usize,
-        limit: usize,
+        params: CollectionCardsParams,
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
 
-        let mut stmt = conn.prepare(
-            "SELECT uuid, quantity, foilquantity, timeadded, provider FROM cards WHERE collection = ?1 LIMIT ?2 OFFSET ?3",
-        )?;
-        let card_iter =
-            stmt.query_map(params![collection_id, limit as u32, offset as u32], |row| {
-                let uuid: String = row.get(0)?;
-                let quantity: i32 = row.get(1)?;
-                let foil_quantity: i32 = row.get(2)?;
-                let time_added: String = row.get(3)?;
-                Ok(CollectionCard {
-                    uuid,
-                    quantity,
-                    foil_quantity,
-                    time_added,
-                    collection: collection_id.clone(),
-                    provider: row.get(4)?,
-                })
-            })?;
+        let mut conditions = vec!["collection = ?1".to_string()];
+        let mut query_params: Vec<String> = vec![collection_id.clone()];
+        let mut i = 2;
+
+        if let Some(provider) = &params.provider {
+            conditions.push(format!("provider = ?{i}"));
+            query_params.push(provider.clone());
+            i += 1;
+        }
+
+        let sort_col = match &params.sort_by {
+            Some(CollectionSortField::Quantity) => "quantity",
+            Some(CollectionSortField::FoilQuantity) => "foilquantity",
+            Some(CollectionSortField::Provider) => "provider",
+            _ => "timeadded",
+        };
+        let sort_dir = if matches!(&params.sort_order, Some(SortOrder::Desc)) { "DESC" } else { "ASC" };
+
+        let query = format!(
+            "SELECT uuid, quantity, foilquantity, timeadded, provider FROM cards WHERE {} ORDER BY {} {} LIMIT ?{} OFFSET ?{}",
+            conditions.join(" AND "),
+            sort_col,
+            sort_dir,
+            i,
+            i + 1,
+        );
+        query_params.push(params.limit.to_string());
+        query_params.push(params.offset.to_string());
+
+        let mut stmt = conn.prepare(&query)?;
+        let collection_id = collection_id.clone();
+        let card_iter = stmt.query_map(rusqlite::params_from_iter(query_params.iter()), |row| {
+            Ok(CollectionCard {
+                uuid: row.get(0)?,
+                quantity: row.get(1)?,
+                foil_quantity: row.get(2)?,
+                time_added: row.get(3)?,
+                collection: collection_id.clone(),
+                provider: row.get(4)?,
+            })
+        })?;
 
         let mut cards = Vec::new();
         for card in card_iter {
@@ -390,7 +412,7 @@ mod tests {
 
         // Verify cards were moved to collection 1
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2); // Should have both cards now
@@ -402,7 +424,7 @@ mod tests {
 
         // Verify cards were moved away from Default
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.into(), 0, 100)
+            .get_cards_in_collection_paginated(&DEFAULT.into(), CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -430,7 +452,7 @@ mod tests {
 
         // Verify no cards remain in the collection
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -496,7 +518,7 @@ mod tests {
 
         // Verify the card was added
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -509,7 +531,7 @@ mod tests {
 
         // Verify the quantities were updated
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -522,7 +544,7 @@ mod tests {
 
         // Verify the quantities were updated
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -535,7 +557,7 @@ mod tests {
 
         // Verify the card was removed from collection (both quantities are 0)
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -558,7 +580,7 @@ mod tests {
 
         // Test pagination - get first page (limit 5, offset 0)
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 5)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 5);
@@ -570,7 +592,7 @@ mod tests {
 
         // Test pagination - get second page (limit 5, offset 5)
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 5, 5)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(5, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 5);
@@ -582,7 +604,7 @@ mod tests {
 
         // Test pagination - get page with less items than limit
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 8, 5)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(8, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2); // Only 2 items left
@@ -591,7 +613,7 @@ mod tests {
 
         // Test pagination - offset beyond available items
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 20, 5)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(20, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -619,7 +641,7 @@ mod tests {
         assert_eq!(c, 1);
 
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.into(), 0, 5)
+            .get_cards_in_collection_paginated(&DEFAULT.into(), CollectionCardsParams::new(0, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -629,7 +651,7 @@ mod tests {
         p.remove_collection(&collection_id, None).await.unwrap();
         assert_eq!(p.list_collections(None).await.unwrap().len(), 1);
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.into(), 0, 5)
+            .get_cards_in_collection_paginated(&DEFAULT.into(), CollectionCardsParams::new(0, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -651,7 +673,7 @@ mod tests {
 
         // Verify cards are in collection 1
         let cards1 = p
-            .get_cards_in_collection_paginated(&collection1_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection1_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards1.len(), 2);
@@ -669,7 +691,7 @@ mod tests {
 
         // Verify cards are now in collection 2
         let cards2 = p
-            .get_cards_in_collection_paginated(&collection2_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection2_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards2.len(), 2);
@@ -700,7 +722,7 @@ mod tests {
         add_card_to_collection(&mut p, &DEFAULT.into(), &"default_card".to_string(), 3, 1).await;
 
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.to_string(), 0, 100)
+            .get_cards_in_collection_paginated(&DEFAULT.to_string(), CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
 
@@ -724,7 +746,7 @@ mod tests {
         assert!(collections.contains(&DEFAULT.to_string()));
 
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.to_string(), 0, 100)
+            .get_cards_in_collection_paginated(&DEFAULT.to_string(), CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -734,7 +756,7 @@ mod tests {
         assert_eq!(card1.foil_quantity, 0);
 
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -781,7 +803,7 @@ mod tests {
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -809,7 +831,7 @@ mod tests {
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -844,7 +866,7 @@ mod tests {
             .unwrap();
 
         let cards = persistence
-            .get_cards_in_collection_paginated(&collection_id, 0, 100)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -905,7 +927,7 @@ mod tests {
 
         // Regular floors at 0; foil = 2 − 1 = 1; card still exists
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -915,7 +937,7 @@ mod tests {
         // Remove remaining foil; both quantities hit 0 → card deleted
         add_card_to_collection(&mut p, &collection_id, &"card1".to_string(), 0, -1).await;
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -949,7 +971,7 @@ mod tests {
 
         // Source collection unchanged
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -958,7 +980,7 @@ mod tests {
 
         // Default collection untouched
         let default_cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.to_string(), 0, 10)
+            .get_cards_in_collection_paginated(&DEFAULT.to_string(), CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(default_cards.len(), 0);
@@ -987,7 +1009,7 @@ mod tests {
         assert!(!collections.contains(&col1));
 
         let cards = p
-            .get_cards_in_collection_paginated(&col2, 0, 100)
+            .get_cards_in_collection_paginated(&col2, CollectionCardsParams::new(0, 100))
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -1062,7 +1084,7 @@ mod tests {
 
         // Source: 2 regular, 2 foil remain
         let src_cards = p
-            .get_cards_in_collection_paginated(&col_a, 0, 10)
+            .get_cards_in_collection_paginated(&col_a, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(src_cards.len(), 1);
@@ -1071,7 +1093,7 @@ mod tests {
 
         // Destination: 3 regular, 0 foil — provider must be "mtg", not ""
         let dst_cards = p
-            .get_cards_in_collection_paginated(&col_b, 0, 10)
+            .get_cards_in_collection_paginated(&col_b, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(dst_cards.len(), 1);
@@ -1117,14 +1139,14 @@ mod tests {
 
         // Source must be empty
         let src_cards = p
-            .get_cards_in_collection_paginated(&col_a, 0, 10)
+            .get_cards_in_collection_paginated(&col_a, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(src_cards.len(), 0);
 
         // Destination has the card with the correct provider
         let dst_cards = p
-            .get_cards_in_collection_paginated(&col_b, 0, 10)
+            .get_cards_in_collection_paginated(&col_b, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(dst_cards.len(), 1);
@@ -1170,7 +1192,7 @@ mod tests {
 
         // Card must still be present with original quantities and correct provider
         let cards = p
-            .get_cards_in_collection_paginated(&col, 0, 10)
+            .get_cards_in_collection_paginated(&col, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(cards.len(), 1);
@@ -1197,7 +1219,7 @@ mod tests {
 
         // Collection should still be empty
         let cards = p
-            .get_cards_in_collection_paginated(&collection_id, 0, 10)
+            .get_cards_in_collection_paginated(&collection_id, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
@@ -1332,5 +1354,165 @@ mod tests {
 
         let time_updated = get_time_updated(&p, &col_b, "card1").await.unwrap();
         assert_ne!(time_updated, OLD_TIME);
+    }
+
+    #[tokio::test]
+    async fn test_collection_sort_by_quantity_asc() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card_a".to_string(), 5, 0, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 0, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_c".to_string(), 3, 0, OLD_TIME, "").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: Some(CollectionSortField::Quantity),
+            sort_order: Some(SortOrder::Asc),
+            provider: None,
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert_eq!(cards.len(), 3);
+        assert_eq!(cards[0].quantity, 1);
+        assert_eq!(cards[1].quantity, 3);
+        assert_eq!(cards[2].quantity, 5);
+    }
+
+    #[tokio::test]
+    async fn test_collection_sort_by_quantity_desc() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card_a".to_string(), 5, 0, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 0, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_c".to_string(), 3, 0, OLD_TIME, "").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: Some(CollectionSortField::Quantity),
+            sort_order: Some(SortOrder::Desc),
+            provider: None,
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert_eq!(cards.len(), 3);
+        assert_eq!(cards[0].quantity, 5);
+        assert_eq!(cards[1].quantity, 3);
+        assert_eq!(cards[2].quantity, 1);
+    }
+
+    #[tokio::test]
+    async fn test_collection_sort_by_foil_quantity_desc() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card_a".to_string(), 1, 10, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 2, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_c".to_string(), 1, 7, OLD_TIME, "").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: Some(CollectionSortField::FoilQuantity),
+            sort_order: Some(SortOrder::Desc),
+            provider: None,
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert_eq!(cards.len(), 3);
+        assert_eq!(cards[0].foil_quantity, 10);
+        assert_eq!(cards[1].foil_quantity, 7);
+        assert_eq!(cards[2].foil_quantity, 2);
+    }
+
+    #[tokio::test]
+    async fn test_collection_filter_by_provider() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"mtg1".to_string(), 1, 0, OLD_TIME, "MagicSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"mtg2".to_string(), 2, 0, OLD_TIME, "MagicSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"rb1".to_string(), 1, 0, OLD_TIME, "RiftboundSQLite").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: None,
+            sort_order: None,
+            provider: Some("MagicSQLite".to_string()),
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert_eq!(cards.len(), 2);
+        assert!(cards.iter().all(|c| c.provider == "MagicSQLite"));
+    }
+
+    #[tokio::test]
+    async fn test_collection_filter_by_provider_no_match() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"card1".to_string(), 1, 0, OLD_TIME, "MagicSQLite").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: None,
+            sort_order: None,
+            provider: Some("PokemonSQLite".to_string()),
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert!(cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_collection_filter_and_sort_combined() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"mtg_high".to_string(), 5, 0, OLD_TIME, "MagicSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"mtg_low".to_string(), 1, 0, OLD_TIME, "MagicSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"rb1".to_string(), 99, 0, OLD_TIME, "RiftboundSQLite").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: Some(CollectionSortField::Quantity),
+            sort_order: Some(SortOrder::Asc),
+            provider: Some("MagicSQLite".to_string()),
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert_eq!(cards.len(), 2);
+        assert_eq!(cards[0].uuid, "mtg_low");
+        assert_eq!(cards[1].uuid, "mtg_high");
+    }
+
+    #[tokio::test]
+    async fn test_collection_sort_by_provider() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let col = p.add_collection("Col".to_string()).await.unwrap();
+
+        p.add_card_to_collection(&col, &"z_card".to_string(), 1, 0, OLD_TIME, "ZProvider").await.unwrap();
+        p.add_card_to_collection(&col, &"a_card".to_string(), 1, 0, OLD_TIME, "AProvider").await.unwrap();
+        p.add_card_to_collection(&col, &"m_card".to_string(), 1, 0, OLD_TIME, "MProvider").await.unwrap();
+
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: 10,
+            sort_by: Some(CollectionSortField::Provider),
+            sort_order: Some(SortOrder::Asc),
+            provider: None,
+        };
+        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+
+        assert_eq!(cards.len(), 3);
+        assert_eq!(cards[0].provider, "AProvider");
+        assert_eq!(cards[1].provider, "MProvider");
+        assert_eq!(cards[2].provider, "ZProvider");
     }
 }

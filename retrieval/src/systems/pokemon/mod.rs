@@ -5,7 +5,7 @@ mod scraper;
 
 use std::{collections::HashMap, sync::Arc};
 
-use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::CardSearchFilters};
+use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::{CardSearchFilters, SortField, SortOrder}};
 use models::SqlPokemonCard;
 use rusqlite::Connection;
 use tokio::sync::Mutex;
@@ -97,6 +97,15 @@ impl RetrievalSystemTrait for PokemonSQLiteRetrievalSystem {
             query.push_str(" WHERE ");
             query.push_str(&conditions.join(" AND "));
         }
+        let sort_col = match &filters.sort_by {
+            Some(SortField::Rarity) => "rarity",
+            Some(SortField::SetCode) => "expName",
+            Some(SortField::CollectorNumber) => "expCardNumber",
+            Some(SortField::Artist) => "name",
+            _ => "name",
+        };
+        let sort_dir = if matches!(&filters.sort_order, Some(SortOrder::Desc)) { "DESC" } else { "ASC" };
+        query.push_str(&format!(" ORDER BY {sort_col} COLLATE NOCASE {sort_dir}"));
         if let Some(limit) = limit {
             query.push_str(format!(" LIMIT {limit} COLLATE NOCASE").as_str());
         } else {

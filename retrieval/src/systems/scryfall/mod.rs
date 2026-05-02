@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use eyre::OptionExt;
 use models::{
-    Card, CardColour, CardID, CardIdentifiers, CollectorNumber, SetCode, filters::CardSearchFilters,
+    Card, CardColour, CardID, CardIdentifiers, CollectorNumber, SetCode, filters::{CardSearchFilters, SortField, SortOrder},
 };
 use serde_json::Value;
 
@@ -71,8 +71,14 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
 
         let page = skip.map(|s| s / 100).unwrap_or(1);
         let unique = "cards";
-        let order = "name";
-        let dir = "asc";
+        let order = match &filters.sort_by {
+            Some(SortField::Rarity) => "rarity",
+            Some(SortField::SetCode) => "set",
+            Some(SortField::CollectorNumber) => "collector_number",
+            Some(SortField::Artist) => "artist",
+            _ => "name",
+        };
+        let dir = if matches!(&filters.sort_order, Some(SortOrder::Desc)) { "desc" } else { "asc" };
         let include_extras = false;
 
         let url = format!(

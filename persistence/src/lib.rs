@@ -5,6 +5,7 @@ use models::CardID;
 use models::CardTrait;
 use models::CollectionCard;
 use models::CollectionID;
+use models::filters::SortOrder;
 use retrieval::NamedRetrievalSystem as _;
 use retrieval::RetrievalSystem;
 use retrieval::RetrievalSystemTrait;
@@ -13,6 +14,36 @@ use crate::csv_models::CSVCard;
 pub use crate::sqlite::SQLitePersistenceSystem;
 
 mod csv_models;
+
+#[derive(Debug, Default, Clone)]
+pub enum CollectionSortField {
+    #[default]
+    TimeAdded,
+    Quantity,
+    FoilQuantity,
+    Provider,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CollectionCardsParams {
+    pub offset: usize,
+    pub limit: usize,
+    pub sort_by: Option<CollectionSortField>,
+    pub sort_order: Option<SortOrder>,
+    pub provider: Option<String>,
+}
+
+impl CollectionCardsParams {
+    pub fn new(offset: usize, limit: usize) -> Self {
+        Self {
+            offset,
+            limit,
+            sort_by: None,
+            sort_order: None,
+            provider: None,
+        }
+    }
+}
 
 #[enum_dispatch]
 #[derive(Debug, Clone)]
@@ -62,8 +93,7 @@ pub trait PersistenceSystemTrait {
     fn get_cards_in_collection_paginated(
         &self,
         collection_id: &CollectionID,
-        offset: usize,
-        limit: usize,
+        params: CollectionCardsParams,
     ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionCard>>>;
 
     fn move_cards_between_collections(
@@ -178,7 +208,7 @@ impl PersistenceSystem {
         let limit = 100;
         loop {
             let cards = self
-                .get_cards_in_collection_paginated(collection_id, offset, limit)
+                .get_cards_in_collection_paginated(collection_id, CollectionCardsParams::new(offset, limit))
                 .await?;
             if cards.is_empty() {
                 break;
@@ -280,7 +310,7 @@ mod tests {
         assert_eq!(card_count, 2);
 
         let cards = s
-            .get_cards_in_collection_paginated(new_collection, 0, 10)
+            .get_cards_in_collection_paginated(new_collection, CollectionCardsParams::new(0, 10))
             .await
             .unwrap();
 

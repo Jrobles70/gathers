@@ -179,6 +179,8 @@ async fn main() -> eyre::Result<()> {
                 types: args.types,
                 domains,
                 energy_types,
+                sort_by: None,
+                sort_order: None,
             },
             Some(args.offset),
             Some(args.limit),

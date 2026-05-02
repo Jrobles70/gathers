@@ -13,7 +13,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use models::Card;
-use persistence::{PersistenceSystem, PersistenceSystemTrait};
+use persistence::{CollectionCardsParams, PersistenceSystem, PersistenceSystemTrait};
 use retrieval::{NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
 
 use crate::{
@@ -295,12 +295,19 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         Path(collection_id): Path<String>,
         Query(query): Query<CollectionCardsQuery>,
     ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
+        let collection_params = CollectionCardsParams {
+            offset: query.offset,
+            limit: query.limit.min(1000),
+            sort_by: query.sort_by.map(persistence::CollectionSortField::from),
+            sort_order: query.sort_order.map(models::filters::SortOrder::from),
+            provider: query.provider,
+        };
         let cards = state
             .1
             .lock()
             .await
             .storage
-            .get_cards_in_collection_paginated(&collection_id, query.offset, query.limit.min(1000))
+            .get_cards_in_collection_paginated(&collection_id, collection_params)
             .await
             .map_err(|e| {
                 (
