@@ -99,13 +99,11 @@ impl RetrievalState {
             };
             // Skip file-based systems whose DB doesn't exist yet (downloading in background).
             let needs_file = matches!(system, Systems::Sql | Systems::RiftboundSql | Systems::PokemonSql);
-            if needs_file {
-                if let Some(ref path) = db_path {
-                    if !std::path::Path::new(path).exists() {
+            if needs_file
+                && let Some(ref path) = db_path
+                    && !std::path::Path::new(path).exists() {
                         continue;
                     }
-                }
-            }
             let retrieval = Self::new_retrieval(system, db_path)?;
             match system {
                 Systems::Scryfall | Systems::Sql => {

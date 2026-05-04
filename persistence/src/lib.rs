@@ -232,13 +232,12 @@ impl PersistenceSystem {
             let mut looked_up: std::collections::HashMap<String, (models::Card, String)> =
                 Default::default();
             for (provider, ids) in &ids_by_provider {
-                if let Some(system) = systems_by_name.get(provider) {
-                    if let Ok(result) = system.get_cards_by_ids(ids.clone()).await {
+                if let Some(system) = systems_by_name.get(provider)
+                    && let Ok(result) = system.get_cards_by_ids(ids.clone()).await {
                         for (uuid, card) in result {
                             looked_up.insert(uuid, (card, system.name().to_string()));
                         }
                     }
-                }
             }
 
             // Fall back: try every system for cards not yet resolved.

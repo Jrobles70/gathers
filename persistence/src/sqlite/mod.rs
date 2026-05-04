@@ -1,5 +1,4 @@
 use crate::{CollectionCard, CollectionCardsParams, CollectionSortField, PersistenceSystemTrait};
-use eyre::eyre;
 use include_dir::{Dir, include_dir};
 use models::CardID;
 use models::CollectionID;

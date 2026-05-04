@@ -68,83 +68,73 @@ fn matches_card_filters(card: &Card, filters: &APICardSearchFilters) -> bool {
         }
     }
 
-    if let Some(ref v) = filters.name {
-        if !v.is_empty() && !name_lower.contains(&v.to_lowercase()) {
+    if let Some(ref v) = filters.name
+        && !v.is_empty() && !name_lower.contains(&v.to_lowercase()) {
             return false;
         }
-    }
-    if let Some(ref v) = filters.set_code {
-        if !v.is_empty() && !set_lower.contains(&v.to_lowercase()) {
+    if let Some(ref v) = filters.set_code
+        && !v.is_empty() && !set_lower.contains(&v.to_lowercase()) {
             return false;
         }
-    }
-    if let Some(ref v) = filters.collector_number {
-        if !v.is_empty() && cn != *v {
+    if let Some(ref v) = filters.collector_number
+        && !v.is_empty() && cn != *v {
             return false;
         }
-    }
 
     match card {
         Card::Magic(m) => {
-            if let Some(ref v) = filters.artist {
-                if !v.is_empty() && !m.artist.to_lowercase().contains(&v.to_lowercase()) {
+            if let Some(ref v) = filters.artist
+                && !v.is_empty() && !m.artist.to_lowercase().contains(&v.to_lowercase()) {
                     return false;
                 }
-            }
-            if let Some(ref v) = filters.text {
-                if !v.is_empty() && !m.text.to_lowercase().contains(&v.to_lowercase()) {
+            if let Some(ref v) = filters.text
+                && !v.is_empty() && !m.text.to_lowercase().contains(&v.to_lowercase()) {
                     return false;
                 }
-            }
             if let Some(ref rarity) = filters.rarity {
                 let filter_rarity = models::Rarity::from(rarity.clone());
                 if m.rarity != filter_rarity {
                     return false;
                 }
             }
-            if let Some(ref colors) = filters.color_identities {
-                if !colors.is_empty() {
+            if let Some(ref colors) = filters.color_identities
+                && !colors.is_empty() {
                     let filter_colors: Vec<models::CardColour> =
                         colors.iter().map(|c| models::CardColour::from(c.clone())).collect();
                     if !filter_colors.iter().all(|c| m.color_identity.contains(c)) {
                         return false;
                     }
                 }
-            }
         }
         Card::Riftbound(r) => {
-            if let Some(ref v) = filters.artist {
-                if !v.is_empty()
+            if let Some(ref v) = filters.artist
+                && !v.is_empty()
                     && !r.artists.iter().any(|a| a.to_lowercase().contains(&v.to_lowercase()))
                 {
                     return false;
                 }
-            }
-            if let Some(ref v) = filters.text {
-                if !v.is_empty() && !r.text.to_lowercase().contains(&v.to_lowercase()) {
+            if let Some(ref v) = filters.text
+                && !v.is_empty() && !r.text.to_lowercase().contains(&v.to_lowercase()) {
                     return false;
                 }
-            }
-            if let Some(ref domains) = filters.domains {
-                if !domains.is_empty() {
+            if let Some(ref domains) = filters.domains
+                && !domains.is_empty() {
                     let filter_domains: Vec<models::riftbound::CardDomain> =
                         domains.iter().map(|d| models::riftbound::CardDomain::from(d.clone())).collect();
                     if !filter_domains.iter().all(|d| r.domains.contains(d)) {
                         return false;
                     }
                 }
-            }
         }
         Card::Pokemon(p) => {
-            if let Some(ref energy) = filters.energy_types {
-                if !energy.is_empty() {
+            if let Some(ref energy) = filters.energy_types
+                && !energy.is_empty() {
                     let filter_energy: Vec<models::pokemon::EnergyType> =
                         energy.iter().map(|e| models::pokemon::EnergyType::from(e.clone())).collect();
                     if !filter_energy.iter().all(|e| p.energy_types.contains(e)) {
                         return false;
                     }
                 }
-            }
         }
     }
 
