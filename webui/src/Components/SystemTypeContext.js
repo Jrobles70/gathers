@@ -22,14 +22,13 @@ export function useSelectedSearchSystem() {
 }
 
 export function SystemTypeProvider({ children }) {
-  const ops = useOperations();
+  const { fetch: opsFetch } = useOperations();
   const [systemType, setSystemType] = useState(null);
   const [systems, setSystems] = useState([]);
   const [selectedSearchSystem, setSelectedSearchSystem] = useState(null);
 
   useEffect(() => {
-    ops
-      .fetch("Getting system info", null, "/system", {})
+    opsFetch("Getting system info", null, "/system", {})
       .then((r) => {
         if (r && r.system) {
           setSystemType(r.system);
@@ -47,7 +46,7 @@ export function SystemTypeProvider({ children }) {
         setSystems(["MagicSQLite"]);
         setSelectedSearchSystem("MagicSQLite");
       });
-  }, []);
+  }, [opsFetch]);
 
   return (
     <SystemTypeContext.Provider

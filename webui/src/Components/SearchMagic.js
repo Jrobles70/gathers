@@ -24,6 +24,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
   const { collectionsEnabled } = useMode();
 
   const [searchCollection, setSearchCollection] = React.useState("");
+  const [setCodeFocused, setSetCodeFocused] = React.useState(false);
 
   const {
     cards, setCards,
@@ -88,9 +89,26 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
       <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
         <div className="input-group">
           <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
-          <input onChange={(e) => handleSearchInput(e, "setCode")} className="form-control" list="datalistOptions" placeholder="Set Code" value={searchOptions.setCode} />
+          <input
+            onChange={(e) => {
+              const raw = e.target.value;
+              const code = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
+              handleSearchInput({ target: { value: code } }, "setCode");
+            }}
+            onFocus={() => setSetCodeFocused(true)}
+            onBlur={() => setSetCodeFocused(false)}
+            className="form-control"
+            list="datalistOptions"
+            placeholder="Set Code"
+            value={searchOptions.setCode}
+          />
           <datalist id="datalistOptions">
-            {cardSets.map((c) => <option key={c} value={c} />)}
+            {setCodeFocused && cardSets
+              .filter(c => c.code && (!searchOptions.setCode ||
+                c.code.toLowerCase().startsWith(searchOptions.setCode.toLowerCase()) ||
+                c.name.toLowerCase().includes(searchOptions.setCode.toLowerCase())))
+              .slice(0, 20)
+              .map((c) => <option key={c.code} value={`${c.code} — ${c.name}`} />)}
           </datalist>
         </div>
         <div className="input-group">

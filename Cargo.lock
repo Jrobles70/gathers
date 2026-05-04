@@ -1392,6 +1392,7 @@ name = "models"
 version = "0.1.0"
 dependencies = [
  "enum_dispatch",
+ "schemars",
  "serde",
  "serde_json",
 ]

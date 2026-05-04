@@ -1,4 +1,4 @@
-import { createContext, useState, useContext } from "react";
+import { createContext, useState, useContext, useCallback } from "react";
 
 export const ModeContext = createContext({ mode: "full", collectionsEnabled: false });
 
@@ -17,28 +17,15 @@ export const OperationsContext = createContext({});
 export function OperationsProvider({ children }) {
   const [operations, setOperations] = useState({});
 
-  const addOperation = (key, operation) => {
-    setOperations((prev) => {
-      return { ...prev, [key]: operation };
-    });
-  };
-
-  const removeOperation = (key) => {
-    setOperations((prev) => {
-      const copy = { ...prev };
-      delete copy[key];
-      return copy;
-    });
-  };
-
-  const opsFetch = async (message, defaultValue, ...args) => {
-    let opId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
-    addOperation(opId, { message: message });
+  const opsFetch = useCallback(async (message, defaultValue, ...args) => {
+    const opId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+    setOperations((prev) => ({ ...prev, [opId]: { message } }));
+    const removeOp = () => setOperations((prev) => { const copy = { ...prev }; delete copy[opId]; return copy; });
     try {
       const response = await fetch(...args);
       if (response.ok) {
         const result = await response.json();
-        removeOperation(opId);
+        removeOp();
         return result;
       } else {
         let errorMessage = `Request failed (${response.status})`;
@@ -46,14 +33,14 @@ export function OperationsProvider({ children }) {
           const body = await response.json();
           if (body?.error) errorMessage = body.error;
         } catch (_) {}
-        removeOperation(opId);
+        removeOp();
         throw new Error(errorMessage);
       }
     } catch (e) {
-      removeOperation(opId);
+      removeOp();
       throw e;
     }
-  };
+  }, []);
 
   return (
     <OperationsContext.Provider

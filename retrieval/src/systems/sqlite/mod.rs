@@ -182,12 +182,12 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
 
     async fn get_sets(&self) -> eyre::Result<Vec<Set>> {
         let conn = self.connection.lock().await;
-        let query = "SELECT DISTINCT setCode FROM cards".to_string();
+        let query = "SELECT DISTINCT c.setCode, COALESCE(s.name, '') FROM cards c LEFT JOIN sets s ON s.code = c.setCode ORDER BY c.setCode".to_string();
         let mut stmt = conn.prepare(&query)?;
         let iter = stmt.query_map([], |row| {
             Ok(Set {
                 code: row.get(0)?,
-                name: "".to_string(),
+                name: row.get(1)?,
             })
         })?;
         Ok(iter.flatten().collect())

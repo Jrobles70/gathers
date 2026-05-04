@@ -7,15 +7,15 @@ export function useCardSets() {
 }
 
 export function CardSetsProvider({ children }) {
-  const ops = useOperations();
+  const { fetch: opsFetch } = useOperations();
 
   const [sets, setSets] = useState([]);
 
   useEffect(() => {
-    ops.fetch("Getting all available sets", [], "/mtg/sets").then((data) => {
-      setSets(["", ...data]);
+    opsFetch("Getting all available sets", [], "/mtg/sets").then((data) => {
+      setSets([{ code: "", name: "" }, ...data]);
     });
-  }, []);
+  }, [opsFetch]);
 
   return (
     <CardSetsContext.Provider value={sets}>{children}</CardSetsContext.Provider>

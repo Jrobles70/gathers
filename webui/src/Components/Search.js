@@ -25,6 +25,7 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false 
     } else if (selectedSystem) {
       setSearchParams((prev) => { prev.set("system", selectedSystem); return prev; }, { replace: true });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [systems, selectedSystem]);
 
   const renderSearch = () => {

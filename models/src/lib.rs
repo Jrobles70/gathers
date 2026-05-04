@@ -1,4 +1,5 @@
 use enum_dispatch::enum_dispatch;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 pub mod filters;
 pub mod mtg;
@@ -33,7 +34,7 @@ pub trait CardTrait {
     fn get_collector_number(&self) -> CollectorNumber;
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Set {
     pub name: SetName,
     pub code: SetCode,

@@ -1,7 +1,6 @@
 import {
   createContext,
   useContext,
-  useState,
   useEffect,
   useReducer,
 } from "react";
@@ -10,26 +9,20 @@ import { useParams } from "react-router-dom";
 
 export function CollectionsProvider({ children }) {
   const { collection = "Main", pageNumber = 1 } = useParams();
-  const [collectionsLoading, setCollectionsLoading] = useState(true);
-
   const [collections, collectionsDispatch] = useReducer(collectionsReducer, []);
 
-  const ops = useOperations();
+  const { fetch: opsFetch } = useOperations();
   const { collectionsEnabled } = useMode();
 
   useEffect(() => {
-    if (!collectionsEnabled) {
-      setCollectionsLoading(false);
-      return;
-    }
-    ops.fetch("Listing collections", [], "/collection/list").then((data) => {
+    if (!collectionsEnabled) return;
+    opsFetch("Listing collections", [], "/collection/list").then((data) => {
       collectionsDispatch({
         type: "overwrite",
         collections: data,
       });
-      setCollectionsLoading(false);
     });
-  }, [collection, collectionsEnabled]);
+  }, [collection, collectionsEnabled, opsFetch]);
 
   return (
     <CollectionContext.Provider value={collection}>
