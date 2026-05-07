@@ -168,6 +168,21 @@ code {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.import-cards-form {
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: min(420px, 100%);
+}
+
+.import-cards-controls {
+    width: 100%;
+}
+
+.import-cards-text {
+    min-height: 5rem;
+    resize: vertical;
+}
+
 /* mana-font defines .ms-1::before … .ms-5::before with icon content,
    colliding with Bootstrap's margin-start utilities.
    Suppress the pseudo-element on any element that lacks the .ms base class. */

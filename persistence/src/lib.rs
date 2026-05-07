@@ -116,10 +116,33 @@ impl PersistenceSystem {
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
     ) -> eyre::Result<()> {
+        let rdr = csv::Reader::from_path(filename)?;
+        self.import_csv_reader(rdr, collection_name, retrievals, progress_sender)
+            .await
+    }
+
+    pub async fn import_csv_text(
+        &mut self,
+        csv_text: &str,
+        collection_name: String,
+        retrievals: &[RetrievalSystem],
+        progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+    ) -> eyre::Result<()> {
+        let rdr = csv::Reader::from_reader(csv_text.as_bytes());
+        self.import_csv_reader(rdr, collection_name, retrievals, progress_sender)
+            .await
+    }
+
+    async fn import_csv_reader<R: std::io::Read>(
+        &mut self,
+        mut rdr: csv::Reader<R>,
+        collection_name: String,
+        retrievals: &[RetrievalSystem],
+        progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+    ) -> eyre::Result<()> {
         const DEFAULT_PROVIDER: &str = "MagicSQLite";
         const BULK_CHUNK_SIZE: usize = 500;
 
-        let mut rdr = csv::Reader::from_path(filename)?;
         let mut cards: Vec<csv_models::CSVCard> = vec![];
         for result in rdr.deserialize() {
             cards.push(result?);
@@ -348,5 +371,38 @@ mod tests {
                 || export
                     == format!("Set,CollectorNumber,Quantity,FoilQuantity,Provider\nISD,173,0,4,{provider}\nM13,39,2,1,{provider}\n")
         );
+    }
+
+    #[tokio::test]
+    async fn import_csv_text_imports_without_file() {
+        let csv = "Set,CollectorNumber,Quantity,FoilQuantity\nM13,39,2,1\nISD,173,0,4\n";
+
+        let mut s = PersistenceSystem::SQLitePersistenceSystem(
+            SQLitePersistenceSystem::new(true, None).unwrap(),
+        );
+        let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
+            MagicSQLiteRetrievalSystem::new(None).unwrap(),
+        );
+
+        s.import_csv_text(
+            csv,
+            "Pasted Collection".to_string(),
+            &[r],
+            None,
+        )
+        .await
+        .unwrap();
+
+        let collections = s.list_collections(None).await.unwrap();
+        let new_collection = collections
+            .iter()
+            .find(|c| "Pasted Collection".eq(*c))
+            .unwrap();
+
+        let card_count = s
+            .get_cards_in_collection_count(new_collection.clone(), &[])
+            .await
+            .unwrap();
+        assert_eq!(card_count, 2);
     }
 }

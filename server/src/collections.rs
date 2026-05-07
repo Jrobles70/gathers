@@ -636,6 +636,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         mut multipart: Multipart,
     ) -> Result<Json<()>, ApiError> {
         let mut file_bytes: Option<Vec<u8>> = None;
+        let mut csv_text: Option<String> = None;
         let mut collection_name: Option<String> = None;
 
         while let Some(field) = multipart.next_field().await.map_err(|e| {
@@ -657,6 +658,16 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                         )
                     })?.to_vec());
                 }
+                Some("text") | Some("csvText") | Some("csv_text") => {
+                    csv_text = Some(field.text().await.map_err(|e| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            Json(ErrorPayload {
+                                error: format!("Failed to read text field: {e}"),
+                            }),
+                        )
+                    })?);
+                }
                 Some("collection") => {
                     collection_name = Some(field.text().await.map_err(|e| {
                         (
@@ -671,35 +682,18 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             }
         }
 
-        let bytes = file_bytes.ok_or_else(|| {
-            (
+        let csv_text = csv_text.filter(|text| !text.trim().is_empty());
+        if file_bytes.is_none() && csv_text.is_none() {
+            return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorPayload {
-                    error: "No file provided".to_string(),
+                    error: "No file or text provided".to_string(),
                 }),
-            )
-        })?;
+            ));
+        }
 
         let collection_name = collection_name.unwrap_or_else(|| "New Collection".to_string());
         validate_collection_name(&collection_name)?;
-
-        let mut tmp = tempfile::NamedTempFile::new().map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: format!("Failed to create temp file: {e}"),
-                }),
-            )
-        })?;
-        std::io::Write::write_all(&mut tmp, &bytes).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: format!("Failed to write temp file: {e}"),
-                }),
-            )
-        })?;
-        let tmp_path = tmp.path().to_string_lossy().to_string();
 
         let retrievals: Vec<RetrievalSystem> = {
             let guard = state.0.lock().await;
@@ -709,21 +703,48 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 .collect()
         };
 
-        state
-            .1
-            .lock()
-            .await
-            .storage
-            .import_csv(tmp_path, collection_name, &retrievals, None)
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorPayload {
-                        error: format!("Import failed: {e}"),
-                    }),
-                )
-            })?;
+        let mut storage = state.1.lock().await;
+        match (file_bytes, csv_text) {
+            (Some(bytes), _) => {
+                let mut tmp = tempfile::NamedTempFile::new().map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to create temp file: {e}"),
+                        }),
+                    )
+                })?;
+                std::io::Write::write_all(&mut tmp, &bytes).map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to write temp file: {e}"),
+                        }),
+                    )
+                })?;
+                let tmp_path = tmp.path().to_string_lossy().to_string();
+
+                storage
+                    .storage
+                    .import_csv(tmp_path, collection_name, &retrievals, None)
+                    .await
+            }
+            (None, Some(text)) => {
+                storage
+                    .storage
+                    .import_csv_text(&text, collection_name, &retrievals, None)
+                    .await
+            }
+            (None, None) => unreachable!("validated import source above"),
+        }
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Import failed: {e}"),
+                }),
+            )
+        })?;
 
         Ok(Json(()))
     }
@@ -884,4 +905,86 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         .api_route("/cards/{id}/delete", post(cards_remove))
         .route("/import", axum::routing::post(import))
         .route("/export/{id}", axum::routing::get(export))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use persistence::{PersistenceSystemTrait, SQLitePersistenceSystem};
+    use retrieval::MagicSQLiteRetrievalSystem;
+    use tokio::sync::Mutex;
+    use tower::ServiceExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn import_accepts_pasted_text_without_file() {
+        let retrieval = RetrievalSystem::MagicSQLiteRetrievalSystem(
+            MagicSQLiteRetrievalSystem::new(None).unwrap(),
+        );
+        let storage = PersistenceSystem::SQLitePersistenceSystem(
+            SQLitePersistenceSystem::new(true, None).unwrap(),
+        );
+        let state = (
+            Arc::new(Mutex::new(crate::RetrievalState {
+                mtg: Some(retrieval),
+                riftbound: None,
+                pokemon: None,
+                mtg_system_type: Some(crate::Systems::Sql),
+                mtg_db_path: None,
+                riftbound_db_path: None,
+                pokemon_db_path: None,
+                downloading: HashMap::new(),
+            })),
+            Arc::new(Mutex::new(crate::StorageState {
+                storage,
+                _storage_db_path: None,
+            })),
+        );
+
+        let boundary = "gathers-test-boundary";
+        let csv = "Set,CollectorNumber,Quantity,FoilQuantity\r\nM13,39,2,1\r\nISD,173,0,4\r\n";
+        let body = format!(
+            "--{boundary}\r\n\
+             Content-Disposition: form-data; name=\"collection\"\r\n\r\n\
+             Pasted Collection\r\n\
+             --{boundary}\r\n\
+             Content-Disposition: form-data; name=\"text\"\r\n\r\n\
+             {csv}\r\n\
+             --{boundary}--\r\n"
+        );
+
+        let response = collection_routes()
+            .with_state(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/import")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let card_count = state
+            .1
+            .lock()
+            .await
+            .storage
+            .get_cards_in_collection_count("Pasted Collection".to_string(), &[])
+            .await
+            .unwrap();
+        assert_eq!(card_count, 2);
+    }
 }
