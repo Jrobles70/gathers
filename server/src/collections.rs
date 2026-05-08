@@ -223,6 +223,143 @@ fn sort_collection_cards(
     });
 }
 
+fn collection_card_response(card: &models::CollectionCard) -> CollectionCard {
+    CollectionCard {
+        id: card.uuid.clone(),
+        quantity: card.quantity,
+        foil_quantity: card.foil_quantity,
+        collection_id: card.collection.clone(),
+        time_added: DateTime::parse_from_rfc3339(&card.time_added)
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|_| Utc::now()),
+        provider: card.provider.clone(),
+    }
+}
+
+fn result_card_from_magic(
+    card: &models::MagicCard,
+    details: Option<CollectionCard>,
+) -> ResultCard {
+    ResultCard {
+        mtg_card: ResultCardInner {
+            id: card.id.clone(),
+            name: card.name.clone(),
+            set_code: card.set_code.clone(),
+            card_identifiers: CardIdentInner {
+                scryfall_id: card.card_identifiers.scryfall_id.clone(),
+            },
+            details,
+        },
+    }
+}
+
+async fn get_collection_cards_for_search(
+    state: &GathersState,
+    collection_id: Option<&str>,
+) -> Result<Vec<models::CollectionCard>, ApiError> {
+    let all_params = || CollectionCardsParams {
+        offset: 0,
+        limit: i64::MAX as usize,
+        sort_by: None,
+        sort_order: None,
+        provider: None,
+        providers: vec![],
+    };
+
+    let storage = &state.1.lock().await.storage;
+    if let Some(collection_id) = collection_id {
+        return storage
+            .get_cards_in_collection_paginated(&collection_id.to_string(), all_params())
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to get cards from collection. {e}"),
+                    }),
+                )
+            });
+    }
+
+    let collections = storage.list_collections(None).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorPayload {
+                error: format!("Failed to list collections. {e}"),
+            }),
+        )
+    })?;
+
+    let mut cards = Vec::new();
+    for collection in collections {
+        cards.extend(
+            storage
+                .get_cards_in_collection_paginated(&collection, all_params())
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to get cards from collection. {e}"),
+                        }),
+                    )
+                })?,
+        );
+    }
+
+    Ok(cards)
+}
+
+async fn search_owned_magic_cards(
+    state: &GathersState,
+    query: &CollectionsSearchQuery,
+    filters: &APICardSearchFilters,
+) -> Result<Vec<ResultCard>, ApiError> {
+    let retrieval_systems = clone_retrieval_systems_by_name(state).await;
+    let collection_cards =
+        get_collection_cards_for_search(state, query.collection.as_deref()).await?;
+
+    let mut by_provider: HashMap<String, Vec<models::CollectionCard>> = HashMap::new();
+    for card in collection_cards {
+        by_provider.entry(card.provider.clone()).or_default().push(card);
+    }
+
+    let mut card_data: HashMap<String, Card> = HashMap::new();
+    for (provider, cards) in &by_provider {
+        if let Some(retrieval) = retrieval_systems.get(provider) {
+            let ids: Vec<String> = cards.iter().map(|c| c.uuid.clone()).collect();
+            if let Ok(data) = retrieval.get_cards_by_ids(ids).await {
+                card_data.extend(data);
+            }
+        }
+    }
+
+    let mut matched: Vec<&models::CollectionCard> = by_provider
+        .values()
+        .flatten()
+        .filter(|cc| {
+            card_data
+                .get(&cc.uuid)
+                .map(|card| matches!(card, Card::Magic(_)) && matches_card_filters(card, filters))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    sort_collection_cards(&mut matched, &card_data, &filters.sort_by, &filters.sort_order);
+
+    Ok(matched
+        .into_iter()
+        .skip(query.offset)
+        .take(query.page_size.min(1000))
+        .filter_map(|cc| match card_data.get(&cc.uuid) {
+            Some(Card::Magic(card)) => {
+                Some(result_card_from_magic(card, Some(collection_card_response(cc))))
+            }
+            _ => None,
+        })
+        .collect())
+}
+
 pub fn collection_routes() -> ApiRouter<GathersState> {
     async fn list(State(state): State<GathersState>) -> Result<Json<Vec<Collection>>, ApiError> {
         let storage = &state.1.lock().await.storage;
@@ -550,6 +687,10 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         Query(query): Query<CollectionsSearchQuery>,
         Json(input): Json<APICardSearchFilters>,
     ) -> Result<Json<Vec<ResultCard>>, ApiError> {
+        if query.skip_not_owned || query.collection.is_some() {
+            return search_owned_magic_cards(&state, &query, &input).await.map(Json);
+        }
+
         let guard = state.0.lock().await;
         let ret = guard.require_mtg()?;
 
@@ -564,16 +705,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                         Card::Magic(m) => Some(m),
                         _ => None,
                     })
-                    .map(|c| ResultCard {
-                        mtg_card: ResultCardInner {
-                            id: c.id.clone(),
-                            name: c.name.clone(),
-                            set_code: c.set_code.clone(),
-                            card_identifiers: CardIdentInner {
-                                scryfall_id: c.card_identifiers.scryfall_id.clone(),
-                            },
-                        },
-                    })
+                    .map(|c| result_card_from_magic(c, None))
                     .collect(),
             )),
             Err(e) => Err((
@@ -912,7 +1044,7 @@ mod tests {
     use std::sync::Arc;
 
     use axum::{
-        body::Body,
+        body::{Body, to_bytes},
         http::{Request, StatusCode},
     };
     use persistence::{PersistenceSystemTrait, SQLitePersistenceSystem};
@@ -921,6 +1053,105 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+
+    fn test_state() -> GathersState {
+        let retrieval = RetrievalSystem::MagicSQLiteRetrievalSystem(
+            MagicSQLiteRetrievalSystem::new(None).unwrap(),
+        );
+        let storage = PersistenceSystem::SQLitePersistenceSystem(
+            SQLitePersistenceSystem::new(true, None).unwrap(),
+        );
+        (
+            Arc::new(Mutex::new(crate::RetrievalState {
+                mtg: Some(retrieval),
+                riftbound: None,
+                pokemon: None,
+                mtg_system_type: Some(crate::Systems::Sql),
+                mtg_db_path: None,
+                riftbound_db_path: None,
+                pokemon_db_path: None,
+                downloading: HashMap::new(),
+            })),
+            Arc::new(Mutex::new(crate::StorageState {
+                storage,
+                _storage_db_path: None,
+            })),
+        )
+    }
+
+    #[tokio::test]
+    async fn search_owned_magic_cards_includes_collection_details() {
+        let state = test_state();
+        let card_id = "0005d268-3fd0-5424-bc6b-573ecd713aa1".to_string();
+        let a1 = "A1".to_string();
+        let default = "Default".to_string();
+        let time_added = "2024-01-01T00:00:00Z";
+
+        {
+            let storage = &mut state.1.lock().await.storage;
+            storage.add_collection(a1.clone()).await.unwrap();
+            storage
+                .add_card_to_collection(&a1, &card_id, 1, 0, time_added, "MagicSQLite")
+                .await
+                .unwrap();
+            storage
+                .add_card_to_collection(&default, &card_id, 2, 0, time_added, "MagicSQLite")
+                .await
+                .unwrap();
+        }
+
+        let response = collection_routes()
+            .with_state(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/search?skipNotOwned=true&pageSize=24&offset=0")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"War Priest"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let all_results: Vec<ResultCard> = serde_json::from_slice(&body).unwrap();
+        let collections: std::collections::HashSet<String> = all_results
+            .iter()
+            .filter_map(|card| {
+                card.mtg_card
+                    .details
+                    .as_ref()
+                    .map(|details| details.collection_id.clone())
+            })
+            .collect();
+        assert_eq!(all_results.len(), 2);
+        assert_eq!(collections.len(), 2);
+        assert!(collections.contains("A1"));
+        assert!(collections.contains("Default"));
+
+        let response = collection_routes()
+            .with_state(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/search?collection=A1&pageSize=24&offset=0")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"War Priest"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let a1_results: Vec<ResultCard> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(a1_results.len(), 1);
+        assert_eq!(a1_results[0].mtg_card.id, card_id);
+        let details = a1_results[0].mtg_card.details.as_ref().unwrap();
+        assert_eq!(details.collection_id, "A1");
+        assert_eq!(details.quantity, 1);
+    }
 
     #[tokio::test]
     async fn import_accepts_pasted_text_without_file() {

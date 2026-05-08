@@ -150,6 +150,7 @@ impl From<APICollectionSortField> for persistence::CollectionSortField {
 pub struct CollectionCardsQuery {
     #[serde(default)]
     pub offset: usize,
+    #[serde(alias = "pageSize")]
     #[serde(default = "default_limit")]
     pub limit: usize,
     pub sort_by: Option<APICollectionSortField>,
@@ -196,8 +197,12 @@ fn default_limit() -> usize {
 pub struct CollectionsSearchQuery {
     #[serde(default)]
     pub offset: usize,
+    #[serde(alias = "pageSize")]
     #[serde(default = "default_limit")]
     pub page_size: usize,
+    #[serde(default, alias = "skipNotOwned")]
+    pub skip_not_owned: bool,
+    pub collection: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -214,6 +219,8 @@ pub struct ResultCardInner {
     pub set_code: String,
     #[serde(rename = "cardIdentifiers")]
     pub card_identifiers: CardIdentInner,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<CollectionCard>,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]

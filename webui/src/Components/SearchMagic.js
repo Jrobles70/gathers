@@ -51,11 +51,16 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
     let url;
     if (!collectionsEnabled) {
       url = `/mtg/cards/search?limit=${PAGE_SIZE}&skip=${(pageNumber - 1) * PAGE_SIZE}`;
-    } else if (searchCollection !== "" && searchCollection !== "skipNotOwned") {
-      url = `/collection/cards/${searchCollection}/search?pageSize=${PAGE_SIZE}&offset=${(pageNumber - 1) * PAGE_SIZE}`;
     } else {
-      url = `/collection/search?pageSize=${PAGE_SIZE}&offset=${(pageNumber - 1) * PAGE_SIZE}`;
-      if (searchCollection === "skipNotOwned") url += "&skipNotOwned=true";
+      const params = new URLSearchParams();
+      params.set("pageSize", String(PAGE_SIZE));
+      params.set("offset", String((pageNumber - 1) * PAGE_SIZE));
+      if (searchCollection === "skipNotOwned") {
+        params.set("skipNotOwned", "true");
+      } else if (searchCollection !== "") {
+        params.set("collection", searchCollection);
+      }
+      url = `/collection/search?${params.toString()}`;
     }
 
     ops
