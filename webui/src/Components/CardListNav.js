@@ -5,16 +5,14 @@ import MoveCards from "./CardListNavButtons/MoveCards";
 import ImportCards from "./CardListNavButtons/ImportCards";
 import DeleteCollection from "./CardListNavButtons/DeleteCollection";
 import ExportCollection from "./CardListNavButtons/ExportCollection";
-import QuickSearch from "./CardListNavButtons/QuickSearch";
 
-export default function CardListNav({ onToggleSearch, searchOpen }) {
+export default function CardListNav() {
   return (
     <nav
       className="navbar navbar-expand-md bg-body-tertiary"
       data-bs-theme="dark"
     >
       <div className="container-fluid">
-        <QuickSearch onToggle={onToggleSearch} isOpen={searchOpen} />
         <SelectionTracker />
         <DeleteCards />
         <MoveCards />

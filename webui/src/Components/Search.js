@@ -12,7 +12,7 @@ function systemLabel(system) {
   return "MTG";
 }
 
-function Search({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
+function Search({ startSearch = false, dedicatedPage = false, sidePanel = false, showTitle = true, targetCollection = null }) {
   const systems = useSystems();
   const [selectedSystem, setSelectedSystem] = useSelectedSearchSystem();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,6 +35,8 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false 
           startSearch={startSearch}
           dedicatedPage={dedicatedPage}
           sidePanel={sidePanel}
+          showTitle={showTitle}
+          targetCollection={targetCollection}
         />
       );
     }
@@ -44,6 +46,8 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false 
           startSearch={startSearch}
           dedicatedPage={dedicatedPage}
           sidePanel={sidePanel}
+          showTitle={showTitle}
+          targetCollection={targetCollection}
         />
       );
     }
@@ -52,6 +56,8 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false 
         startSearch={startSearch}
         dedicatedPage={dedicatedPage}
         sidePanel={sidePanel}
+        showTitle={showTitle}
+        targetCollection={targetCollection}
       />
     );
   };

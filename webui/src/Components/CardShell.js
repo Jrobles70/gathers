@@ -4,7 +4,7 @@ import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 
-export default function CardShell({ id, card = null, details = null, provider = null, detailPath, getImagePath, showCollectionSelect = false, listMode = false }) {
+export default function CardShell({ id, card = null, details = null, provider = null, detailPath, getImagePath, showCollectionSelect = false, listMode = false, targetCollection = null }) {
   const [_card, setCard] = useState(card);
   const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState(false);
@@ -75,6 +75,7 @@ export default function CardShell({ id, card = null, details = null, provider = 
             details={details}
             toggleSelected={toggleSelected}
             showCollectionSelect={showCollectionSelect}
+            targetCollection={targetCollection}
           />
           <div className="card-info">
             <div className="row align-items-center">

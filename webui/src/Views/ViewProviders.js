@@ -8,25 +8,32 @@ import { CollectionsProvider } from "../Components/CollectionContext";
 import Header from "../Components/Layout/Header";
 import { RefreshCardListProvider } from "../Components/CardListContexts/RefreshCardListContext";
 import { SystemTypeProvider } from "../Components/SystemTypeContext";
+import { QuickSearchProvider } from "../Components/QuickSearchContext";
+import QuickSearchModal from "../Components/QuickSearchModal";
 
 export default function ViewProviders({ children }) {
   return (
     <CollectionsProvider>
       <SystemTypeProvider>
-        <Header />
-        <main>
-          <CardsProvider>
-            <SelectedCardsProvider>
-              <CardCacheProvider>
-                <CardLoaderProvider>
-                  <RefreshCardListProvider>
-                    <CardSetsProvider>{children}</CardSetsProvider>
-                  </RefreshCardListProvider>
-                </CardLoaderProvider>
-              </CardCacheProvider>
-            </SelectedCardsProvider>
-          </CardsProvider>
-        </main>
+        <QuickSearchProvider>
+          <Header />
+          <main>
+            <CardsProvider>
+              <SelectedCardsProvider>
+                <CardCacheProvider>
+                  <CardLoaderProvider>
+                    <RefreshCardListProvider>
+                      <CardSetsProvider>
+                        {children}
+                        <QuickSearchModal />
+                      </CardSetsProvider>
+                    </RefreshCardListProvider>
+                  </CardLoaderProvider>
+                </CardCacheProvider>
+              </SelectedCardsProvider>
+            </CardsProvider>
+          </main>
+        </QuickSearchProvider>
       </SystemTypeProvider>
     </CollectionsProvider>
   );

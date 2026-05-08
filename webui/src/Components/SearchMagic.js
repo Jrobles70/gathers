@@ -17,7 +17,7 @@ const SORT_FIELDS = [
   { value: "Artist",         label: "Artist" },
 ];
 
-function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
+function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = false, showTitle = true, targetCollection = null }) {
   const ops = useOperations();
   const cardSets = useCardSets();
   const collections = useCollections();
@@ -90,7 +90,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
       className={dedicatedPage === true || sidePanel === true ? "" : "collapse"}
       id={dedicatedPage ? "main-search" : "search"}
     >
-      <h2>Search</h2>
+      {showTitle && <h2>Search</h2>}
       <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
         <div className="input-group">
           <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
@@ -172,11 +172,12 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
                       id={card.mtGCard.id}
                       card={card.mtGCard}
                       details={card.mtGCard.details}
-                      showCollectionSelect={dedicatedPage && card.mtGCard.details == null}
+                      showCollectionSelect={dedicatedPage && targetCollection == null && card.mtGCard.details == null}
+                      targetCollection={targetCollection}
                     />
                   ))
                 : cards.map((card) => (
-                    <Card key={card.id} id={card.id} card={card} details={null} />
+                    <Card key={card.id} id={card.id} card={card} details={null} targetCollection={targetCollection} />
                   ))}
             </div>
           )}

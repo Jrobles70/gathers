@@ -1,6 +1,6 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import CardDetails from "./CardDetails";
+import CardDetails, { resolveCardUpdateCollection } from "./CardDetails";
 import { ModeProvider } from "../OperationsContext";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,6 +26,17 @@ function renderIntoForm(ui) {
 }
 
 describe("CardDetails", () => {
+  it("uses the quick search target collection when adding unowned cards", () => {
+    expect(resolveCardUpdateCollection({
+      details: null,
+      showCollectionSelect: false,
+      selectedCollection: null,
+      collections: [{ id: "A1" }, { id: "Default" }],
+      currentCollection: "A1",
+      targetCollection: "Default",
+    })).toBe("Default");
+  });
+
   it("does not expose collection add controls as form submit buttons", () => {
     const { container, cleanup } = renderIntoForm(
       <ModeProvider collectionsEnabled={true}>

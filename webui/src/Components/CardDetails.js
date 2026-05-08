@@ -4,7 +4,20 @@ import { useOperations, useMode } from "../OperationsContext";
 import { useCardsDispatch } from "../Components/CardListContexts/CardsContext";
 import { useRefreshCardList } from "./CardListContexts/RefreshCardListContext";
 
-export default function CardDetails({ id, details = null, toggleSelected, showCollectionSelect = false }) {
+export function resolveCardUpdateCollection({
+  details,
+  showCollectionSelect,
+  selectedCollection,
+  collections,
+  currentCollection,
+  targetCollection,
+}) {
+  if (details != null) return details.collectionId;
+  if (showCollectionSelect) return selectedCollection ?? collections[0]?.id ?? currentCollection;
+  return targetCollection ?? currentCollection;
+}
+
+export default function CardDetails({ id, details = null, toggleSelected, showCollectionSelect = false, targetCollection = null }) {
   const ops = useOperations();
   const { collectionsEnabled } = useMode();
   const currentCollection = useCollection();
@@ -14,9 +27,14 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
   const [selectedCollection, setSelectedCollection] = useState(null);
 
   const updateQuantity = (delta, deltaFoil) => {
-    let collection = details != null
-      ? details.collectionId
-      : (showCollectionSelect ? (selectedCollection ?? collections[0]?.id ?? currentCollection) : currentCollection);
+    let collection = resolveCardUpdateCollection({
+      details,
+      showCollectionSelect,
+      selectedCollection,
+      collections,
+      currentCollection,
+      targetCollection,
+    });
     let add = parseInt(delta) >= 0 && parseInt(deltaFoil) >= 0;
     let url =
       "/collection/cards/" + collection + "/" + (add ? "add" : "delete");

@@ -15,7 +15,7 @@ const SORT_FIELDS = [
   { value: "Artist",         label: "Artist" },
 ];
 
-function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel = false }) {
+function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel = false, showTitle = true, targetCollection = null }) {
   const ops = useOperations();
 
   const {
@@ -61,7 +61,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
       className={dedicatedPage === true || sidePanel === true ? "" : "collapse"}
       id={dedicatedPage ? "main-search" : "search"}
     >
-      <h2>Search</h2>
+      {showTitle && <h2>Search</h2>}
       <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
         <div className="input-group">
           <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
@@ -114,6 +114,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
                   card={card}
                   details={card.details}
                   provider="RiftboundSQLite"
+                  targetCollection={targetCollection}
                 />
               ))}
             </div>

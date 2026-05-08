@@ -1,7 +1,7 @@
 import React from "react";
 import CardShell from "./CardShell";
 
-export default function MtGCard({ id, card = null, details = null, provider = null, showCollectionSelect = false, listMode = false }) {
+export default function MtGCard({ id, card = null, details = null, provider = null, showCollectionSelect = false, listMode = false, targetCollection = null }) {
   return (
     <CardShell
       id={id}
@@ -10,6 +10,7 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
       provider={provider}
       showCollectionSelect={showCollectionSelect}
       listMode={listMode}
+      targetCollection={targetCollection}
       detailPath={`/card/mtg/${encodeURIComponent(id)}`}
       getImagePath={(_card) =>
         _card.cardIdentifiers?.scryfallId

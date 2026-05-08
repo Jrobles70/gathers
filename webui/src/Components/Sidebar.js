@@ -4,6 +4,7 @@ import AddCollectionForm from "./AddCollectionForm";
 import { useCollection, useCollections } from "./CollectionContext";
 import OperationsTracker from "./CardListNavButtons/OperationsTracker";
 import { useMode } from "../OperationsContext";
+import { useQuickSearch } from "./QuickSearchContext";
 
 function useServerStatus() {
   const [status, setStatus] = useState({ ready: true, downloading: {} });
@@ -42,6 +43,7 @@ export default function Sidebar() {
   const { mode, collectionsEnabled } = useMode();
   const isSearchOnly = mode === "search-only";
   const serverStatus = useServerStatus();
+  const { openQuickSearch } = useQuickSearch();
 
   return (
     <header>
@@ -59,9 +61,15 @@ export default function Sidebar() {
             role="tablist"
             aria-orientation="vertical"
           >
-            <Link to={"/search"} className="btn btn-secondary">
-              Search
-            </Link>
+            {!isSearchOnly && collectionsEnabled ? (
+              <button type="button" className="btn btn-secondary" onClick={openQuickSearch}>
+                Search
+              </button>
+            ) : (
+              <Link to={"/search"} className="btn btn-secondary">
+                Search
+              </Link>
+            )}
           </div>
           {!serverStatus.ready && (
             <>
