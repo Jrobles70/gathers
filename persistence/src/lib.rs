@@ -108,6 +108,91 @@ pub trait PersistenceSystemTrait {
     ) -> impl std::future::Future<Output = eyre::Result<()>>;
 }
 
+fn csv_cards_from_text(csv_text: &str) -> eyre::Result<Vec<CSVCard>> {
+    let mut rdr = csv::Reader::from_reader(csv_text.as_bytes());
+    let headers = rdr.headers()?.clone();
+
+    if is_manabox_csv(&headers) {
+        csv_cards_from_manabox_records(&mut rdr, &headers)
+    } else {
+        rdr.deserialize::<CSVCard>()
+            .map(|result| result.map_err(eyre::Report::from))
+            .collect()
+    }
+}
+
+fn csv_cards_from_manabox_records<R: std::io::Read>(
+    rdr: &mut csv::Reader<R>,
+    headers: &csv::StringRecord,
+) -> eyre::Result<Vec<CSVCard>> {
+    let set_code_index = manabox_header_index(headers, "Set code")?;
+    let collector_number_index = manabox_header_index(headers, "Collector number")?;
+    let foil_index = manabox_header_index(headers, "Foil")?;
+    let quantity_index = manabox_header_index(headers, "Quantity")?;
+
+    rdr.records()
+        .map(|result| {
+            let record = result?;
+            let set_code = manabox_field(&record, set_code_index, "Set code")?
+                .trim()
+                .to_ascii_uppercase();
+            let collector_number = manabox_field(&record, collector_number_index, "Collector number")?
+                .trim()
+                .to_string();
+            let quantity = manabox_field(&record, quantity_index, "Quantity")?
+                .trim()
+                .parse::<u32>()?;
+            let is_foil = manabox_is_foil(manabox_field(&record, foil_index, "Foil")?);
+
+            Ok(CSVCard {
+                set_code,
+                collector_number,
+                quantity: if is_foil { 0 } else { quantity },
+                foil_quantity: if is_foil { quantity } else { 0 },
+                provider: String::new(),
+            })
+        })
+        .collect()
+}
+
+fn is_manabox_csv(headers: &csv::StringRecord) -> bool {
+    ["Name", "Set code", "Collector number", "Foil", "Quantity"]
+        .iter()
+        .all(|expected| manabox_header_index(headers, expected).is_ok())
+}
+
+fn manabox_header_index(headers: &csv::StringRecord, expected: &str) -> eyre::Result<usize> {
+    let expected = normalize_manabox_header(expected);
+    headers
+        .iter()
+        .position(|header| normalize_manabox_header(header) == expected)
+        .ok_or_else(|| eyre::eyre!("Missing ManaBox column: {expected}"))
+}
+
+fn normalize_manabox_header(header: &str) -> String {
+    header.trim_start_matches('\u{feff}').trim().to_ascii_lowercase()
+}
+
+fn manabox_field<'a>(
+    record: &'a csv::StringRecord,
+    index: usize,
+    name: &str,
+) -> eyre::Result<&'a str> {
+    record
+        .get(index)
+        .ok_or_else(|| eyre::eyre!("Missing ManaBox field: {name}"))
+}
+
+fn manabox_is_foil(foil: &str) -> bool {
+    let foil: String = foil
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| !matches!(c, ' ' | '-' | '_'))
+        .collect();
+    !matches!(foil.as_str(), "" | "normal" | "nonfoil" | "regular")
+}
+
 impl PersistenceSystem {
     pub async fn import_csv(
         &mut self,
@@ -128,8 +213,8 @@ impl PersistenceSystem {
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
     ) -> eyre::Result<()> {
-        let rdr = csv::Reader::from_reader(csv_text.as_bytes());
-        self.import_csv_reader(rdr, collection_name, retrievals, progress_sender)
+        let cards = csv_cards_from_text(csv_text)?;
+        self.import_csv_cards(cards, collection_name, retrievals, progress_sender)
             .await
     }
 
@@ -140,13 +225,24 @@ impl PersistenceSystem {
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
     ) -> eyre::Result<()> {
-        const DEFAULT_PROVIDER: &str = "MagicSQLite";
-        const BULK_CHUNK_SIZE: usize = 500;
-
         let mut cards: Vec<csv_models::CSVCard> = vec![];
         for result in rdr.deserialize() {
             cards.push(result?);
         }
+
+        self.import_csv_cards(cards, collection_name, retrievals, progress_sender)
+            .await
+    }
+
+    async fn import_csv_cards(
+        &mut self,
+        cards: Vec<csv_models::CSVCard>,
+        collection_name: String,
+        retrievals: &[RetrievalSystem],
+        progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+    ) -> eyre::Result<()> {
+        const DEFAULT_PROVIDER: &str = "MagicSQLite";
+        const BULK_CHUNK_SIZE: usize = 500;
 
         let systems_by_name: std::collections::HashMap<&str, &RetrievalSystem> =
             retrievals.iter().map(|r| (r.name(), r)).collect();
@@ -404,5 +500,81 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(card_count, 2);
+    }
+
+    #[tokio::test]
+    async fn import_csv_text_accepts_manabox_export_format() {
+        let csv = "Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency\nSerra Angel,m13,Magic 2013,39,normal,uncommon,2,32634,780f9197-e910-4c7a-bb4b-2c4a94903c39,0.8,false,false,near_mint,en,USD\nAvacyn's Pilgrim,isd,Innistrad,173,foil,common,4,32635,00000000-0000-0000-0000-000000000000,0,false,false,near_mint,en,USD\n";
+
+        let mut s = PersistenceSystem::SQLitePersistenceSystem(
+            SQLitePersistenceSystem::new(true, None).unwrap(),
+        );
+        let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
+            MagicSQLiteRetrievalSystem::new(None).unwrap(),
+        );
+
+        s.import_csv_text(csv, "ManaBox Collection".to_string(), &[r], None)
+            .await
+            .unwrap();
+
+        let cards = s
+            .get_cards_in_collection_paginated(
+                &"ManaBox Collection".to_string(),
+                CollectionCardsParams::new(0, 10),
+            )
+            .await
+            .unwrap();
+
+        let normal = cards
+            .iter()
+            .find(|c| c.uuid == "0005d268-3fd0-5424-bc6b-573ecd713aa1")
+            .unwrap();
+        assert_eq!(normal.quantity, 2);
+        assert_eq!(normal.foil_quantity, 0);
+
+        let foil = cards
+            .iter()
+            .find(|c| c.uuid == "0003caab-9ff5-5d1a-bc06-976dd0457f19")
+            .unwrap();
+        assert_eq!(foil.quantity, 0);
+        assert_eq!(foil.foil_quantity, 4);
+    }
+
+    #[tokio::test]
+    async fn import_csv_text_normalizes_manabox_clipboard_values() {
+        let csv = "\u{feff}Name, Set code ,Set name, Collector number ,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency\nSerra Angel, m13 ,Magic 2013, 39 , NORMAL ,uncommon,2,32634,780f9197-e910-4c7a-bb4b-2c4a94903c39,0.8,,,near_mint,en,USD\nAvacyn's Pilgrim, isd ,Innistrad, 173 , etched_foil ,common,4,32635,00000000-0000-0000-0000-000000000000,,,,near_mint,en,USD\n";
+
+        let mut s = PersistenceSystem::SQLitePersistenceSystem(
+            SQLitePersistenceSystem::new(true, None).unwrap(),
+        );
+        let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
+            MagicSQLiteRetrievalSystem::new(None).unwrap(),
+        );
+
+        s.import_csv_text(csv, "Normalized ManaBox".to_string(), &[r], None)
+            .await
+            .unwrap();
+
+        let cards = s
+            .get_cards_in_collection_paginated(
+                &"Normalized ManaBox".to_string(),
+                CollectionCardsParams::new(0, 10),
+            )
+            .await
+            .unwrap();
+
+        let normal = cards
+            .iter()
+            .find(|c| c.uuid == "0005d268-3fd0-5424-bc6b-573ecd713aa1")
+            .unwrap();
+        assert_eq!(normal.quantity, 2);
+        assert_eq!(normal.foil_quantity, 0);
+
+        let foil = cards
+            .iter()
+            .find(|c| c.uuid == "0003caab-9ff5-5d1a-bc06-976dd0457f19")
+            .unwrap();
+        assert_eq!(foil.quantity, 0);
+        assert_eq!(foil.foil_quantity, 4);
     }
 }

@@ -105,7 +105,7 @@ export default function ImportCards() {
           aria-label="Paste CSV text"
           className="form-control form-control-sm import-cards-text"
           onChange={(e) => setText(e.target.value)}
-          placeholder="Set,CollectorNumber,Quantity,FoilQuantity"
+          placeholder="Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,..."
           rows="3"
           value={text}
         />

@@ -948,7 +948,7 @@ mod tests {
         );
 
         let boundary = "gathers-test-boundary";
-        let csv = "Set,CollectorNumber,Quantity,FoilQuantity\r\nM13,39,2,1\r\nISD,173,0,4\r\n";
+        let csv = "Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency\r\nSerra Angel,m13,Magic 2013,39,normal,uncommon,2,32634,780f9197-e910-4c7a-bb4b-2c4a94903c39,0.8,false,false,near_mint,en,USD\r\nAvacyn's Pilgrim,isd,Innistrad,173,foil,common,4,32635,00000000-0000-0000-0000-000000000000,0,false,false,near_mint,en,USD\r\n";
         let body = format!(
             "--{boundary}\r\n\
              Content-Disposition: form-data; name=\"collection\"\r\n\r\n\
