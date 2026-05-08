@@ -127,9 +127,9 @@ export default function Sidebar() {
                 <hr />
                 <AddCollectionForm />
                 <hr />
-                <OperationsTracker />
               </React.Fragment>
             )}
+            <OperationsTracker />
           </div>
         </div>
       </nav>

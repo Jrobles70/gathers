@@ -189,6 +189,70 @@ code {
     resize: vertical;
 }
 
+.operations-tracker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0 0.15rem;
+}
+
+.operation-active-badges {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.operation-log {
+    max-height: 18rem;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #f8f9fa;
+    color: #212529;
+    font-size: 0.75rem;
+}
+
+.operation-log-row {
+    display: grid;
+    grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+    gap: 0.35rem;
+    align-items: start;
+    padding: 0.35rem 0.4rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.operation-log-row:last-child {
+    border-bottom: 0;
+}
+
+.operation-log-time {
+    color: #6c757d;
+    font-variant-numeric: tabular-nums;
+}
+
+.operation-log-message {
+    overflow-wrap: anywhere;
+}
+
+.operation-log-status {
+    color: #6c757d;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+}
+
+.operation-log-row.failed .operation-log-status {
+    color: #dc3545;
+}
+
+.operation-log-row.active .operation-log-status {
+    color: #0d6efd;
+}
+
+.operation-log-empty {
+    padding: 0.4rem;
+    color: #6c757d;
+}
+
 /* mana-font defines .ms-1::before … .ms-5::before with icon content,
    colliding with Bootstrap's margin-start utilities.
    Suppress the pseudo-element on any element that lacks the .ms base class. */
