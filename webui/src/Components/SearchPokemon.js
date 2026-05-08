@@ -96,7 +96,7 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
           />
         </div>
         <div className="input-group">
-          <button onClick={triggerSearch} className="btn btn-outline-secondary" type="button">
+          <button className="btn btn-outline-secondary" type="submit">
             Search
           </button>
         </div>

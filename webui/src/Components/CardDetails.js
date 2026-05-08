@@ -49,6 +49,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
           {details != null ? (
             <React.Fragment>
               <button
+                type="button"
                 onClick={(e) => updateQuantity(1, 0)}
                 className="btn btn-sm btn-outline-success"
               >
@@ -56,6 +57,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
               </button>
               <span className="btn badge bg-secondary">{details.quantity}</span>
               <button
+                type="button"
                 onClick={(e) => updateQuantity(-1, 0)}
                 className="btn btn-sm btn-outline-danger"
               >
@@ -65,6 +67,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
               <span className="btn"></span>
 
               <button
+                type="button"
                 onClick={(e) => updateQuantity(0, 1)}
                 className="btn btn-sm btn-outline-success"
               >
@@ -72,6 +75,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
               </button>
               <span className="btn badge bg-info">{details.foilQuantity}</span>
               <button
+                type="button"
                 onClick={(e) => updateQuantity(0, -1)}
                 className="btn btn-sm btn-outline-danger"
               >
@@ -93,6 +97,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
                 </select>
               )}
               <button
+                type="button"
                 onClick={(e) => updateQuantity(1, 0)}
                 className="btn btn-sm btn-light"
               >
@@ -100,6 +105,7 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
               </button>
               <span className="btn"></span>
               <button
+                type="button"
                 onClick={(e) => updateQuantity(0, 1)}
                 className="btn btn-sm btn-info"
               >

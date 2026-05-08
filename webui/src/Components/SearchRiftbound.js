@@ -98,7 +98,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
           />
         </div>
         <div className="input-group">
-          <button onClick={triggerSearch} className="btn btn-outline-secondary" type="button" id="button-addon2">
+          <button className="btn btn-outline-secondary" type="submit" id="button-addon2">
             Search
           </button>
         </div>
