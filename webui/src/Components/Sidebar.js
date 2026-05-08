@@ -5,6 +5,7 @@ import { useCollection, useCollections } from "./CollectionContext";
 import OperationsTracker from "./CardListNavButtons/OperationsTracker";
 import { useMode } from "../OperationsContext";
 import { useQuickSearch } from "./QuickSearchContext";
+import SettingsModal from "./SettingsModal";
 
 function useServerStatus() {
   const [status, setStatus] = useState({ ready: true, downloading: {} });
@@ -38,6 +39,7 @@ function useServerStatus() {
 }
 
 export default function Sidebar() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const collection = useCollection();
   const collections = useCollections();
   const { mode, collectionsEnabled } = useMode();
@@ -116,6 +118,12 @@ export default function Sidebar() {
             </>
           )}
           <hr />
+          <div className="nav flex-column nav-pills me-3">
+            <button type="button" className="btn btn-outline-secondary" onClick={() => setSettingsOpen(true)}>
+              Settings
+            </button>
+          </div>
+          <hr />
           <div
             className="nav flex-column nav-pills me-3"
             role="tablist"
@@ -141,6 +149,7 @@ export default function Sidebar() {
           </div>
         </div>
       </nav>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 }

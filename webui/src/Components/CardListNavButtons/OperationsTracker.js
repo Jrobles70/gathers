@@ -6,7 +6,6 @@ export default function OperationsTracker() {
   const activeOperations = Object.entries(ops.operations ?? {});
   const operationLogs = ops.operationLogs ?? [];
   const debugEnabled = ops.debugEnabled ?? false;
-  const setDebugEnabled = ops.setDebugEnabled ?? (() => {});
 
   return (
     <div className="operations-tracker">
@@ -20,14 +19,6 @@ export default function OperationsTracker() {
           </span>
         ))}
       </div>
-      <button
-        type="button"
-        className={`btn btn-sm ${debugEnabled ? "btn-secondary" : "btn-outline-secondary"}`}
-        aria-pressed={debugEnabled}
-        onClick={() => setDebugEnabled((enabled) => !enabled)}
-      >
-        Debug logs
-      </button>
       {debugEnabled && (
         <div className="operation-log" aria-label="Operation logs">
           {operationLogs.length === 0 ? (
