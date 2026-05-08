@@ -88,7 +88,13 @@ code {
 
 @media (max-width: 991.98px) {
     .sidebar {
+        position: static;
         width: 100%;
+        height: auto;
+    }
+
+    .sidebar .position-sticky {
+        position: static !important;
     }
 }
 
