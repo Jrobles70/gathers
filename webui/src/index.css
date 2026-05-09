@@ -597,12 +597,6 @@ code {
     padding: 0 0.15rem;
 }
 
-.operation-active-badges {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
 .operation-log {
     max-height: 18rem;
     overflow-y: auto;
@@ -615,7 +609,7 @@ code {
 
 .operation-log-row {
     display: grid;
-    grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+    grid-template-columns: 4rem minmax(0, 1fr) auto;
     gap: 0.35rem;
     align-items: start;
     padding: 0.35rem 0.4rem;
