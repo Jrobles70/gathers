@@ -6,6 +6,7 @@ import { useCollections } from "./CollectionContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
 import SortControls from "./SortControls";
+import { groupMagicSearchResults } from "./searchPrintings";
 
 const PAGE_SIZE = 24;
 
@@ -84,6 +85,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
     { value: "Red",   label: "R" },
     { value: "Green", label: "G" },
   ];
+  const groupedCards = groupMagicSearchResults(cards, collectionsEnabled);
 
   return (
     <div
@@ -166,18 +168,26 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
           ) : (
             <div className="card-grid list">
               {collectionsEnabled
-                ? cards.map((card) => (
+                ? groupedCards.map(({ primary, printings }) => (
                     <Card
-                      key={card.mtGCard.id + "-" + (card.mtGCard.details != null ? card.mtGCard.details.collectionId : "")}
-                      id={card.mtGCard.id}
-                      card={card.mtGCard}
-                      details={card.mtGCard.details}
-                      showCollectionSelect={dedicatedPage && targetCollection == null && card.mtGCard.details == null}
+                      key={primary.id + "-" + (primary.details != null ? primary.details.collectionId : "")}
+                      id={primary.id}
+                      card={primary.card}
+                      details={primary.details}
+                      printings={printings}
+                      showCollectionSelect={dedicatedPage && targetCollection == null && primary.details == null}
                       targetCollection={targetCollection}
                     />
                   ))
-                : cards.map((card) => (
-                    <Card key={card.id} id={card.id} card={card} details={null} targetCollection={targetCollection} />
+                : groupedCards.map(({ primary, printings }) => (
+                    <Card
+                      key={primary.id}
+                      id={primary.id}
+                      card={primary.card}
+                      details={null}
+                      printings={printings}
+                      targetCollection={targetCollection}
+                    />
                   ))}
             </div>
           )}

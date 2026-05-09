@@ -1,7 +1,16 @@
 import React from "react";
 import CardShell from "./CardShell";
 
-export default function MtGCard({ id, card = null, details = null, provider = null, showCollectionSelect = false, listMode = false, targetCollection = null }) {
+export default function MtGCard({
+  id,
+  card = null,
+  details = null,
+  provider = null,
+  showCollectionSelect = false,
+  listMode = false,
+  targetCollection = null,
+  printings = [],
+}) {
   return (
     <CardShell
       id={id}
@@ -11,7 +20,9 @@ export default function MtGCard({ id, card = null, details = null, provider = nu
       showCollectionSelect={showCollectionSelect}
       listMode={listMode}
       targetCollection={targetCollection}
+      printings={printings}
       detailPath={`/card/mtg/${encodeURIComponent(id)}`}
+      makeDetailPath={(cardId) => `/card/mtg/${encodeURIComponent(cardId)}`}
       getImagePath={(_card) =>
         _card.cardIdentifiers?.scryfallId
           ? `https://api.scryfall.com/cards/${_card.cardIdentifiers.scryfallId}?format=image`

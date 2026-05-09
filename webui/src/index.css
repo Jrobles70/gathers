@@ -45,12 +45,14 @@ code {
 
 .search-card-art {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     border-radius: 7px;
 }
 
 .search-card-image-link {
     display: block;
+    overflow: hidden;
+    border-radius: 7px;
 }
 
 .search-card-image-link:focus-visible {
@@ -258,6 +260,108 @@ code {
     font-size: 0.78rem;
     font-weight: 700;
     text-transform: uppercase;
+}
+
+.search-card-printing-picker {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 4;
+    display: flex;
+    width: min(34rem, calc(100vw - 2rem));
+    max-height: min(32rem, 80vh);
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 7px;
+    background: rgba(33, 37, 41, 0.96);
+    color: #f8f9fa;
+    box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.34);
+    pointer-events: auto;
+}
+
+.search-card-printing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.search-card-printing-close {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #f8f9fa;
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+.search-card-printing-close:hover,
+.search-card-printing-close:focus-visible {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.search-card-printing-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: 0.75rem;
+    overflow: auto;
+    padding: 0.75rem;
+}
+
+.search-card-printing-option {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 0.45rem;
+    border: 2px solid transparent;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    padding: 0.4rem;
+    text-align: left;
+}
+
+.search-card-printing-option:hover,
+.search-card-printing-option:focus-visible {
+    border-color: rgba(255, 255, 255, 0.38);
+}
+
+.search-card-printing-option.selected {
+    border-color: #fd7e14;
+}
+
+.search-card-printing-option img {
+    width: 100%;
+    border-radius: 5px;
+}
+
+.search-card-printing-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    color: #f8f9fa;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.search-card-printing-meta span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-card-printing-meta span + span,
+.search-card-printing-price {
+    color: #ced4da;
+    font-size: 0.76rem;
+    font-weight: 600;
 }
 
 /* Sidebar */

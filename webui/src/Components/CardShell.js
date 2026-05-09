@@ -1,13 +1,44 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 
-export default function CardShell({ id, card = null, details = null, provider = null, detailPath, getImagePath, showCollectionSelect = false, listMode = false, targetCollection = null }) {
-  const [_card, setCard] = useState(card);
+export default function CardShell({
+  id,
+  card = null,
+  details = null,
+  provider = null,
+  detailPath,
+  makeDetailPath = null,
+  getImagePath,
+  showCollectionSelect = false,
+  listMode = false,
+  targetCollection = null,
+  printings = [],
+}) {
+  const printingOptions = useMemo(
+    () => (printings.length > 0 ? printings : [{ id, card, details }]),
+    [card, details, id, printings],
+  );
+  const [selectedPrintingId, setSelectedPrintingId] = useState(id);
   const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState(false);
+  const [printingPickerOpen, setPrintingPickerOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedPrintingId(id);
+  }, [id]);
+
+  const selectedPrinting = useMemo(
+    () => printingOptions.find((printing) => printing.id === selectedPrintingId) ?? printingOptions[0],
+    [printingOptions, selectedPrintingId],
+  );
+  const activeId = selectedPrinting?.id ?? id;
+  const activeDetails = selectedPrinting?.details ?? details;
+  const cardFromProps = selectedPrinting?.card ?? card;
+  const activeDetailPath = makeDetailPath ? makeDetailPath(activeId) : detailPath;
+  const [_card, setCard] = useState(cardFromProps);
 
   const selectedDispatch = useSelectedCardsDispatch();
   const loader = useCardLoader();
@@ -15,18 +46,36 @@ export default function CardShell({ id, card = null, details = null, provider = 
   const detailState = { returnTo: `${location.pathname}${location.search}` };
 
   const toggleSelected = () => {
-    if (details != null) {
-      selectedDispatch({ type: !selected ? "added" : "deleted", card: details });
+    if (activeDetails != null) {
+      selectedDispatch({ type: !selected ? "added" : "deleted", card: activeDetails });
       setSelected((s) => !s);
     }
   };
 
   useEffect(() => {
-    if (_card == null) {
-      loader(id, provider).then(setCard).catch(() => setLoadFailed(true));
+    let cancelled = false;
+    setLoadFailed(false);
+
+    if (cardFromProps != null) {
+      setCard(cardFromProps);
+      return undefined;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, _card, details, provider]);
+
+    setCard(null);
+    if (loader != null) {
+      loader(activeId, provider)
+        .then((loadedCard) => {
+          if (!cancelled) setCard(loadedCard);
+        })
+        .catch(() => {
+          if (!cancelled) setLoadFailed(true);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, cardFromProps, loader, provider]);
 
   if (loadFailed) return null;
 
@@ -46,17 +95,17 @@ export default function CardShell({ id, card = null, details = null, provider = 
         ) : (
           <>
             <span className="card-list-name">
-              <Link to={detailPath} state={detailState} onClick={(e) => e.stopPropagation()}>{_card.name}</Link>
+              <Link to={activeDetailPath} state={detailState} onClick={(e) => e.stopPropagation()}>{_card.name}</Link>
             </span>
             <span className="card-list-set text-muted">{_card.setCode}</span>
             <span className="card-list-rarity text-muted">{_card.rarity ?? ""}</span>
-            {details != null && (
+            {activeDetails != null && (
               <>
-                <span className="card-list-qty badge bg-secondary">×{details.quantity}</span>
-                {details.foilQuantity > 0 && (
-                  <span className="card-list-foil badge bg-info text-dark ms-1">✦×{details.foilQuantity}</span>
+                <span className="card-list-qty badge bg-secondary">×{activeDetails.quantity}</span>
+                {activeDetails.foilQuantity > 0 && (
+                  <span className="card-list-foil badge bg-info text-dark ms-1">✦×{activeDetails.foilQuantity}</span>
                 )}
-                <span className="card-list-provider badge bg-dark ms-1">{details.provider}</span>
+                <span className="card-list-provider badge bg-dark ms-1">{activeDetails.provider}</span>
               </>
             )}
           </>
@@ -73,7 +122,7 @@ export default function CardShell({ id, card = null, details = null, provider = 
         <div className={"card search-card" + (selected ? " border border-primary" : "")}>
           <div className="search-card-art">
             <Link
-              to={detailPath}
+              to={activeDetailPath}
               state={detailState}
               className="search-card-image-link"
               aria-label={`Open details for ${_card.name}`}
@@ -81,12 +130,62 @@ export default function CardShell({ id, card = null, details = null, provider = 
               <img src={imagePath} alt={_card.name} loading="lazy" />
             </Link>
             <CardDetails
-              id={id}
-              details={details}
-              toggleSelected={toggleSelected}
+              id={activeId}
+              details={activeDetails}
               showCollectionSelect={showCollectionSelect}
               targetCollection={targetCollection}
+              hasPrintings={printingOptions.length > 1}
+              onOpenPrintings={() => setPrintingPickerOpen(true)}
             />
+            {printingPickerOpen && (
+              <div className="search-card-printing-picker" role="dialog" aria-label="Select a printing">
+                <div className="search-card-printing-header">
+                  <strong>Select a printing</strong>
+                  <button
+                    type="button"
+                    className="search-card-printing-close"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setPrintingPickerOpen(false);
+                    }}
+                    aria-label="Close printing picker"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="search-card-printing-list">
+                  {printingOptions.map((printing) => (
+                    <button
+                      type="button"
+                      key={printing.id}
+                      className={
+                        "search-card-printing-option" +
+                        (printing.id === activeId ? " selected" : "")
+                      }
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSelectedPrintingId(printing.id);
+                        setPrintingPickerOpen(false);
+                      }}
+                    >
+                      {printing.card != null && (
+                        <img src={getImagePath(printing.card)} alt="" loading="lazy" />
+                      )}
+                      <span className="search-card-printing-meta">
+                        <span>{printing.card?.name ?? printing.id}</span>
+                        <span>
+                          {printing.card?.setCode ?? ""}
+                          {printing.card?.collectorNumber ? ` #${printing.card.collectorNumber}` : ""}
+                        </span>
+                      </span>
+                      <span className="search-card-printing-price">$-</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="search-card-footer">
             <span className="search-card-price">$-</span>
