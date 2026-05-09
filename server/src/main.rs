@@ -25,6 +25,8 @@ mod mtg_api;
 mod pokemon_api;
 mod riftbound_api;
 
+const DEFAULT_PORT: usize = 5234;
+
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ErrorPayload {
     pub error: String,
@@ -357,12 +359,7 @@ async fn main() -> eyre::Result<()> {
                 config_path.display()
             );
         }
-        let port = args.port.ok_or_else(|| {
-            eyre::eyre!(
-                "--port is required when no config file exists at {}",
-                config_path.display()
-            )
-        })?;
+        let port = args.port.unwrap_or(DEFAULT_PORT);
         let cfg = ServerConfig {
             system: args.system.clone(),
             port,

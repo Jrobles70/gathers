@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useCallback } from "react";
+import { createContext, useState, useContext, useCallback, useMemo } from "react";
 
 export const ModeContext = createContext({ mode: "full", collectionsEnabled: false });
 
@@ -32,6 +32,24 @@ export function updateOperationLog(logs, id, updates) {
 
 export const OperationsContext = createContext({});
 
+async function fetchJson(defaultValue, ...args) {
+  const response = await fetch(...args);
+  if (!response.ok) {
+    let errorMessage = `Request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body?.error) errorMessage = body.error;
+    } catch (_) {}
+    throw new Error(errorMessage);
+  }
+
+  if (response.status === 204) return defaultValue;
+
+  const text = await response.text();
+  if (text.length === 0) return defaultValue;
+  return JSON.parse(text);
+}
+
 export function OperationsProvider({ children }) {
   const [operations, setOperations] = useState({});
   const [operationLogs, setOperationLogs] = useState([]);
@@ -56,16 +74,7 @@ export function OperationsProvider({ children }) {
     };
 
     try {
-      const response = await fetch(...args);
-      if (!response.ok) {
-        let errorMessage = `Request failed (${response.status})`;
-        try {
-          const body = await response.json();
-          if (body?.error) errorMessage = body.error;
-        } catch (_) {}
-        throw new Error(errorMessage);
-      }
-      const result = await response.json();
+      const result = await fetchJson(defaultValue, ...args);
       finishOp("done");
       return result;
     } catch (e) {
@@ -74,16 +83,21 @@ export function OperationsProvider({ children }) {
     }
   }, []);
 
+  const quietFetch = useCallback(async (defaultValue, ...args) => {
+    return fetchJson(defaultValue, ...args);
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    operations,
+    operationLogs,
+    debugEnabled,
+    setDebugEnabled,
+    fetch: opsFetch,
+    quietFetch,
+  }), [debugEnabled, operationLogs, operations, opsFetch, quietFetch]);
+
   return (
-    <OperationsContext.Provider
-      value={{
-        operations: operations,
-        operationLogs,
-        debugEnabled,
-        setDebugEnabled,
-        fetch: opsFetch,
-      }}
-    >
+    <OperationsContext.Provider value={contextValue}>
       {children}
     </OperationsContext.Provider>
   );

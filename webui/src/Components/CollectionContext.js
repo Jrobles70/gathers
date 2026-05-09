@@ -22,7 +22,7 @@ export function CollectionsProvider({ children }) {
         collections: data,
       });
     });
-  }, [collection, collectionsEnabled, opsFetch]);
+  }, [collectionsEnabled, opsFetch]);
 
   return (
     <CollectionContext.Provider value={collection}>

@@ -17,21 +17,21 @@ npm run start-webui
 Or the following for the backend server:
 
 ```bash
-cargo run --bin server -- --system sql --port 5234
+cargo run --bin server -- --system sql
 ```
 
 The `--system` flag may be specified multiple times to enable multiple retrieval backends simultaneously. Supported values: `scryfall`, `sql`, `riftbound-sql`, `pokemon-sql`.
 
 ```bash
 # Enable both MTG and Riftbound
-cargo run --bin server -- --system sql --system riftbound-sql --port 5234
+cargo run --bin server -- --system sql --system riftbound-sql
 ```
 
 You can then access the webui at `http://localhost:3000`.
 
 ## Config File
 
-On first run with `--system` and `--port`, the server writes a config file to `~/.local/share/gathers/server.toml`. On subsequent runs, this config is loaded automatically and `--system`/`--port` are not required.
+On first run with `--system`, the server writes a config file to `~/.local/share/gathers/server.toml`. The default port is `5234`; pass `--port` to use a different port. On subsequent runs, this config is loaded automatically and `--system`/`--port` are not required.
 
 ## Environment Variables
 

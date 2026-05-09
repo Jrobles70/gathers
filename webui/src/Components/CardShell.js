@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
@@ -39,7 +39,9 @@ export default function CardShell({
   const activeDetails = selectedPrinting?.details ?? details;
   const cardFromProps = selectedPrinting?.card ?? card;
   const activeDetailPath = makeDetailPath ? makeDetailPath(activeId) : detailPath;
+  const activeCardKey = `${provider ?? "default"}:${activeId}`;
   const [_card, setCard] = useState(cardFromProps);
+  const loadedCardKeyRef = useRef(cardFromProps != null ? activeCardKey : null);
 
   const selectedDispatch = useSelectedCardsDispatch();
   const loader = useCardLoader();
@@ -58,15 +60,21 @@ export default function CardShell({
     setLoadFailed(false);
 
     if (cardFromProps != null) {
+      loadedCardKeyRef.current = activeCardKey;
       setCard(cardFromProps);
       return undefined;
     }
 
-    setCard(null);
+    if (loadedCardKeyRef.current !== activeCardKey) {
+      setCard(null);
+    }
     if (loader != null) {
       loader(activeId, provider)
         .then((loadedCard) => {
-          if (!cancelled) setCard(loadedCard);
+          if (!cancelled) {
+            loadedCardKeyRef.current = activeCardKey;
+            setCard(loadedCard);
+          }
         })
         .catch(() => {
           if (!cancelled) setLoadFailed(true);
@@ -76,7 +84,7 @@ export default function CardShell({
     return () => {
       cancelled = true;
     };
-  }, [activeId, cardFromProps, loader, provider]);
+  }, [activeCardKey, activeId, cardFromProps, loader, provider]);
 
   if (loadFailed) return null;
 

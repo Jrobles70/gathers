@@ -21,6 +21,16 @@ To run the server using Docker, you can use the provided Dockerfile or docker-co
 
 The Docker setup uses a named volume (`gathers-data`) to persist all databases across container restarts.
 
+## First-Run Arguments
+
+On first run, pass at least one retrieval system. The API defaults to port `5234`, so Docker/Unraid post arguments can be as simple as:
+
+```bash
+--system sql
+```
+
+Supported systems are `scryfall`, `sql`, `riftbound-sql`, and `pokemon-sql`.
+
 ## Environment Variables
 
 The Docker container supports the following environment variables (all set by default in docker-compose.yml):

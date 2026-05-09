@@ -101,6 +101,7 @@ export default function CardDetails({
         body: JSON.stringify(body),
       })
       .then((data) => {
+        const updatedCard = Array.isArray(data) ? data[0] : data;
         setQuantitiesByPrinting((previous) => ({
           ...previous,
           [id]: applyQuantityDelta(
@@ -109,10 +110,15 @@ export default function CardDetails({
             parseInt(deltaFoil),
           ),
         }));
-        if (cardsDispatch) {
-          cardsDispatch({ type: "added", card: add ? data[0] : data });
+        if (cardsDispatch && updatedCard != null) {
+          cardsDispatch({ type: "added", card: updatedCard });
         }
-        if (triggerRefresh) {
+        if (
+          triggerRefresh &&
+          updatedCard != null &&
+          updatedCard.quantity === 0 &&
+          updatedCard.foilQuantity === 0
+        ) {
           triggerRefresh(true);
         }
       });
