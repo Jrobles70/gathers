@@ -39,3 +39,13 @@ export function groupMagicSearchResults(cards, collectionsEnabled) {
   return groups;
 }
 
+export function listMagicSearchResultsByPrinting(cards, collectionsEnabled) {
+  return cards.map((searchResult) => {
+    const printing = normalizeMagicSearchResult(searchResult, collectionsEnabled);
+    return {
+      key: printing.id,
+      primary: printing,
+      printings: [printing],
+    };
+  });
+}

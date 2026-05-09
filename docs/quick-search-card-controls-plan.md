@@ -27,6 +27,8 @@
 - The `...` menu contains foil mode and a printing switch action.
 - The price footer is present with `$-` as a placeholder.
 - MTG search results are grouped by card name on the current page, with alternate printings available in a picker.
+- Quantity state is scoped by printing id, so switching printings does not share local regular or foil counts.
+- Searches scoped to all collections or a specific collection list owned printings separately instead of grouping them by card name.
 
 ## Remaining Follow-Ups
 

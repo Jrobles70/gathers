@@ -6,7 +6,10 @@ import { useCollections } from "./CollectionContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
 import SortControls from "./SortControls";
-import { groupMagicSearchResults } from "./searchPrintings";
+import {
+  groupMagicSearchResults,
+  listMagicSearchResultsByPrinting,
+} from "./searchPrintings";
 
 const PAGE_SIZE = 24;
 
@@ -92,7 +95,10 @@ function SearchMagic({
     { value: "Red",   label: "R" },
     { value: "Green", label: "G" },
   ];
-  const groupedCards = groupMagicSearchResults(cards, collectionsEnabled);
+  const shouldGroupPrintings = !collectionsEnabled || searchCollection === "";
+  const cardGroups = shouldGroupPrintings
+    ? groupMagicSearchResults(cards, collectionsEnabled)
+    : listMagicSearchResultsByPrinting(cards, collectionsEnabled);
 
   return (
     <div
@@ -175,7 +181,7 @@ function SearchMagic({
           ) : (
             <div className="card-grid list">
               {collectionsEnabled
-                ? groupedCards.map(({ primary, printings }) => (
+                ? cardGroups.map(({ primary, printings }) => (
                     <Card
                       key={primary.id + "-" + (primary.details != null ? primary.details.collectionId : "")}
                       id={primary.id}
@@ -187,7 +193,7 @@ function SearchMagic({
                       detailReturnPath={detailReturnPath}
                     />
                   ))
-                : groupedCards.map(({ primary, printings }) => (
+                : cardGroups.map(({ primary, printings }) => (
                     <Card
                       key={primary.id}
                       id={primary.id}

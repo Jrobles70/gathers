@@ -24,6 +24,13 @@ export function applyQuantityDelta(quantities, delta, deltaFoil) {
   };
 }
 
+function detailsToQuantities(details) {
+  return {
+    quantity: details?.quantity ?? 0,
+    foilQuantity: details?.foilQuantity ?? 0,
+  };
+}
+
 export default function CardDetails({
   id,
   details = null,
@@ -38,20 +45,30 @@ export default function CardDetails({
   const collections = useCollections();
   const cardsDispatch = useCardsDispatch();
   const triggerRefresh = useRefreshCardList();
+  const hasDetails = details != null;
+  const detailsQuantity = details?.quantity ?? 0;
+  const detailsFoilQuantity = details?.foilQuantity ?? 0;
   const [selectedCollection, setSelectedCollection] = useState(null);
   const [foilMode, setFoilMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [quantities, setQuantities] = useState({
-    quantity: details?.quantity ?? 0,
-    foilQuantity: details?.foilQuantity ?? 0,
-  });
+  const [quantitiesByPrinting, setQuantitiesByPrinting] = useState(() => ({
+    [id]: {
+      quantity: detailsQuantity,
+      foilQuantity: detailsFoilQuantity,
+    },
+  }));
 
   useEffect(() => {
-    setQuantities({
-      quantity: details?.quantity ?? 0,
-      foilQuantity: details?.foilQuantity ?? 0,
-    });
-  }, [details?.quantity, details?.foilQuantity]);
+    setQuantitiesByPrinting((previous) => ({
+      ...previous,
+      [id]: !hasDetails && previous[id] != null
+        ? previous[id]
+        : {
+          quantity: detailsQuantity,
+          foilQuantity: detailsFoilQuantity,
+        },
+    }));
+  }, [id, hasDetails, detailsQuantity, detailsFoilQuantity]);
 
   const updateQuantity = (delta, deltaFoil) => {
     if (!collectionsEnabled && details == null) return;
@@ -84,7 +101,14 @@ export default function CardDetails({
         body: JSON.stringify(body),
       })
       .then((data) => {
-        setQuantities((previous) => applyQuantityDelta(previous, parseInt(delta), parseInt(deltaFoil)));
+        setQuantitiesByPrinting((previous) => ({
+          ...previous,
+          [id]: applyQuantityDelta(
+            previous[id] ?? detailsToQuantities(details),
+            parseInt(delta),
+            parseInt(deltaFoil),
+          ),
+        }));
         if (cardsDispatch) {
           cardsDispatch({ type: "added", card: add ? data[0] : data });
         }
@@ -100,8 +124,9 @@ export default function CardDetails({
     action();
   };
 
+  const quantities = quantitiesByPrinting[id] ?? detailsToQuantities(details);
   const activeQuantity = foilMode ? quantities.foilQuantity : quantities.quantity;
-  const canAdjustQuantity = details != null || collectionsEnabled;
+  const canAdjustQuantity = hasDetails || collectionsEnabled;
 
   if (!canAdjustQuantity) return null;
 

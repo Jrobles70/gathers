@@ -4,7 +4,7 @@ import CardDetails, {
   applyQuantityDelta,
   resolveCardUpdateCollection,
 } from "./CardDetails";
-import { ModeProvider } from "../OperationsContext";
+import { ModeProvider, OperationsContext } from "../OperationsContext";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,6 +19,11 @@ function renderIntoForm(ui) {
 
   return {
     container,
+    rerender: (nextUi) => {
+      act(() => {
+        root.render(<form>{nextUi}</form>);
+      });
+    },
     cleanup: () => {
       act(() => {
         root.unmount();
@@ -100,5 +105,51 @@ describe("CardDetails", () => {
       quantity: 0,
       foilQuantity: 1,
     });
+  });
+
+  it("keeps local quantities scoped to the active printing id", async () => {
+    const fetchMock = jest.fn().mockResolvedValue([{ id: "printing-a" }]);
+    const renderCardDetails = (id) => (
+      <OperationsContext.Provider value={{ fetch: fetchMock }}>
+        <ModeProvider collectionsEnabled={true}>
+          <CardDetails id={id} />
+        </ModeProvider>
+      </OperationsContext.Provider>
+    );
+
+    const { container, rerender, cleanup } = renderIntoForm(renderCardDetails("printing-a"));
+    const quantityOutput = () => container.querySelector(".search-card-quantity").textContent.trim();
+    const increaseButton = () => Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "+");
+
+    expect(quantityOutput()).toBe("0");
+
+    await act(async () => {
+      increaseButton().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "Updating quantities for card printing-a",
+      {},
+      "/collection/cards/Main/add",
+      expect.objectContaining({
+        body: JSON.stringify({
+          id: "printing-a",
+          collectionId: "Main",
+          quantity: 1,
+          foilQuantity: 0,
+        }),
+      }),
+    );
+    expect(quantityOutput()).toBe("1");
+
+    rerender(renderCardDetails("printing-b"));
+    expect(quantityOutput()).toBe("0");
+
+    rerender(renderCardDetails("printing-a"));
+    expect(quantityOutput()).toBe("1");
+
+    cleanup();
   });
 });
