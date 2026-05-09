@@ -1,6 +1,9 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import CardDetails, { resolveCardUpdateCollection } from "./CardDetails";
+import CardDetails, {
+  applyQuantityDelta,
+  resolveCardUpdateCollection,
+} from "./CardDetails";
 import { ModeProvider } from "../OperationsContext";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,8 +50,9 @@ describe("CardDetails", () => {
     const buttons = Array.from(container.querySelectorAll("button"));
 
     expect(buttons.map((button) => button.textContent.trim())).toEqual([
-      "Add",
-      "Add Foil",
+      "+",
+      "-",
+      "...",
     ]);
     expect(buttons.every((button) => button.type === "button")).toBe(true);
 
@@ -69,5 +73,32 @@ describe("CardDetails", () => {
     expect(buttons.every((button) => button.type === "button")).toBe(true);
 
     cleanup();
+  });
+
+  it("shows foil mode in the card action menu", () => {
+    const { container, cleanup } = renderIntoForm(
+      <ModeProvider collectionsEnabled={true}>
+        <CardDetails id="card-1" details={{ collectionId: "Main", quantity: 1, foilQuantity: 0 }} />
+      </ModeProvider>,
+    );
+
+    const menuButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "...");
+
+    act(() => {
+      menuButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector(".search-card-menu").textContent).toContain("Foil");
+    expect(Array.from(container.querySelectorAll("button")).every((button) => button.type === "button")).toBe(true);
+
+    cleanup();
+  });
+
+  it("applies quantity deltas without dropping below zero", () => {
+    expect(applyQuantityDelta({ quantity: 1, foilQuantity: 0 }, -2, 1)).toEqual({
+      quantity: 0,
+      foilQuantity: 1,
+    });
   });
 });

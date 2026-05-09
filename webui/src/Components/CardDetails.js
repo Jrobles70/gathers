@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useCollection, useCollections } from "./CollectionContext";
 import { useOperations, useMode } from "../OperationsContext";
 import { useCardsDispatch } from "../Components/CardListContexts/CardsContext";
@@ -17,7 +17,21 @@ export function resolveCardUpdateCollection({
   return targetCollection ?? currentCollection;
 }
 
-export default function CardDetails({ id, details = null, toggleSelected, showCollectionSelect = false, targetCollection = null }) {
+export function applyQuantityDelta(quantities, delta, deltaFoil) {
+  return {
+    quantity: Math.max(0, quantities.quantity + delta),
+    foilQuantity: Math.max(0, quantities.foilQuantity + deltaFoil),
+  };
+}
+
+export default function CardDetails({
+  id,
+  details = null,
+  showCollectionSelect = false,
+  targetCollection = null,
+  hasPrintings = false,
+  onOpenPrintings = null,
+}) {
   const ops = useOperations();
   const { collectionsEnabled } = useMode();
   const currentCollection = useCollection();
@@ -25,8 +39,23 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
   const cardsDispatch = useCardsDispatch();
   const triggerRefresh = useRefreshCardList();
   const [selectedCollection, setSelectedCollection] = useState(null);
+  const [foilMode, setFoilMode] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [quantities, setQuantities] = useState({
+    quantity: details?.quantity ?? 0,
+    foilQuantity: details?.foilQuantity ?? 0,
+  });
+
+  useEffect(() => {
+    setQuantities({
+      quantity: details?.quantity ?? 0,
+      foilQuantity: details?.foilQuantity ?? 0,
+    });
+  }, [details?.quantity, details?.foilQuantity]);
 
   const updateQuantity = (delta, deltaFoil) => {
+    if (!collectionsEnabled && details == null) return;
+
     let collection = resolveCardUpdateCollection({
       details,
       showCollectionSelect,
@@ -55,83 +84,101 @@ export default function CardDetails({ id, details = null, toggleSelected, showCo
         body: JSON.stringify(body),
       })
       .then((data) => {
-        cardsDispatch({ type: "added", card: add ? data[0] : data });
-        triggerRefresh(true);
+        setQuantities((previous) => applyQuantityDelta(previous, parseInt(delta), parseInt(deltaFoil)));
+        if (cardsDispatch) {
+          cardsDispatch({ type: "added", card: add ? data[0] : data });
+        }
+        if (triggerRefresh) {
+          triggerRefresh(true);
+        }
       });
   };
 
+  const handleAction = (event, action) => {
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  };
+
+  const activeQuantity = foilMode ? quantities.foilQuantity : quantities.quantity;
+  const canAdjustQuantity = details != null || collectionsEnabled;
+
+  if (!canAdjustQuantity) return null;
+
   return (
-    <div className="card-img-overlay d-flex" onClick={toggleSelected}>
-      <div className="align-self-center">
-        <div className="btn-group-vertical">
-          {details != null ? (
-            <React.Fragment>
-              <button
-                type="button"
-                onClick={(e) => updateQuantity(1, 0)}
-                className="btn btn-sm btn-outline-success"
-              >
-                +
-              </button>
-              <span className="btn badge bg-secondary">{details.quantity}</span>
-              <button
-                type="button"
-                onClick={(e) => updateQuantity(-1, 0)}
-                className="btn btn-sm btn-outline-danger"
-              >
-                -
-              </button>
-
-              <span className="btn"></span>
-
-              <button
-                type="button"
-                onClick={(e) => updateQuantity(0, 1)}
-                className="btn btn-sm btn-outline-success"
-              >
-                +
-              </button>
-              <span className="btn badge bg-info">{details.foilQuantity}</span>
-              <button
-                type="button"
-                onClick={(e) => updateQuantity(0, -1)}
-                className="btn btn-sm btn-outline-danger"
-              >
-                -
-              </button>
-            </React.Fragment>
-          ) : collectionsEnabled ? (
-            <React.Fragment>
-              {showCollectionSelect && collections.length > 0 && (
+    <div className="card-img-overlay search-card-overlay">
+      <div className="search-card-action-rail" aria-label="Card quantity controls">
+        <button
+          type="button"
+          onClick={(event) => handleAction(event, () => updateQuantity(foilMode ? 0 : 1, foilMode ? 1 : 0))}
+          className="search-card-action"
+          aria-label={foilMode ? "Increase foil quantity" : "Increase quantity"}
+        >
+          +
+        </button>
+        <output className="search-card-quantity" aria-label={foilMode ? "Foil quantity" : "Quantity"}>
+          {activeQuantity}
+        </output>
+        <button
+          type="button"
+          onClick={(event) => handleAction(event, () => updateQuantity(foilMode ? 0 : -1, foilMode ? -1 : 0))}
+          className="search-card-action"
+          disabled={activeQuantity <= 0}
+          aria-label={foilMode ? "Decrease foil quantity" : "Decrease quantity"}
+        >
+          -
+        </button>
+        <button
+          type="button"
+          onClick={(event) => handleAction(event, () => setMenuOpen((open) => !open))}
+          className="search-card-action"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="More card actions"
+        >
+          ...
+        </button>
+        {menuOpen && (
+          <div className="search-card-menu" role="menu">
+            <div className="search-card-menu-title">
+              {foilMode ? "Foil" : "Regular"} quantity
+            </div>
+            {showCollectionSelect && collections.length > 0 && (
+              <label className="search-card-menu-field">
+                <span>Collection</span>
                 <select
                   value={selectedCollection ?? collections[0]?.id ?? ""}
-                  onChange={(e) => setSelectedCollection(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
+                  onChange={(event) => setSelectedCollection(event.target.value)}
+                  onClick={(event) => event.stopPropagation()}
                   className="form-select form-select-sm"
                 >
                   {collections.map((c) => (
                     <option key={c.id} value={c.id}>{c.id}</option>
                   ))}
                 </select>
-              )}
-              <button
-                type="button"
-                onClick={(e) => updateQuantity(1, 0)}
-                className="btn btn-sm btn-light"
-              >
-                Add
-              </button>
-              <span className="btn"></span>
-              <button
-                type="button"
-                onClick={(e) => updateQuantity(0, 1)}
-                className="btn btn-sm btn-info"
-              >
-                Add Foil
-              </button>
-            </React.Fragment>
-          ) : null}
-        </div>
+              </label>
+            )}
+            <label className="search-card-menu-row">
+              <input
+                type="checkbox"
+                checked={foilMode}
+                onChange={(event) => setFoilMode(event.target.checked)}
+              />
+              <span>Foil</span>
+            </label>
+            <button
+              type="button"
+              className="search-card-menu-button"
+              disabled={!hasPrintings || onOpenPrintings == null}
+              onClick={(event) => handleAction(event, () => {
+                setMenuOpen(false);
+                onOpenPrintings();
+              })}
+            >
+              Switch printing
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
