@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
@@ -11,6 +11,8 @@ export default function CardShell({ id, card = null, details = null, provider = 
 
   const selectedDispatch = useSelectedCardsDispatch();
   const loader = useCardLoader();
+  const location = useLocation();
+  const detailState = { returnTo: `${location.pathname}${location.search}` };
 
   const toggleSelected = () => {
     if (details != null) {
@@ -44,7 +46,7 @@ export default function CardShell({ id, card = null, details = null, provider = 
         ) : (
           <>
             <span className="card-list-name">
-              <Link to={detailPath} onClick={(e) => e.stopPropagation()}>{_card.name}</Link>
+              <Link to={detailPath} state={detailState} onClick={(e) => e.stopPropagation()}>{_card.name}</Link>
             </span>
             <span className="card-list-set text-muted">{_card.setCode}</span>
             <span className="card-list-rarity text-muted">{_card.rarity ?? ""}</span>
@@ -68,27 +70,27 @@ export default function CardShell({ id, card = null, details = null, provider = 
       {_card == null ? (
         <p>Loading...</p>
       ) : (
-        <div className={"card" + (selected ? " border border-primary" : "")}>
-          <img src={imagePath} alt={_card.name} loading="lazy" />
-          <CardDetails
-            id={id}
-            details={details}
-            toggleSelected={toggleSelected}
-            showCollectionSelect={showCollectionSelect}
-            targetCollection={targetCollection}
-          />
-          <div className="card-info">
-            <div className="row align-items-center">
-              <span className="col-sm-8">
-                <Link to={detailPath}>{_card.name}</Link>
-                {details != null ? (
-                  <span className="badge bg-secondary">{details.collectionId}</span>
-                ) : (
-                  ""
-                )}
-              </span>
-              <span className="col-sm-11">{_card.setCode}</span>
-            </div>
+        <div className={"card search-card" + (selected ? " border border-primary" : "")}>
+          <div className="search-card-art">
+            <Link
+              to={detailPath}
+              state={detailState}
+              className="search-card-image-link"
+              aria-label={`Open details for ${_card.name}`}
+            >
+              <img src={imagePath} alt={_card.name} loading="lazy" />
+            </Link>
+            <CardDetails
+              id={id}
+              details={details}
+              toggleSelected={toggleSelected}
+              showCollectionSelect={showCollectionSelect}
+              targetCollection={targetCollection}
+            />
+          </div>
+          <div className="search-card-footer">
+            <span className="search-card-price">$-</span>
+            <span className="search-card-set">{_card.setCode}</span>
           </div>
         </div>
       )}

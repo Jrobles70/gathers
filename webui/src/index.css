@@ -36,6 +36,57 @@ code {
         width: 100%;
     }
 
+.search-card {
+    gap: 0.45rem;
+    overflow: visible;
+    padding: 0;
+    background: transparent;
+}
+
+.search-card-art {
+    position: relative;
+    overflow: hidden;
+    border-radius: 7px;
+}
+
+.search-card-image-link {
+    display: block;
+}
+
+.search-card-image-link:focus-visible {
+    outline: 3px solid #0d6efd;
+    outline-offset: 3px;
+}
+
+.search-card img {
+    display: block;
+}
+
+.search-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 1.75rem;
+    gap: 0.5rem;
+    color: #495057;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.search-card-set {
+    color: #6c757d;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+}
+
+.search-card .card-img-overlay {
+    pointer-events: none;
+}
+
+.search-card .btn-group-vertical {
+    pointer-events: auto;
+}
+
 .zoomable {
     transition: transform 0.15s ease;
     cursor: zoom-in;
