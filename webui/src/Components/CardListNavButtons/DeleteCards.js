@@ -42,7 +42,14 @@ export default function DeleteCards() {
   };
 
   return (
-    <button onClick={deleteCards} type="button" className="btn btn-danger">
+    <button
+      aria-label="Delete selected cards"
+      disabled={selected.length === 0}
+      onClick={deleteCards}
+      title="Delete selected cards"
+      type="button"
+      className="btn btn-outline-danger btn-sm collection-icon-action"
+    >
       🗑️
     </button>
   );

@@ -4,6 +4,18 @@ import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 
+const PROVIDER_LABELS = {
+  MagicSQLite: "Magic",
+  PokemonSQLite: "Pokémon",
+  RiftboundSQLite: "Riftbound",
+  Scryfall: "Scryfall",
+};
+
+function providerLabel(provider) {
+  if (!provider) return "";
+  return PROVIDER_LABELS[provider] ?? provider.replace(/SQLite$/, "");
+}
+
 export default function CardShell({
   id,
   card = null,
@@ -89,6 +101,7 @@ export default function CardShell({
   if (loadFailed) return null;
 
   const imagePath = _card != null ? getImagePath(_card) : "";
+  const activeProviderLabel = providerLabel(activeDetails?.provider);
 
   if (listMode) {
     return (
@@ -114,7 +127,9 @@ export default function CardShell({
                 {activeDetails.foilQuantity > 0 && (
                   <span className="card-list-foil badge bg-info text-dark ms-1">✦×{activeDetails.foilQuantity}</span>
                 )}
-                <span className="card-list-provider badge bg-dark ms-1">{activeDetails.provider}</span>
+                {activeProviderLabel && (
+                  <span className="card-list-provider badge bg-dark ms-1">{activeProviderLabel}</span>
+                )}
               </>
             )}
           </>

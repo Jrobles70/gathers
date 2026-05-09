@@ -43,10 +43,12 @@ function AddCollectionForm() {
   };
 
   return (
-    <>
-      <Button onClick={handleToggleForm}>Add Collection</Button>
+    <div className="add-collection-form">
+      <Button className="add-collection-toggle" onClick={handleToggleForm} variant="primary">
+        Add Collection
+      </Button>
       {showForm && (
-        <Form onSubmit={handleSubmit}>
+        <Form className="add-collection-fields" onSubmit={handleSubmit}>
           <Form.Group controlId="newItem">
             <Form.Control
               type="text"
@@ -57,15 +59,17 @@ function AddCollectionForm() {
             />
             <Form.Control.Feedback type="invalid">{error}</Form.Control.Feedback>
           </Form.Group>
-          <Button variant="primary" type="submit">
-            Submit
-          </Button>
-          <Button variant="secondary" onClick={handleHideForm}>
-            Cancel
-          </Button>
+          <div className="add-collection-actions">
+            <Button disabled={newItem.trim() === ""} variant="primary" type="submit">
+              Submit
+            </Button>
+            <Button variant="secondary" onClick={handleHideForm}>
+              Cancel
+            </Button>
+          </div>
         </Form>
       )}
-    </>
+    </div>
   );
 }
 

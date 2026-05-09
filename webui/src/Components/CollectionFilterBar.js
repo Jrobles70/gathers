@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSystems } from "./SystemTypeContext";
 import SortControls from "./SortControls";
-import colorlessSymbol from "../assets/card-symbols/C.svg";
+import { ReactComponent as ColorlessSymbol } from "../assets/card-symbols/C.svg";
 import "mana-font/css/mana.min.css";
 
 const MTG_COLORS = [
@@ -11,7 +11,7 @@ const MTG_COLORS = [
   { value: "Black",      mana: "b", bg: "#2a2a2a", border: "#555" },
   { value: "Red",        mana: "r", bg: "#d3202a", border: "#a01820" },
   { value: "Green",      mana: "g", bg: "#00733e", border: "#005a30" },
-  { value: "Colorless",  symbol: colorlessSymbol, bg: "#cac5c0", border: "#8f8780", title: "Colorless" },
+  { value: "Colorless",  Symbol: ColorlessSymbol, bg: "#cac5c0", border: "#8f8780", title: "Colorless" },
 ];
 
 const SORT_FIELDS = [
@@ -102,118 +102,108 @@ export default function CollectionFilterBar() {
   const hasActive = collectionFiltersActive(filters);
 
   return (
-    <div className="collection-filter-bar bg-body-tertiary border-bottom" data-bs-theme="dark">
-      <div className="d-flex align-items-center gap-2 px-3 py-2">
-        <button
-          className={`btn btn-sm ${open ? "btn-secondary" : "btn-outline-secondary"}`}
-          onClick={() => setOpen((o) => !o)}
-          type="button"
-        >
-          Filters {hasActive && <span className="badge bg-primary ms-1">●</span>}
-        </button>
-
-        {hasActive && (
-          <button className="btn btn-sm btn-outline-danger" onClick={clearFilters} type="button">
-            Clear
-          </button>
-        )}
-
-        <div className="ms-auto">
-          <div className="btn-group btn-group-sm" role="group">
-            <button
-              type="button"
-              className={`btn ${filters.viewMode === "grid" ? "btn-secondary" : "btn-outline-secondary"}`}
-              onClick={() => setFilter("cf_viewMode", "grid")}
-              title="Grid view"
-            >
-              ⊞
-            </button>
-            <button
-              type="button"
-              className={`btn ${filters.viewMode === "list" ? "btn-secondary" : "btn-outline-secondary"}`}
-              onClick={() => setFilter("cf_viewMode", "list")}
-              title="List view"
-            >
-              ☰
-            </button>
-          </div>
-        </div>
-      </div>
+    <section className="collection-filter-bar collection-panel-section" data-bs-theme="dark">
+      <button
+        className="collection-panel-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        type="button"
+      >
+        <span className="collection-panel-toggle-label">
+          Filters
+          {hasActive && <span className="filter-active-dot" aria-label="Active filters" />}
+        </span>
+        <span aria-hidden="true">{open ? "^" : "v"}</span>
+      </button>
 
       {open && (
-        <div className="px-3 pb-3">
-          <div className="row g-2 mb-2">
-            <div className="col-sm-4">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Name"
-                value={filters.name}
-                onChange={(e) => setFilter("cf_name", e.target.value)}
-              />
-            </div>
-            <div className="col-sm-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Set Code"
-                value={filters.setCode}
-                onChange={(e) => setFilter("cf_setCode", e.target.value)}
-              />
-            </div>
-            <div className="col-sm-2">
-              <select
-                className="form-select form-select-sm"
-                value={filters.rarity}
-                onChange={(e) => setFilter("cf_rarity", e.target.value)}
-              >
-                <option value="">Any Rarity</option>
-                <option value="Common">Common</option>
-                <option value="Uncommon">Uncommon</option>
-                <option value="Rare">Rare</option>
-                <option value="Mythic">Mythic</option>
-              </select>
-            </div>
-            <div className="col-sm-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Artist"
-                value={filters.artist}
-                onChange={(e) => setFilter("cf_artist", e.target.value)}
-              />
-            </div>
-            <div className="col-sm-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Card Text"
-                value={filters.text}
-                onChange={(e) => setFilter("cf_text", e.target.value)}
-              />
-            </div>
+        <div className="collection-panel-dropdown collection-filters-dropdown">
+          <div className="collection-filter-field">
+            <label htmlFor="collection-filter-name">Name</label>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              id="collection-filter-name"
+              placeholder="Name"
+              value={filters.name}
+              onChange={(e) => setFilter("cf_name", e.target.value)}
+            />
           </div>
 
-          <div className="row g-2 mb-2">
-            {systems.length > 1 && (
-              <div className="col-sm-3">
-                <select
-                  className="form-select form-select-sm"
-                  value={filters.provider}
-                  onChange={(e) => setFilter("cf_provider", e.target.value)}
-                >
-                  <option value="">All Games</option>
-                  {systems.map((s) => (
-                    <option key={s} value={s}>{SYSTEM_LABELS[s] ?? s}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+          <div className="collection-filter-field">
+            <label htmlFor="collection-filter-set-code">Set code</label>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              id="collection-filter-set-code"
+              placeholder="Set code"
+              value={filters.setCode}
+              onChange={(e) => setFilter("cf_setCode", e.target.value)}
+            />
+          </div>
 
-            {(systems.includes("MagicSQLite") || systems.includes("Scryfall")) && (
-              <div className="col-auto d-flex align-items-center gap-1">
-                <small className="text-muted me-1">Colors:</small>
-                {MTG_COLORS.map(({ value, mana, symbol, bg, border, title = value }) => {
+          <div className="collection-filter-field">
+            <label htmlFor="collection-filter-rarity">Rarity</label>
+            <select
+              className="form-select form-select-sm"
+              id="collection-filter-rarity"
+              value={filters.rarity}
+              onChange={(e) => setFilter("cf_rarity", e.target.value)}
+            >
+              <option value="">Any rarity</option>
+              <option value="Common">Common</option>
+              <option value="Uncommon">Uncommon</option>
+              <option value="Rare">Rare</option>
+              <option value="Mythic">Mythic</option>
+            </select>
+          </div>
+
+          <div className="collection-filter-field">
+            <label htmlFor="collection-filter-artist">Artist</label>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              id="collection-filter-artist"
+              placeholder="Artist"
+              value={filters.artist}
+              onChange={(e) => setFilter("cf_artist", e.target.value)}
+            />
+          </div>
+
+          <div className="collection-filter-field">
+            <label htmlFor="collection-filter-text">Card text</label>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              id="collection-filter-text"
+              placeholder="Card text"
+              value={filters.text}
+              onChange={(e) => setFilter("cf_text", e.target.value)}
+            />
+          </div>
+
+          {systems.length > 1 && (
+            <div className="collection-filter-field">
+              <label htmlFor="collection-filter-provider">Game</label>
+              <select
+                className="form-select form-select-sm"
+                id="collection-filter-provider"
+                value={filters.provider}
+                onChange={(e) => setFilter("cf_provider", e.target.value)}
+              >
+                <option value="">All games</option>
+                {systems.map((s) => (
+                  <option key={s} value={s}>{SYSTEM_LABELS[s] ?? s}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(systems.includes("MagicSQLite") || systems.includes("Scryfall")) && (
+            <div className="collection-filter-row">
+              <span className="collection-filter-label">Colors</span>
+              <div className="collection-color-controls">
+                {MTG_COLORS.map(({ value, mana, Symbol, bg, border, title = value }) => {
                   const active = filters.colorIdentities.includes(value);
                   return (
                     <button
@@ -221,17 +211,18 @@ export default function CollectionFilterBar() {
                       type="button"
                       title={title}
                       aria-label={title}
+                      aria-pressed={active}
                       onClick={() => setArrayFilter("cf_color", value, !active)}
                       className="mana-toggle-btn"
                       style={{
                         background: active ? bg : "transparent",
                         borderColor: active ? border : "rgba(255,255,255,0.3)",
                         opacity: active ? 1 : 0.45,
-                        transform: active ? "scale(1.15)" : "scale(1)",
+                        transform: active ? "scale(1.08)" : "scale(1)",
                       }}
                     >
-                      {symbol ? (
-                        <img className="mana-toggle-symbol" src={symbol} alt="" aria-hidden="true" />
+                      {Symbol ? (
+                        <Symbol className="mana-toggle-symbol" aria-hidden="true" />
                       ) : (
                         <i className={`ms ms-${mana} ms-cost`} />
                       )}
@@ -239,28 +230,51 @@ export default function CollectionFilterBar() {
                   );
                 })}
               </div>
-            )}
+            </div>
+          )}
 
-          </div>
+          <SortControls
+            sortBy={filters.sortBy}
+            sortOrder={filters.sortOrder}
+            fields={SORT_FIELDS}
+            onChange={(field, order) => {
+              const next = new URLSearchParams(searchParams);
+              next.set("cf_sortBy", field);
+              next.set("cf_sortOrder", order);
+              next.set("page", "1");
+              setSearchParams(next);
+            }}
+          />
 
-          <div className="row g-2">
-            <div className="col-auto">
-              <SortControls
-                sortBy={filters.sortBy}
-                sortOrder={filters.sortOrder}
-                fields={SORT_FIELDS}
-                onChange={(field, order) => {
-                  const next = new URLSearchParams(searchParams);
-                  next.set("cf_sortBy", field);
-                  next.set("cf_sortOrder", order);
-                  next.set("page", "1");
-                  setSearchParams(next);
-                }}
-              />
+          <div className="collection-filter-row">
+            <span className="collection-filter-label">View</span>
+            <div className="btn-group btn-group-sm" role="group" aria-label="View mode">
+              <button
+                type="button"
+                className={`btn ${filters.viewMode === "grid" ? "btn-secondary" : "btn-outline-secondary"}`}
+                onClick={() => setFilter("cf_viewMode", "grid")}
+                title="Grid view"
+              >
+                Grid
+              </button>
+              <button
+                type="button"
+                className={`btn ${filters.viewMode === "list" ? "btn-secondary" : "btn-outline-secondary"}`}
+                onClick={() => setFilter("cf_viewMode", "list")}
+                title="List view"
+              >
+                List
+              </button>
             </div>
           </div>
+
+          {hasActive && (
+            <button className="btn btn-outline-danger btn-sm" onClick={clearFilters} type="button">
+              Clear filters
+            </button>
+          )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

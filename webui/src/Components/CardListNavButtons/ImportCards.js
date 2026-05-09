@@ -19,9 +19,10 @@ export default function ImportCards() {
   const collection = useCollection();
   const triggerRefresh = useRefreshCardList();
 
+  const [open, setOpen] = useState(false);
   const [file, setFile] = useState();
   const [text, setText] = useState("");
-  const [importMode, setImportMode] = useState("file");
+  const [importMode, setImportMode] = useState("text");
 
   const handleFileChange = (e) => {
     if (e.target.files) {
@@ -59,56 +60,59 @@ export default function ImportCards() {
   };
 
   return (
-    <form className="import-cards-form d-flex" onSubmit={handleUploadClick}>
-      <div className="input-group input-group-sm import-cards-controls">
-        <div className="btn-group" role="group" aria-label="Import source">
-          <button
-            aria-pressed={importMode === "file"}
-            className={`btn btn-outline-secondary ${
-              importMode === "file" ? "active" : ""
-            }`}
-            onClick={() => setImportMode("file")}
-            type="button"
+    <form className="import-cards-form" onSubmit={handleUploadClick}>
+      <button
+        type="button"
+        className="collection-panel-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((isOpen) => !isOpen)}
+      >
+        <span>Import</span>
+        <span aria-hidden="true">{open ? "^" : "v"}</span>
+      </button>
+
+      {open && (
+        <div className="collection-panel-dropdown import-cards-dropdown">
+          <label className="form-label" htmlFor="collection-import-source">
+            Source
+          </label>
+          <select
+            className="form-select form-select-sm"
+            id="collection-import-source"
+            onChange={(e) => setImportMode(e.target.value)}
+            value={importMode}
           >
-            File
-          </button>
+            <option value="file">File</option>
+            <option value="text">Text</option>
+          </select>
+
+          {importMode === "file" ? (
+            <input
+              onChange={handleFileChange}
+              type="file"
+              className="form-control form-control-sm"
+              id="inputGroupFile02"
+            />
+          ) : (
+            <textarea
+              aria-label="Paste CSV text"
+              className="form-control form-control-sm import-cards-text"
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,..."
+              rows="4"
+              value={text}
+            />
+          )}
+
           <button
-            aria-pressed={importMode === "text"}
-            className={`btn btn-outline-secondary ${
-              importMode === "text" ? "active" : ""
-            }`}
-            onClick={() => setImportMode("text")}
-            type="button"
+            className="btn btn-outline-info btn-sm"
+            disabled={!canImport}
+            type="submit"
+            id="inputGroupFileAddon04"
           >
-            Text
+            Import
           </button>
         </div>
-        {importMode === "file" && (
-          <input
-            onChange={handleFileChange}
-            type="file"
-            className="form-control"
-            id="inputGroupFile02"
-          />
-        )}
-        <button
-          className="btn btn-outline-secondary"
-          disabled={!canImport}
-          type="submit"
-          id="inputGroupFileAddon04"
-        >
-          Import
-        </button>
-      </div>
-      {importMode === "text" && (
-        <textarea
-          aria-label="Paste CSV text"
-          className="form-control form-control-sm import-cards-text"
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,..."
-          rows="3"
-          value={text}
-        />
       )}
     </form>
   );

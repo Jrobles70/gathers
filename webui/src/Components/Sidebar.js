@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import AddCollectionForm from "./AddCollectionForm";
 import { useCollection, useCollections } from "./CollectionContext";
 import OperationsTracker from "./CardListNavButtons/OperationsTracker";
 import { useMode } from "../OperationsContext";
 import { useQuickSearch } from "./QuickSearchContext";
 import SettingsModal from "./SettingsModal";
+import CardListNav from "./CardListNav";
+import CollectionFilterBar from "./CollectionFilterBar";
 
 function useServerStatus() {
   const [status, setStatus] = useState({ ready: true, downloading: {} });
@@ -40,12 +42,22 @@ function useServerStatus() {
 
 export default function Sidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [collectionsOpen, setCollectionsOpen] = useState(true);
+  const [collectionQuery, setCollectionQuery] = useState("");
   const collection = useCollection();
   const collections = useCollections();
   const { mode, collectionsEnabled } = useMode();
   const isSearchOnly = mode === "search-only";
   const serverStatus = useServerStatus();
   const { openQuickSearch } = useQuickSearch();
+  const location = useLocation();
+  const showCollectionTools =
+    !isSearchOnly &&
+    collectionsEnabled &&
+    location.pathname.startsWith("/c/");
+  const filteredCollections = collections.filter((c) =>
+    c.id.toLowerCase().includes(collectionQuery.trim().toLowerCase()),
+  );
 
   return (
     <header>
@@ -57,7 +69,7 @@ export default function Sidebar() {
             </a>
           </div>
         </nav>
-        <div className="position-sticky">
+        <div className="position-sticky sidebar-content">
           <div
             className="nav flex-column nav-pills me-3"
             role="tablist"
@@ -118,34 +130,66 @@ export default function Sidebar() {
             </>
           )}
           <hr />
-          <div className="nav flex-column nav-pills me-3">
-            <button type="button" className="btn btn-outline-secondary" onClick={() => setSettingsOpen(true)}>
-              Settings
-            </button>
-          </div>
-          <hr />
           <div
-            className="nav flex-column nav-pills me-3"
-            role="tablist"
-            aria-orientation="vertical"
+            className="nav flex-column nav-pills me-3 sidebar-nav-stack sidebar-main-nav"
+            aria-label="Collection sidebar"
           >
+            {showCollectionTools && <CollectionFilterBar />}
             {!isSearchOnly && collectionsEnabled && (
-              <React.Fragment>
-                {collections.map((c) => (
-                  <Link
-                    to={"/c/" + c.id + "/1"}
-                    key={c.id}
-                    className={"nav-link" + (c.id === collection ? " active" : "")}
-                  >
-                    {c.id}
-                  </Link>
-                ))}
-                <hr />
-                <AddCollectionForm />
-                <hr />
-              </React.Fragment>
+              <section className="collection-panel-section sidebar-collections-panel">
+                <button
+                  type="button"
+                  className="collection-panel-toggle"
+                  aria-expanded={collectionsOpen}
+                  onClick={() => setCollectionsOpen((open) => !open)}
+                >
+                  <span>Collections</span>
+                  <span aria-hidden="true">{collectionsOpen ? "^" : "v"}</span>
+                </button>
+                {collectionsOpen && (
+                  <div className="collection-panel-dropdown">
+                    <input
+                      type="search"
+                      className="form-control form-control-sm"
+                      placeholder="Search collections"
+                      aria-label="Search collections"
+                      value={collectionQuery}
+                      onChange={(event) => setCollectionQuery(event.target.value)}
+                    />
+                    <div className="sidebar-collection-list">
+                      {filteredCollections.length > 0 ? (
+                        filteredCollections.map((c) => (
+                          <Link
+                            to={"/c/" + c.id + "/1"}
+                            key={c.id}
+                            className={"nav-link" + (c.id === collection ? " active" : "")}
+                          >
+                            {c.id}
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="sidebar-empty-state">No collections found</div>
+                      )}
+                    </div>
+                    <AddCollectionForm />
+                  </div>
+                )}
+              </section>
+            )}
+            {showCollectionTools && (
+              <div className="sidebar-collection-tools">
+                <CardListNav />
+              </div>
             )}
             <OperationsTracker />
+          </div>
+          <div className="sidebar-settings">
+            <hr />
+            <div className="nav flex-column nav-pills me-3">
+              <button type="button" className="btn btn-outline-secondary" onClick={() => setSettingsOpen(true)}>
+                Settings
+              </button>
+            </div>
           </div>
         </div>
       </nav>

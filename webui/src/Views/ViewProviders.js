@@ -16,23 +16,23 @@ export default function ViewProviders({ children }) {
     <CollectionsProvider>
       <SystemTypeProvider>
         <QuickSearchProvider>
-          <Header />
-          <main>
-            <CardsProvider>
-              <SelectedCardsProvider>
-                <CardCacheProvider>
-                  <CardLoaderProvider>
-                    <RefreshCardListProvider>
-                      <CardSetsProvider>
+          <CardsProvider>
+            <SelectedCardsProvider>
+              <CardCacheProvider>
+                <CardLoaderProvider>
+                  <RefreshCardListProvider>
+                    <CardSetsProvider>
+                      <Header />
+                      <main>
                         {children}
                         <QuickSearchModal />
-                      </CardSetsProvider>
-                    </RefreshCardListProvider>
-                  </CardLoaderProvider>
-                </CardCacheProvider>
-              </SelectedCardsProvider>
-            </CardsProvider>
-          </main>
+                      </main>
+                    </CardSetsProvider>
+                  </RefreshCardListProvider>
+                </CardLoaderProvider>
+              </CardCacheProvider>
+            </SelectedCardsProvider>
+          </CardsProvider>
         </QuickSearchProvider>
       </SystemTypeProvider>
     </CollectionsProvider>

@@ -44,14 +44,12 @@ export default function DeleteCollection() {
   };
 
   return (
-    <div className="d-flex">
-      <button
-        onClick={deleteCollection}
-        type="button"
-        className="btn btn-danger"
-      >
-        🗑️ collection
-      </button>
-    </div>
+    <button
+      onClick={deleteCollection}
+      type="button"
+      className="btn btn-outline-danger btn-sm w-100"
+    >
+      Delete collection
+    </button>
   );
 }

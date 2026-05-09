@@ -6,7 +6,7 @@ import { useCollections } from "./CollectionContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
 import SortControls from "./SortControls";
-import colorlessSymbol from "../assets/card-symbols/C.svg";
+import { ReactComponent as ColorlessSymbol } from "../assets/card-symbols/C.svg";
 import {
   groupMagicSearchResults,
   listMagicSearchResultsByPrinting,
@@ -95,7 +95,7 @@ function SearchMagic({
     { value: "Black",      label: "B" },
     { value: "Red",        label: "R" },
     { value: "Green",      label: "G" },
-    { value: "Colorless",  symbol: colorlessSymbol, title: "Colorless" },
+    { value: "Colorless",  Symbol: ColorlessSymbol, title: "Colorless" },
   ];
   const shouldGroupPrintings = !collectionsEnabled || searchCollection === "";
   const cardGroups = shouldGroupPrintings
@@ -141,7 +141,7 @@ function SearchMagic({
           <input onChange={(e) => handleSearchInput(e, "text")} type="text" className="form-control" placeholder="Text" value={searchOptions.text} />
         </div>
         <div className="input-group">
-          {colors.map(({ value, label, symbol, title = value }, i) => (
+          {colors.map(({ value, label, Symbol, title = value }, i) => (
             <div key={value} className="form-check form-check-inline">
               <input
                 onChange={(e) => handleArrayInput("colorIdentities", e)}
@@ -152,8 +152,8 @@ function SearchMagic({
                 checked={searchOptions.colorIdentities.includes(value)}
               />
               <label className="form-check-label" htmlFor={`inlineCheckbox${i + 1}`} title={title}>
-                {symbol ? (
-                  <img className="mana-checkbox-symbol" src={symbol} alt={title} />
+                {Symbol ? (
+                  <Symbol className="mana-checkbox-symbol" aria-label={title} />
                 ) : (
                   label
                 )}

@@ -5,12 +5,8 @@ export default function ExportCollection() {
   const collection = useCollection();
 
   return (
-    <div className="d-flex">
-      <a href={"/collection/export/" + collection}>
-        <button type="button" className="btn btn-info">
-          Export
-        </button>
-      </a>
-    </div>
+    <a className="btn btn-outline-info btn-sm w-100" href={"/collection/export/" + collection}>
+      Export collection
+    </a>
   );
 }

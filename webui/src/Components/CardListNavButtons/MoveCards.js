@@ -17,6 +17,7 @@ export default function MoveCards() {
 
   const [destinationCollection, setDestinationCollection] =
     useState(collection);
+  const canMove = selected.length > 0 && Boolean(destinationCollection);
 
   const moveCards = () => {
     ops
@@ -40,18 +41,19 @@ export default function MoveCards() {
   };
 
   return (
-    <form className="d-flex">
+    <form className="move-cards-form">
       <button
+        disabled={!canMove}
         onClick={moveCards}
         type="button"
-        className="btn btn-outline-info"
+        className="btn btn-outline-info btn-sm"
       >
         Move
       </button>
       <select
         value={destinationCollection}
         onChange={(e) => setDestinationCollection(e.target.value)}
-        className="form-control"
+        className="form-select form-select-sm"
         id="exampleFormControlSelect1"
       >
         {collections.map((c) => (
