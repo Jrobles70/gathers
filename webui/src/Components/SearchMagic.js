@@ -6,6 +6,7 @@ import { useCollections } from "./CollectionContext";
 import useCardSearch from "./useCardSearch";
 import SearchPagination from "./SearchPagination";
 import SortControls from "./SortControls";
+import colorlessSymbol from "../assets/card-symbols/C.svg";
 import {
   groupMagicSearchResults,
   listMagicSearchResultsByPrinting,
@@ -89,11 +90,12 @@ function SearchMagic({
   }, [pageNumber, shouldSearch]);
 
   const colors = [
-    { value: "White", label: "W" },
-    { value: "Blue",  label: "U" },
-    { value: "Black", label: "B" },
-    { value: "Red",   label: "R" },
-    { value: "Green", label: "G" },
+    { value: "White",      label: "W" },
+    { value: "Blue",       label: "U" },
+    { value: "Black",      label: "B" },
+    { value: "Red",        label: "R" },
+    { value: "Green",      label: "G" },
+    { value: "Colorless",  symbol: colorlessSymbol, title: "Colorless" },
   ];
   const shouldGroupPrintings = !collectionsEnabled || searchCollection === "";
   const cardGroups = shouldGroupPrintings
@@ -139,7 +141,7 @@ function SearchMagic({
           <input onChange={(e) => handleSearchInput(e, "text")} type="text" className="form-control" placeholder="Text" value={searchOptions.text} />
         </div>
         <div className="input-group">
-          {colors.map(({ value, label }, i) => (
+          {colors.map(({ value, label, symbol, title = value }, i) => (
             <div key={value} className="form-check form-check-inline">
               <input
                 onChange={(e) => handleArrayInput("colorIdentities", e)}
@@ -149,7 +151,13 @@ function SearchMagic({
                 value={value}
                 checked={searchOptions.colorIdentities.includes(value)}
               />
-              <label className="form-check-label" htmlFor={`inlineCheckbox${i + 1}`}>{label}</label>
+              <label className="form-check-label" htmlFor={`inlineCheckbox${i + 1}`} title={title}>
+                {symbol ? (
+                  <img className="mana-checkbox-symbol" src={symbol} alt={title} />
+                ) : (
+                  label
+                )}
+              </label>
             </div>
           ))}
         </div>

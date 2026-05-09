@@ -787,6 +787,19 @@ code {
     opacity: 0.85 !important;
 }
 
+.mana-toggle-symbol {
+    display: block;
+    width: 22px;
+    height: 22px;
+}
+
+.mana-checkbox-symbol {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    vertical-align: -0.15rem;
+}
+
 .collection-filter-bar input.form-control,
 .collection-filter-bar select.form-select {
     background-color: #2b2b2b;

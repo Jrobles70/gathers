@@ -2,14 +2,16 @@ import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSystems } from "./SystemTypeContext";
 import SortControls from "./SortControls";
+import colorlessSymbol from "../assets/card-symbols/C.svg";
 import "mana-font/css/mana.min.css";
 
-const MTG_COLOURS = [
-  { value: "White", mana: "w", bg: "#f9faf4", border: "#c4b78a" },
-  { value: "Blue",  mana: "u", bg: "#0e68ab", border: "#0a4f82" },
-  { value: "Black", mana: "b", bg: "#2a2a2a", border: "#555" },
-  { value: "Red",   mana: "r", bg: "#d3202a", border: "#a01820" },
-  { value: "Green", mana: "g", bg: "#00733e", border: "#005a30" },
+const MTG_COLORS = [
+  { value: "White",      mana: "w", bg: "#f9faf4", border: "#c4b78a" },
+  { value: "Blue",       mana: "u", bg: "#0e68ab", border: "#0a4f82" },
+  { value: "Black",      mana: "b", bg: "#2a2a2a", border: "#555" },
+  { value: "Red",        mana: "r", bg: "#d3202a", border: "#a01820" },
+  { value: "Green",      mana: "g", bg: "#00733e", border: "#005a30" },
+  { value: "Colorless",  symbol: colorlessSymbol, bg: "#cac5c0", border: "#8f8780", title: "Colorless" },
 ];
 
 const SORT_FIELDS = [
@@ -210,14 +212,15 @@ export default function CollectionFilterBar() {
 
             {(systems.includes("MagicSQLite") || systems.includes("Scryfall")) && (
               <div className="col-auto d-flex align-items-center gap-1">
-                <small className="text-muted me-1">Colours:</small>
-                {MTG_COLOURS.map(({ value, mana, bg, border }) => {
+                <small className="text-muted me-1">Colors:</small>
+                {MTG_COLORS.map(({ value, mana, symbol, bg, border, title = value }) => {
                   const active = filters.colorIdentities.includes(value);
                   return (
                     <button
                       key={value}
                       type="button"
-                      title={value}
+                      title={title}
+                      aria-label={title}
                       onClick={() => setArrayFilter("cf_color", value, !active)}
                       className="mana-toggle-btn"
                       style={{
@@ -227,7 +230,11 @@ export default function CollectionFilterBar() {
                         transform: active ? "scale(1.15)" : "scale(1)",
                       }}
                     >
-                      <i className={`ms ms-${mana} ms-cost`} />
+                      {symbol ? (
+                        <img className="mana-toggle-symbol" src={symbol} alt="" aria-hidden="true" />
+                      ) : (
+                        <i className={`ms ms-${mana} ms-cost`} />
+                      )}
                     </button>
                   );
                 })}

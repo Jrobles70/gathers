@@ -58,22 +58,28 @@ function buildSearchBody(filters) {
   return body;
 }
 
-function impliedProvider(filters) {
-  if (filters.colorIdentities.length > 0) return "MagicSQLite";
-  if (filters.domains.length > 0)         return "RiftboundSQLite";
-  if (filters.energyTypes.length > 0)     return "PokemonSQLite";
-  return null;
+function impliedProviders(filters, systems) {
+  if (filters.colorIdentities.length > 0) {
+    return systems.filter((system) => system === "MagicSQLite" || system === "Scryfall");
+  }
+  if (filters.domains.length > 0) return ["RiftboundSQLite"];
+  if (filters.energyTypes.length > 0) return ["PokemonSQLite"];
+  return [];
 }
 
 function buildSearchUrl(collection, filters, pageNumber, systems, isCount = false) {
   const params = new URLSearchParams();
   params.set("offset", String((pageNumber - 1) * pageSize));
   params.set("limit", String(pageSize));
-  const provider = filters.provider || impliedProvider(filters);
-  if (provider) {
-    params.set("provider", provider);
-  } else if (systems.length > 0) {
-    params.set("providers", systems.join(","));
+  if (filters.provider) {
+    params.set("provider", filters.provider);
+  } else {
+    const providers = impliedProviders(filters, systems);
+    if (providers.length > 0) {
+      params.set("providers", providers.join(","));
+    } else if (systems.length > 0) {
+      params.set("providers", systems.join(","));
+    }
   }
   const base = `/collection/cards/${collection}/search`;
   return isCount ? `${base}/count?${params.toString()}` : `${base}?${params.toString()}`;

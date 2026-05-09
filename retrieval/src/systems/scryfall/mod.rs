@@ -2,11 +2,35 @@ use std::collections::HashMap;
 
 use eyre::OptionExt;
 use models::{
-    Card, CardColour, CardID, CardIdentifiers, CollectorNumber, SetCode, filters::{CardSearchFilters, SortField, SortOrder},
+    Card, CardColour, CardID, CardIdentifiers, CollectorNumber, SetCode,
+    filters::{CardSearchFilters, SortField, SortOrder},
 };
 use serde_json::Value;
 
 use crate::{NamedRetrievalSystem, RetrievalSystemTrait};
+
+fn color_identity_from_value(value: Option<&Value>) -> Option<Vec<CardColour>> {
+    let colors = value?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(|c| match c {
+            "B" => CardColour::Black,
+            "U" => CardColour::Blue,
+            "W" => CardColour::White,
+            "G" => CardColour::Green,
+            "R" => CardColour::Red,
+            "C" => CardColour::Colourless,
+            _ => CardColour::Colourless,
+        })
+        .collect::<Vec<CardColour>>();
+
+    Some(if colors.is_empty() {
+        vec![CardColour::Colourless]
+    } else {
+        colors
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct ScryfallRetrievalSystem {}
@@ -125,23 +149,7 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                 let oracle_text = card.get("oracle_text")?.as_str()?;
                 let collector_number = card.get("collector_number")?.as_str()?;
 
-                let color_identity = card
-                    .get("color_identity")
-                    .and_then(Value::as_array)?
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<&str>>()
-                    .iter()
-                    .map(|c| match *c {
-                        "B" => CardColour::Black,
-                        "U" => CardColour::Blue,
-                        "W" => CardColour::White,
-                        "G" => CardColour::Green,
-                        "R" => CardColour::Red,
-                        "C" => CardColour::Colourless,
-                        _ => CardColour::Colourless,
-                    })
-                    .collect::<Vec<CardColour>>();
+                let color_identity = color_identity_from_value(card.get("color_identity"))?;
 
                 let type_line = card.get("type_line")?.as_str()?;
                 let mut types = vec![];
@@ -229,24 +237,8 @@ impl RetrievalSystemTrait for ScryfallRetrievalSystem {
                     .and_then(Value::as_str)
                     .ok_or_eyre("Could not retrieve artist")?
                     .to_string(),
-                color_identity: json
-                    .get("color_identity")
-                    .and_then(Value::as_array)
-                    .ok_or_eyre("Could not retrieve color identity")?
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<&str>>()
-                    .iter()
-                    .map(|c| match *c {
-                        "B" => CardColour::Black,
-                        "U" => CardColour::Blue,
-                        "W" => CardColour::White,
-                        "G" => CardColour::Green,
-                        "R" => CardColour::Red,
-                        "C" => CardColour::Colourless,
-                        _ => CardColour::Colourless,
-                    })
-                    .collect::<Vec<CardColour>>(),
+                color_identity: color_identity_from_value(json.get("color_identity"))
+                    .ok_or_eyre("Could not retrieve color identity")?,
                 id: card_id.clone(),
                 rarity: json
                     .get("rarity")
@@ -323,7 +315,7 @@ mod tests {
             panic!("Not a Magic card")
         };
         assert_eq!(card.name, "Panharmonicon");
-        assert_eq!(card.color_identity, vec![]);
+        assert_eq!(card.color_identity, vec![CardColour::Colourless]);
 
         Ok(())
     }

@@ -15,7 +15,10 @@ pub struct DownloadProgress {
     pub phase: String,
 }
 
-use ::models::{Card, CardID, CollectorNumber, Set, SetCode, filters::{CardSearchFilters, SortField, SortOrder}};
+use ::models::{
+    Card, CardColour, CardID, CollectorNumber, Set, SetCode,
+    filters::{CardSearchFilters, SortField, SortOrder},
+};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use models::SqlCard;
@@ -72,9 +75,15 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
         }
         if let Some(colours) = &filters.color_identities {
             for colour in colours {
-                conditions.push(format!("a.colorIdentity LIKE ?{i}"));
-                params.push(format!("%{colour}%"));
-                i += 1;
+                if matches!(colour, CardColour::Colourless) {
+                    conditions.push(
+                        "(a.colorIdentity IS NULL OR TRIM(a.colorIdentity) = '')".to_string(),
+                    );
+                } else {
+                    conditions.push(format!("a.colorIdentity LIKE ?{i}"));
+                    params.push(format!("%{colour}%"));
+                    i += 1;
+                }
             }
         }
         if let Some(artist) = &filters.artist
@@ -414,6 +423,23 @@ mod tests {
         assert!(result.is_ok());
         let cards = result.unwrap();
         assert!(!cards.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_cards_with_colorless_filter() {
+        let system = MagicSQLiteRetrievalSystem::new(None).unwrap();
+        let filters = CardSearchFilters {
+            color_identities: Some(vec![CardColour::Colourless]),
+            ..Default::default()
+        };
+        let result = system.search_cards(filters, None, None).await;
+        assert!(result.is_ok());
+        let cards = result.unwrap();
+        assert!(!cards.is_empty());
+        assert!(cards.iter().all(|card| match card {
+            Card::Magic(m) => m.color_identity == vec![CardColour::Colourless],
+            _ => false,
+        }));
     }
 
     #[tokio::test]

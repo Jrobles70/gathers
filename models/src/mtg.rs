@@ -54,6 +54,7 @@ pub enum CardColour {
     Black,
     Red,
     Green,
+    #[serde(alias = "Colorless")]
     Colourless,
     Multicoloured,
 }
@@ -102,7 +103,7 @@ impl From<&String> for CardColour {
             "b" | "black" => CardColour::Black,
             "r" | "red" => CardColour::Red,
             "g" | "green" => CardColour::Green,
-            "c" | "colourless" => CardColour::Colourless,
+            "c" | "colourless" | "colorless" => CardColour::Colourless,
             "m" | "multicoloured" => CardColour::Multicoloured,
             _ => CardColour::Colourless,
         }

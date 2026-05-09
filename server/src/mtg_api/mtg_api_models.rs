@@ -45,6 +45,7 @@ pub enum APICardColour {
     Black,
     Red,
     Green,
+    #[serde(alias = "Colorless")]
     Colourless,
     Multicoloured,
 }
