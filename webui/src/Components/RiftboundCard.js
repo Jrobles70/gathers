@@ -1,7 +1,15 @@
 import React from "react";
 import CardShell from "./CardShell";
 
-export default function RiftboundCard({ id, card = null, details = null, provider = null, listMode = false, targetCollection = null }) {
+export default function RiftboundCard({
+  id,
+  card = null,
+  details = null,
+  provider = null,
+  listMode = false,
+  targetCollection = null,
+  detailReturnPath = null,
+}) {
   return (
     <CardShell
       id={id}
@@ -10,6 +18,7 @@ export default function RiftboundCard({ id, card = null, details = null, provide
       provider={provider}
       listMode={listMode}
       targetCollection={targetCollection}
+      detailReturnPath={detailReturnPath}
       detailPath={`/card/riftbound/${encodeURIComponent(id)}`}
       getImagePath={(_card) => _card.image ?? ""}
     />

@@ -16,6 +16,7 @@ export default function CardShell({
   listMode = false,
   targetCollection = null,
   printings = [],
+  detailReturnPath = null,
 }) {
   const printingOptions = useMemo(
     () => (printings.length > 0 ? printings : [{ id, card, details }]),
@@ -43,7 +44,7 @@ export default function CardShell({
   const selectedDispatch = useSelectedCardsDispatch();
   const loader = useCardLoader();
   const location = useLocation();
-  const detailState = { returnTo: `${location.pathname}${location.search}` };
+  const detailState = { returnTo: detailReturnPath ?? `${location.pathname}${location.search}` };
 
   const toggleSelected = () => {
     if (activeDetails != null) {

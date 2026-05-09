@@ -15,7 +15,14 @@ const SORT_FIELDS = [
   { value: "Artist",         label: "Artist" },
 ];
 
-function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel = false, showTitle = true, targetCollection = null }) {
+function SearchRiftbound({
+  startSearch = false,
+  dedicatedPage = false,
+  sidePanel = false,
+  showTitle = true,
+  targetCollection = null,
+  detailReturnPath = null,
+}) {
   const ops = useOperations();
 
   const {
@@ -115,6 +122,7 @@ function SearchRiftbound({ startSearch = false, dedicatedPage = false, sidePanel
                   details={card.details}
                   provider="RiftboundSQLite"
                   targetCollection={targetCollection}
+                  detailReturnPath={detailReturnPath}
                 />
               ))}
             </div>

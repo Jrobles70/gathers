@@ -10,6 +10,7 @@ export default function MtGCard({
   listMode = false,
   targetCollection = null,
   printings = [],
+  detailReturnPath = null,
 }) {
   return (
     <CardShell
@@ -21,6 +22,7 @@ export default function MtGCard({
       listMode={listMode}
       targetCollection={targetCollection}
       printings={printings}
+      detailReturnPath={detailReturnPath}
       detailPath={`/card/mtg/${encodeURIComponent(id)}`}
       makeDetailPath={(cardId) => `/card/mtg/${encodeURIComponent(cardId)}`}
       getImagePath={(_card) =>

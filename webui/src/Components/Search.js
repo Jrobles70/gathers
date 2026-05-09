@@ -5,6 +5,11 @@ import SearchRiftbound from "./SearchRiftbound";
 import SearchPokemon from "./SearchPokemon";
 import { useSystems, useSelectedSearchSystem } from "./SystemTypeContext";
 
+export function buildSearchReturnPath(searchParams) {
+  const params = searchParams.toString();
+  return params ? `/search?${params}` : "/search";
+}
+
 function systemLabel(system) {
   if (system === "RiftboundSQLite") return "Riftbound";
   if (system === "PokemonSQLite") return "Pokémon";
@@ -16,6 +21,7 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false,
   const systems = useSystems();
   const [selectedSystem, setSelectedSystem] = useSelectedSearchSystem();
   const [searchParams, setSearchParams] = useSearchParams();
+  const detailReturnPath = sidePanel ? buildSearchReturnPath(searchParams) : null;
 
   useEffect(() => {
     if (systems.length === 0) return;
@@ -37,6 +43,7 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false,
           sidePanel={sidePanel}
           showTitle={showTitle}
           targetCollection={targetCollection}
+          detailReturnPath={detailReturnPath}
         />
       );
     }
@@ -48,6 +55,7 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false,
           sidePanel={sidePanel}
           showTitle={showTitle}
           targetCollection={targetCollection}
+          detailReturnPath={detailReturnPath}
         />
       );
     }
@@ -58,6 +66,7 @@ function Search({ startSearch = false, dedicatedPage = false, sidePanel = false,
         sidePanel={sidePanel}
         showTitle={showTitle}
         targetCollection={targetCollection}
+        detailReturnPath={detailReturnPath}
       />
     );
   };

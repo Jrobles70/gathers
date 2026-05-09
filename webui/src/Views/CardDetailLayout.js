@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import ViewProviders from "./ViewProviders";
+
+export function resolveDetailReturnPath(locationState) {
+  return locationState?.returnTo ?? null;
+}
 
 function CardDetailContent({ fetchUrl, cardId, renderImage, renderRows }) {
   const [card, setCard] = useState(null);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnPath = resolveDetailReturnPath(location.state);
 
   useEffect(() => {
     fetch(fetchUrl)
@@ -23,7 +29,16 @@ function CardDetailContent({ fetchUrl, cardId, renderImage, renderRows }) {
 
   return (
     <div className="container mt-4">
-      <button className="btn btn-link p-0" onClick={() => navigate(-1)}>
+      <button
+        className="btn btn-link p-0"
+        onClick={() => {
+          if (returnPath) {
+            navigate(returnPath);
+          } else {
+            navigate(-1);
+          }
+        }}
+      >
         ← Back
       </button>
       <div className="row mt-3 g-4">

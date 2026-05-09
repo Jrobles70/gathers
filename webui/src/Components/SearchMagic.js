@@ -18,7 +18,14 @@ const SORT_FIELDS = [
   { value: "Artist",         label: "Artist" },
 ];
 
-function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = false, showTitle = true, targetCollection = null }) {
+function SearchMagic({
+  startSearch = false,
+  dedicatedPage = false,
+  sidePanel = false,
+  showTitle = true,
+  targetCollection = null,
+  detailReturnPath = null,
+}) {
   const ops = useOperations();
   const cardSets = useCardSets();
   const collections = useCollections();
@@ -177,6 +184,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
                       printings={printings}
                       showCollectionSelect={dedicatedPage && targetCollection == null && primary.details == null}
                       targetCollection={targetCollection}
+                      detailReturnPath={detailReturnPath}
                     />
                   ))
                 : groupedCards.map(({ primary, printings }) => (
@@ -187,6 +195,7 @@ function SearchMagic({ startSearch = false, dedicatedPage = false, sidePanel = f
                       details={null}
                       printings={printings}
                       targetCollection={targetCollection}
+                      detailReturnPath={detailReturnPath}
                     />
                   ))}
             </div>

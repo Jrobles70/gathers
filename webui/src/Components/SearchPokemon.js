@@ -19,7 +19,14 @@ const SORT_FIELDS = [
   { value: "CollectorNumber",label: "Collector Number" },
 ];
 
-function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel = false, showTitle = true, targetCollection = null }) {
+function SearchPokemon({
+  startSearch = false,
+  dedicatedPage = false,
+  sidePanel = false,
+  showTitle = true,
+  targetCollection = null,
+  detailReturnPath = null,
+}) {
   const ops = useOperations();
 
   const {
@@ -113,6 +120,7 @@ function SearchPokemon({ startSearch = false, dedicatedPage = false, sidePanel =
                   details={card.details}
                   provider="PokemonSQLite"
                   targetCollection={targetCollection}
+                  detailReturnPath={detailReturnPath}
                 />
               ))}
             </div>
