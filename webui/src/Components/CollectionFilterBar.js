@@ -12,36 +12,14 @@ const MTG_COLOURS = [
   { value: "Green", mana: "g", bg: "#00733e", border: "#005a30" },
 ];
 
-const RB_DOMAINS = [
-  { value: "Calm",   label: "Ca", bg: "#3a7abf", border: "#2a5a8f", title: "Calm" },
-  { value: "Chaos",  label: "Ch", bg: "#d4681a", border: "#a34e12", title: "Chaos" },
-  { value: "Fury",   label: "Fu", bg: "#b02020", border: "#801818", title: "Fury" },
-  { value: "Mind",   label: "Mi", bg: "#7b3fa0", border: "#5a2e78", title: "Mind" },
-  { value: "Body",   label: "Bo", bg: "#2e8b45", border: "#1e6030", title: "Body" },
-  { value: "Order",  label: "Or", bg: "#b89a20", border: "#8a7010", title: "Order" },
-];
-
-const POKEMON_ENERGY = [
-  { value: "Fire",       label: "🔥", bg: "#e8401c", border: "#b02e10" },
-  { value: "Water",      label: "💧", bg: "#3a8bdc", border: "#2060a8" },
-  { value: "Grass",      label: "🌿", bg: "#3fa84a", border: "#2a7034" },
-  { value: "Lightning",  label: "⚡", bg: "#e8c020", border: "#b09010" },
-  { value: "Psychic",    label: "🔮", bg: "#c040b0", border: "#8c2c80" },
-  { value: "Fighting",   label: "👊", bg: "#c06030", border: "#8a4020" },
-  { value: "Darkness",   label: "🌑", bg: "#303050", border: "#181828" },
-  { value: "Metal",      label: "⚙", bg: "#8090a0", border: "#505a60" },
-  { value: "Dragon",     label: "🐉", bg: "#6050c0", border: "#403590" },
-  { value: "Fairy",      label: "✨", bg: "#e060a0", border: "#a84070" },
-  { value: "Colorless",  label: "◇", bg: "#a0a0a0", border: "#606060" },
-];
-
 const SORT_FIELDS = [
   { value: "Name",             label: "Name" },
   { value: "SetCode",          label: "Set" },
   { value: "Rarity",           label: "Rarity" },
   { value: "CollectorNumber",  label: "No." },
-  { value: "Artist",           label: "Artist" },
 ];
+
+const SORT_FIELD_VALUES = new Set(SORT_FIELDS.map(({ value }) => value));
 
 const SYSTEM_LABELS = {
   MagicSQLite: "MTG",
@@ -51,6 +29,8 @@ const SYSTEM_LABELS = {
 };
 
 function readFilters(searchParams) {
+  const sortBy = searchParams.get("cf_sortBy");
+
   return {
     name:            searchParams.get("cf_name") ?? "",
     setCode:         searchParams.get("cf_setCode") ?? "",
@@ -58,12 +38,12 @@ function readFilters(searchParams) {
     artist:          searchParams.get("cf_artist") ?? "",
     text:            searchParams.get("cf_text") ?? "",
     provider:        searchParams.get("cf_provider") ?? "",
-    sortBy:          searchParams.get("cf_sortBy") ?? "Name",
+    sortBy:          SORT_FIELD_VALUES.has(sortBy) ? sortBy : "Name",
     sortOrder:       searchParams.get("cf_sortOrder") ?? "Asc",
     viewMode:        searchParams.get("cf_viewMode") ?? "grid",
     colorIdentities: searchParams.getAll("cf_color"),
-    domains:         searchParams.getAll("cf_domain"),
-    energyTypes:     searchParams.getAll("cf_energy"),
+    domains:         [],
+    energyTypes:     [],
   };
 }
 
@@ -79,9 +59,7 @@ export function collectionFiltersActive(filters) {
     filters.rarity !== "" ||
     filters.artist !== "" ||
     filters.text !== "" ||
-    filters.colorIdentities.length > 0 ||
-    filters.domains.length > 0 ||
-    filters.energyTypes.length > 0
+    filters.colorIdentities.length > 0
   );
 }
 
@@ -256,66 +234,7 @@ export default function CollectionFilterBar() {
               </div>
             )}
 
-            {systems.includes("RiftboundSQLite") && (
-              <div className="col-auto d-flex align-items-center gap-1">
-                <small className="text-muted me-1">Domains:</small>
-                {RB_DOMAINS.map(({ value, label, bg, border, title }) => {
-                  const active = filters.domains.includes(value);
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      title={title}
-                      onClick={() => setArrayFilter("cf_domain", value, !active)}
-                      className="mana-toggle-btn"
-                      style={{
-                        background: active ? bg : "transparent",
-                        borderColor: active ? border : "rgba(255,255,255,0.3)",
-                        opacity: active ? 1 : 0.45,
-                        transform: active ? "scale(1.15)" : "scale(1)",
-                        fontSize: "0.65rem",
-                        fontWeight: "700",
-                        color: active ? "#fff" : "rgba(255,255,255,0.7)",
-                        letterSpacing: "-0.5px",
-                      }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
-
-          {systems.includes("PokemonSQLite") && (
-          <div className="row g-2 mb-2">
-            <div className="col-auto d-flex align-items-center gap-1 flex-wrap">
-              <small className="text-muted me-1">Energy:</small>
-              {POKEMON_ENERGY.map(({ value, label, bg, border }) => {
-                const active = filters.energyTypes.includes(value);
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    title={value}
-                    onClick={() => setArrayFilter("cf_energy", value, !active)}
-                    className="mana-toggle-btn"
-                    style={{
-                      background: active ? bg : "transparent",
-                      borderColor: active ? border : "rgba(255,255,255,0.3)",
-                      opacity: active ? 1 : 0.45,
-                      transform: active ? "scale(1.15)" : "scale(1)",
-                      fontSize: "1rem",
-                      lineHeight: 1,
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          )}
 
           <div className="row g-2">
             <div className="col-auto">
