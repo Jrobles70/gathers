@@ -18,10 +18,25 @@
 - Printing grouping can happen on the search results returned for the current page. A broader backend search endpoint can later provide all printings for a card name if needed.
 - Price display should be a stable footer element so real price data can replace the `$-` placeholder without changing layout.
 
+## Changes Made
+
+- Search result cards no longer render a hover title link over the image.
+- The card image is the details link and carries an explicit return path in route state.
+- Quick search detail links return to `/search` with the current search query and page parameters.
+- Visual cards now show a right-side quantity rail with plus, quantity, minus, and a `...` menu.
+- The `...` menu contains foil mode and a printing switch action.
+- The price footer is present with `$-` as a placeholder.
+- MTG search results are grouped by card name on the current page, with alternate printings available in a picker.
+
+## Remaining Follow-Ups
+
+- Add real price data when a pricing source is available.
+- Add a backend printings endpoint if the picker needs every printing instead of only printings already returned on the current search page.
+- Consider adding keyboard shortcuts for the quantity rail if repeated card entry becomes a primary workflow.
+
 ## Test Plan
 
 - Unit test collection resolution and card control rendering.
 - Unit test printing grouping and detail return path helpers.
 - Run the React test suite in watch-disabled mode.
 - Run a production build to catch routing, lint, and bundling regressions.
-
