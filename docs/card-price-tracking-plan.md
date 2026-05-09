@@ -8,6 +8,7 @@
 - Avoid making a Scryfall request every time a card appears.
 - Batch Scryfall requests so the app does not spam the API.
 - Keep the database from growing without bound.
+- Track whether a card is up or down compared to when it was first added or purchased.
 
 ## Current State
 
@@ -16,6 +17,7 @@
 - The UI already reserves a price footer with `$-`.
 - The current card models and API responses do not expose price data.
 - Collection storage currently tracks card id, collection, quantity, foil quantity, added time, and provider, but not price.
+- Collection storage has `timeadded`, but it does not currently store the card's price when it was added or a user-entered purchase price.
 
 ## Data Model
 
@@ -48,6 +50,25 @@ CREATE TABLE card_price_refresh_queue (
 ```
 
 Do not add a history table for the first version. Add a `card_price_snapshots` table later only if charts or historical collection values become part of the feature.
+
+For owned cards, it would be useful to track a baseline price so the app can show whether a card is up or down since it entered the collection.
+
+That baseline could be:
+
+- The cached market price when the card was first added to a collection.
+- An editable user-entered purchase price when the user knows what they paid.
+
+This should be modeled separately from the current market price cache. The cache answers "what is this card worth now?" while the collection baseline answers "what did this card cost or appear to be worth when I got it?"
+
+Possible future collection price fields:
+
+```sql
+ALTER TABLE cards ADD COLUMN purchase_price_cents INTEGER NULL;
+ALTER TABLE cards ADD COLUMN purchase_price_source TEXT NULL;
+ALTER TABLE cards ADD COLUMN purchase_price_updated_at TEXT NULL;
+```
+
+`purchase_price_source` could distinguish values such as `market_at_add` and `manual`. A manually edited purchase price should not be overwritten by later Scryfall refreshes.
 
 ## Search Flow
 
@@ -182,8 +203,16 @@ The exact join will need to match the app's collection database and MTG card dat
 - Enqueue stale collection cards through the same queue.
 - Add cleanup for old cache and abandoned queue rows.
 
+### Phase 4: Purchase Price and Gain/Loss
+
+- Store a baseline price when a card is first added to a collection.
+- Allow the baseline to be edited if the user purchased the card at a known price.
+- Mark manual purchase prices so automated market refreshes do not overwrite them.
+- Show current value compared with baseline value for each card and collection.
+
 ## Open Questions
 
 - Should collection totals use regular price for normal quantity and foil price for foil quantity only?
 - Should etched prices be displayed in the UI now, or only stored for future finish-specific quantity tracking?
 - Should the first version use a durable SQLite queue or an in-memory queue to reduce initial schema work?
+- Should purchase price be tracked per card row, per copy, or split between regular and foil quantities?
