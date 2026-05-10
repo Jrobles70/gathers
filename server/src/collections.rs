@@ -20,9 +20,10 @@ use crate::{
     ApiError, ErrorPayload, GathersState,
     collections::collections_models::{
         APICardSearchFilters, CardIdentInner, CardToAdd, CollectionAddResponse, CollectionCard,
-        CollectionCardsQuery, CollectionRemoveResponse, CollectionsSearchQuery, ResultCard,
-        ResultCardInner,
+        CollectionCardsQuery, CollectionPriceStats, CollectionRemoveResponse,
+        CollectionsSearchQuery, PurchasePrice, PurchasePriceUpdate, ResultCard, ResultCardInner,
     },
+    prices::{api_price_from_cache, cached_prices_for_scryfall_ids},
 };
 use models::CardTrait as _;
 pub mod collections_models;
@@ -233,12 +234,73 @@ fn collection_card_response(card: &models::CollectionCard) -> CollectionCard {
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(|_| Utc::now()),
         provider: card.provider.clone(),
+        purchase_price: purchase_price_response(card),
     }
+}
+
+fn purchase_price_response(card: &models::CollectionCard) -> Option<PurchasePrice> {
+    Some(PurchasePrice {
+        usd_cents: card.purchase_price_cents?,
+        source: card
+            .purchase_price_source
+            .clone()
+            .unwrap_or_else(|| "manual".to_string()),
+        updated_at: card
+            .purchase_price_updated_at
+            .as_deref()
+            .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(Utc::now),
+    })
+}
+
+fn current_unit_price_cents(
+    quantity: i32,
+    foil_quantity: i32,
+    price: Option<&crate::mtg_api::mtg_api_models::APICardPrice>,
+) -> Option<i64> {
+    let price = price?;
+    if quantity > 0 {
+        price.usd_cents.or(price.usd_foil_cents)
+    } else if foil_quantity > 0 {
+        price.usd_foil_cents.or(price.usd_cents)
+    } else {
+        price.usd_cents.or(price.usd_foil_cents)
+    }
+}
+
+fn value_for_quantities(
+    quantity: i32,
+    foil_quantity: i32,
+    price: Option<&crate::mtg_api::mtg_api_models::APICardPrice>,
+) -> (i64, i64) {
+    let Some(price) = price else {
+        return (0, 0);
+    };
+    let mut value = 0;
+    let mut priced_copies = 0;
+
+    if quantity > 0
+        && let Some(usd_cents) = price.usd_cents
+    {
+        value += i64::from(quantity) * usd_cents;
+        priced_copies += i64::from(quantity);
+    }
+
+    if foil_quantity > 0
+        && let Some(usd_foil_cents) = price.usd_foil_cents.or(price.usd_cents)
+    {
+        value += i64::from(foil_quantity) * usd_foil_cents;
+        priced_copies += i64::from(foil_quantity);
+    }
+
+    (value, priced_copies)
 }
 
 fn result_card_from_magic(
     card: &models::MagicCard,
     details: Option<CollectionCard>,
+    price: Option<crate::mtg_api::mtg_api_models::APICardPrice>,
 ) -> ResultCard {
     ResultCard {
         mtg_card: ResultCardInner {
@@ -248,6 +310,7 @@ fn result_card_from_magic(
             card_identifiers: CardIdentInner {
                 scryfall_id: card.card_identifiers.scryfall_id.clone(),
             },
+            price,
             details,
         },
     }
@@ -347,17 +410,132 @@ async fn search_owned_magic_cards(
 
     sort_collection_cards(&mut matched, &card_data, &filters.sort_by, &filters.sort_order);
 
-    Ok(matched
+    let page: Vec<&models::CollectionCard> = matched
         .into_iter()
         .skip(query.offset)
         .take(query.page_size.min(1000))
+        .collect();
+    let price_cache = cached_prices_for_scryfall_ids(
+        state,
+        page.iter().filter_map(|cc| match card_data.get(&cc.uuid) {
+            Some(Card::Magic(card)) => Some(card.card_identifiers.scryfall_id.clone()),
+            _ => None,
+        }),
+        1,
+    )
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorPayload {
+                error: format!("Failed to read card prices. {e}"),
+            }),
+        )
+    })?;
+
+    Ok(page
+        .into_iter()
         .filter_map(|cc| match card_data.get(&cc.uuid) {
-            Some(Card::Magic(card)) => {
-                Some(result_card_from_magic(card, Some(collection_card_response(cc))))
-            }
+            Some(Card::Magic(card)) => Some(result_card_from_magic(
+                card,
+                Some(collection_card_response(cc)),
+                price_cache
+                    .get(&card.card_identifiers.scryfall_id)
+                    .map(api_price_from_cache),
+            )),
             _ => None,
         })
         .collect())
+}
+
+async fn price_stats_for_collection_cards(
+    state: &GathersState,
+    collection_id: Option<String>,
+    cards: Vec<models::CollectionCard>,
+) -> Result<CollectionPriceStats, ApiError> {
+    let retrieval_systems = clone_retrieval_systems_by_name(state).await;
+    let mut by_provider: HashMap<String, Vec<models::CollectionCard>> = HashMap::new();
+    for card in &cards {
+        by_provider
+            .entry(card.provider.clone())
+            .or_default()
+            .push(card.clone());
+    }
+
+    let mut card_data: HashMap<String, Card> = HashMap::new();
+    for (provider, cards) in &by_provider {
+        if let Some(retrieval) = retrieval_systems.get(provider) {
+            let ids: Vec<String> = cards.iter().map(|c| c.uuid.clone()).collect();
+            if let Ok(data) = retrieval.get_cards_by_ids(ids).await {
+                card_data.extend(data);
+            }
+        }
+    }
+
+    let price_cache = cached_prices_for_scryfall_ids(
+        state,
+        card_data.values().filter_map(|card| match card {
+            Card::Magic(card) => Some(card.card_identifiers.scryfall_id.clone()),
+            _ => None,
+        }),
+        1,
+    )
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorPayload {
+                error: format!("Failed to read card prices. {e}"),
+            }),
+        )
+    })?;
+
+    let mut copy_count = 0;
+    let mut priced_copy_count = 0;
+    let mut baseline_copy_count = 0;
+    let mut total_value_cents = 0;
+    let mut tracked_current_value_cents = 0;
+    let mut purchase_value_cents = 0;
+
+    for card in &cards {
+        let row_copy_count = i64::from(card.quantity.max(0) + card.foil_quantity.max(0));
+        copy_count += row_copy_count;
+
+        let api_price = card_data.get(&card.uuid).and_then(|card_data| match card_data {
+            Card::Magic(card) => price_cache
+                .get(&card.card_identifiers.scryfall_id)
+                .map(api_price_from_cache),
+            _ => None,
+        });
+        let (current_value, current_priced_copies) =
+            value_for_quantities(card.quantity, card.foil_quantity, api_price.as_ref());
+        total_value_cents += current_value;
+        priced_copy_count += current_priced_copies;
+
+        if let Some(purchase_price_cents) = card.purchase_price_cents {
+            baseline_copy_count += row_copy_count;
+            purchase_value_cents += purchase_price_cents * row_copy_count;
+            tracked_current_value_cents += current_value;
+        }
+    }
+
+    let change_cents = (purchase_value_cents > 0)
+        .then_some(tracked_current_value_cents - purchase_value_cents);
+    let change_percent = change_cents
+        .map(|change| (change as f64 / purchase_value_cents as f64) * 100.0);
+
+    Ok(CollectionPriceStats {
+        collection_id,
+        card_count: cards.len(),
+        copy_count,
+        priced_copy_count,
+        baseline_copy_count,
+        total_value_cents,
+        tracked_current_value_cents,
+        purchase_value_cents,
+        change_cents,
+        change_percent,
+    })
 }
 
 pub fn collection_routes() -> ApiRouter<GathersState> {
@@ -499,6 +677,8 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         quantity: i32,
         foil_quantity: i32,
         provider: String,
+        purchase_price_cents: Option<i64>,
+        purchase_price_source: Option<&str>,
     ) -> Result<Json<Vec<CollectionCard>>, ApiError> {
         let now = chrono::Utc::now();
         let now_str = now.to_rfc3339();
@@ -514,16 +694,30 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             )
             .await
         {
-            Ok(card) => Ok(Json(vec![CollectionCard {
-                id: card.uuid.to_string(),
-                quantity: card.quantity,
-                foil_quantity: card.foil_quantity,
-                collection_id: collection_id.to_string(),
-                time_added: DateTime::parse_from_rfc3339(&card.time_added)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-                provider: card.provider,
-            }])),
+            Ok(mut card) => {
+                if card.purchase_price_cents.is_none()
+                    && let Some(purchase_price_cents) = purchase_price_cents
+                {
+                    card = storage
+                        .set_card_purchase_price(
+                            &collection_id.to_string(),
+                            &uuid,
+                            Some(purchase_price_cents),
+                            purchase_price_source,
+                            &now_str,
+                        )
+                        .await
+                        .map_err(|e| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ErrorPayload {
+                                    error: format!("Failed to set purchase price. {e}"),
+                                }),
+                            )
+                        })?;
+                }
+                Ok(Json(vec![collection_card_response(&card)]))
+            }
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
@@ -542,14 +736,46 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         let systems = clone_retrieval_systems_by_name(&state).await;
         let card_ids = vec![input.id.clone()];
         let mut provider = String::new();
+        let mut scryfall_id = None;
         for (name, system) in &systems {
             if let Ok(found) = system.get_cards_by_ids(card_ids.clone()).await
                 && !found.is_empty()
             {
                 provider = name.clone();
+                scryfall_id = found.values().find_map(|card| match card {
+                    Card::Magic(card) => Some(card.card_identifiers.scryfall_id.clone()),
+                    _ => None,
+                });
                 break;
             }
         }
+
+        let (purchase_price_cents, purchase_price_source) =
+            if let Some(purchase_price_cents) = input.purchase_price_cents {
+                (Some(purchase_price_cents), Some("manual"))
+            } else if let Some(scryfall_id) = scryfall_id {
+                let price_cache = cached_prices_for_scryfall_ids(
+                    &state,
+                    [scryfall_id.clone()],
+                    1,
+                )
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to read card prices. {e}"),
+                        }),
+                    )
+                })?;
+                let api_price = price_cache.get(&scryfall_id).map(api_price_from_cache);
+                (
+                    current_unit_price_cents(input.quantity, input.foil_quantity, api_price.as_ref()),
+                    Some("market_at_add"),
+                )
+            } else {
+                (None, None)
+            };
 
         let storage = &mut state.1.lock().await.storage;
 
@@ -564,6 +790,8 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             input.quantity,
             input.foil_quantity,
             provider,
+            purchase_price_cents,
+            purchase_price_source,
         )
         .await
     }
@@ -603,6 +831,8 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             neg_quantity,
             neg_foil_quantity,
             "".to_string(),
+            None,
+            None,
         )
         .await
     }
@@ -641,16 +871,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
 
         let response_cards = cards
             .into_iter()
-            .map(|card| CollectionCard {
-                id: card.uuid,
-                quantity: card.quantity,
-                foil_quantity: card.foil_quantity,
-                collection_id: collection_id.clone(),
-                time_added: DateTime::parse_from_rfc3339(&card.time_added)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-                provider: card.provider,
-            })
+            .map(|card| collection_card_response(&card))
             .collect();
 
         Ok(Json(response_cards))
@@ -682,6 +903,122 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         }
     }
 
+    async fn collection_cards_stats(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+    ) -> Result<Json<CollectionPriceStats>, ApiError> {
+        let cards = state
+            .1
+            .lock()
+            .await
+            .storage
+            .get_cards_in_collection_paginated(
+                &collection_id,
+                CollectionCardsParams {
+                    offset: 0,
+                    limit: i64::MAX as usize,
+                    sort_by: None,
+                    sort_order: None,
+                    provider: None,
+                    providers: vec![],
+                },
+            )
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to get cards from collection. {e}"),
+                    }),
+                )
+            })?;
+
+        price_stats_for_collection_cards(&state, Some(collection_id), cards)
+            .await
+            .map(Json)
+    }
+
+    async fn all_collections_stats(
+        State(state): State<GathersState>,
+    ) -> Result<Json<CollectionPriceStats>, ApiError> {
+        let cards = {
+            let storage = &state.1.lock().await.storage;
+            let collections = storage.list_collections(None).await.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to list collections. {e}"),
+                    }),
+                )
+            })?;
+
+            let mut cards = Vec::new();
+            for collection in collections {
+                cards.extend(
+                    storage
+                        .get_cards_in_collection_paginated(
+                            &collection,
+                            CollectionCardsParams {
+                                offset: 0,
+                                limit: i64::MAX as usize,
+                                sort_by: None,
+                                sort_order: None,
+                                provider: None,
+                                providers: vec![],
+                            },
+                        )
+                        .await
+                        .map_err(|e| {
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ErrorPayload {
+                                    error: format!(
+                                        "Failed to get cards from collection. {e}"
+                                    ),
+                                }),
+                            )
+                        })?,
+                );
+            }
+            cards
+        };
+
+        price_stats_for_collection_cards(&state, None, cards)
+            .await
+            .map(Json)
+    }
+
+    async fn purchase_price_update(
+        State(state): State<GathersState>,
+        Path(collection_id): Path<String>,
+        Json(input): Json<PurchasePriceUpdate>,
+    ) -> Result<Json<CollectionCard>, ApiError> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let card = state
+            .1
+            .lock()
+            .await
+            .storage
+            .set_card_purchase_price(
+                &collection_id,
+                &input.id,
+                input.purchase_price_cents,
+                input.purchase_price_cents.map(|_| "manual"),
+                &now,
+            )
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to set purchase price. {e}"),
+                    }),
+                )
+            })?;
+
+        Ok(Json(collection_card_response(&card)))
+    }
+
     async fn search_temp(
         State(state): State<GathersState>,
         Query(query): Query<CollectionsSearchQuery>,
@@ -694,27 +1031,50 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         let guard = state.0.lock().await;
         let ret = guard.require_mtg()?;
 
-        match ret
+        let result = ret
             .search_cards(input.into(), query.offset.into(), query.page_size.min(1000).into())
             .await
-        {
-            Ok(result) => Ok(Json(
-                result
-                    .iter()
-                    .filter_map(|c| match c {
-                        Card::Magic(m) => Some(m),
-                        _ => None,
-                    })
-                    .map(|c| result_card_from_magic(c, None))
-                    .collect(),
-            )),
-            Err(e) => Err((
+            .map_err(|e| (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
                     error: format!("Failed to search cards. {e}"),
                 }),
-            )),
-        }
+            ))?;
+        drop(guard);
+
+        let price_cache = cached_prices_for_scryfall_ids(
+            &state,
+            result.iter().filter_map(|c| match c {
+                Card::Magic(m) => Some(m.card_identifiers.scryfall_id.clone()),
+                _ => None,
+            }),
+            0,
+        )
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to read card prices. {e}"),
+                }),
+            )
+        })?;
+
+        Ok(Json(
+            result
+                .iter()
+                .filter_map(|c| match c {
+                    Card::Magic(m) => Some(result_card_from_magic(
+                        m,
+                        None,
+                        price_cache
+                            .get(&m.card_identifiers.scryfall_id)
+                            .map(api_price_from_cache),
+                    )),
+                    _ => None,
+                })
+                .collect(),
+        ))
     }
 
     async fn export(
@@ -946,16 +1306,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             .into_iter()
             .skip(query.offset)
             .take(query.limit)
-            .map(|cc| CollectionCard {
-                id: cc.uuid.clone(),
-                quantity: cc.quantity,
-                foil_quantity: cc.foil_quantity,
-                collection_id: collection_id.clone(),
-                time_added: DateTime::parse_from_rfc3339(&cc.time_added)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-                provider: cc.provider.clone(),
-            })
+            .map(collection_card_response)
             .collect();
 
         Ok(Json(page))
@@ -1028,13 +1379,16 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         .api_route("/add", post(add))
         .api_route("/remove/{id}", post(remove))
         .api_route("/move/{id}", post(move_to))
+        .api_route("/stats", get(all_collections_stats))
         .api_route("/cards/{id}/list", get(cards_get))
         .api_route("/cards/{id}/count", get(collection_cards_count))
+        .api_route("/cards/{id}/stats", get(collection_cards_stats))
         .api_route("/cards/{id}/search", post(collection_cards_search))
         .api_route("/cards/{id}/search/count", post(collection_cards_search_count))
         .api_route("/search", post(search_temp))
         .api_route("/cards/{id}/add", post(cards_add))
         .api_route("/cards/{id}/delete", post(cards_remove))
+        .api_route("/cards/{id}/purchase-price", post(purchase_price_update))
         .route("/import", axum::routing::post(import))
         .route("/export/{id}", axum::routing::get(export))
 }

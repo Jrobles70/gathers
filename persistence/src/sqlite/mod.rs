@@ -1,4 +1,6 @@
-use crate::{CollectionCard, CollectionCardsParams, CollectionSortField, PersistenceSystemTrait};
+use crate::{
+    CardPrice, CollectionCard, CollectionCardsParams, CollectionSortField, PersistenceSystemTrait,
+};
 use include_dir::{Dir, include_dir};
 use models::CardID;
 use models::CollectionID;
@@ -39,6 +41,20 @@ impl SQLitePersistenceSystem {
     }
 }
 
+fn collection_card_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CollectionCard> {
+    Ok(CollectionCard {
+        uuid: row.get(0)?,
+        collection: row.get(1)?,
+        quantity: row.get(2)?,
+        foil_quantity: row.get(3)?,
+        time_added: row.get(4)?,
+        provider: row.get(5)?,
+        purchase_price_cents: row.get(6)?,
+        purchase_price_source: row.get(7)?,
+        purchase_price_updated_at: row.get(8)?,
+    })
+}
+
 impl PersistenceSystemTrait for SQLitePersistenceSystem {
     async fn add_collection(&mut self, name: CollectionID) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
@@ -56,14 +72,17 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         let conn = self.connection.lock().await;
 
         if let Some(target_collection_id) = move_to {
-            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider)
-            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as timeupdated, provider FROM
-	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded, provider FROM cards WHERE collection = ?2) WHERE true
+            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at)
+            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as timeupdated, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at FROM
+	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at FROM cards WHERE collection = ?2) WHERE true
             ON CONFLICT (uuid, collection)
             DO UPDATE SET
                 quantity = cards.quantity + EXCLUDED.quantity,
                 foilquantity = cards.foilquantity + EXCLUDED.foilquantity,
-                timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');";
+                timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                purchase_price_cents = COALESCE(cards.purchase_price_cents, EXCLUDED.purchase_price_cents),
+                purchase_price_source = COALESCE(cards.purchase_price_source, EXCLUDED.purchase_price_source),
+                purchase_price_updated_at = COALESCE(cards.purchase_price_updated_at, EXCLUDED.purchase_price_updated_at);";
             conn.execute(query, params![target_collection_id, name])?;
         }
 
@@ -114,6 +133,28 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 &provider,
             )
             .await?;
+
+            let purchase_price_cents = c.purchase_price_cents.or(source_card.purchase_price_cents);
+            let purchase_price_source = c
+                .purchase_price_source
+                .as_deref()
+                .or(source_card.purchase_price_source.as_deref());
+            let purchase_price_updated_at = c
+                .purchase_price_updated_at
+                .as_deref()
+                .or(source_card.purchase_price_updated_at.as_deref());
+
+            if let Some(price_cents) = purchase_price_cents {
+                self.set_card_purchase_price(
+                    &to_collection_id,
+                    &c.uuid,
+                    Some(price_cents),
+                    purchase_price_source,
+                    purchase_price_updated_at
+                        .unwrap_or(&chrono::Utc::now().to_rfc3339()),
+                )
+                .await?;
+            }
         }
         Ok(())
     }
@@ -191,6 +232,9 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                     foil_quantity,
                     time_added: time_added.to_string(),
                     provider: provider.to_string(),
+                    purchase_price_cents: None,
+                    purchase_price_source: None,
+                    purchase_price_updated_at: None,
                 }],
             )
             .await?;
@@ -232,21 +276,12 @@ ON CONFLICT (uuid, collection) DO UPDATE SET
  quantity = max(cards.quantity + EXCLUDED.quantity, 0),
  foilquantity = max(cards.foilquantity + EXCLUDED.foilquantity, 0),
  timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
+RETURNING uuid, collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at
 ",
             placeholders
         );
         let mut stmt = conn.prepare(&query)?;
-        let card_iter = stmt.query_map(rusqlite::params_from_iter(params), |row| {
-            Ok(CollectionCard {
-                uuid: row.get(0)?,
-                quantity: row.get(2)?,
-                foil_quantity: row.get(3)?,
-                time_added: row.get(4)?,
-                collection: row.get(1)?,
-                provider: row.get(5)?,
-            })
-        })?;
+        let card_iter = stmt.query_map(rusqlite::params_from_iter(params), collection_card_from_row)?;
         let mut cards = Vec::new();
         for card in card_iter.flatten() {
             cards.push(card);
@@ -292,7 +327,7 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
         let sort_dir = if matches!(&params.sort_order, Some(SortOrder::Desc)) { "DESC" } else { "ASC" };
 
         let query = format!(
-            "SELECT uuid, quantity, foilquantity, timeadded, provider FROM cards WHERE {} ORDER BY {} {} LIMIT ?{} OFFSET ?{}",
+            "SELECT uuid, collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at FROM cards WHERE {} ORDER BY {} {} LIMIT ?{} OFFSET ?{}",
             conditions.join(" AND "),
             sort_col,
             sort_dir,
@@ -303,17 +338,10 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
         query_params.push(params.offset.to_string());
 
         let mut stmt = conn.prepare(&query)?;
-        let collection_id = collection_id.clone();
-        let card_iter = stmt.query_map(rusqlite::params_from_iter(query_params.iter()), |row| {
-            Ok(CollectionCard {
-                uuid: row.get(0)?,
-                quantity: row.get(1)?,
-                foil_quantity: row.get(2)?,
-                time_added: row.get(3)?,
-                collection: collection_id.clone(),
-                provider: row.get(4)?,
-            })
-        })?;
+        let card_iter = stmt.query_map(
+            rusqlite::params_from_iter(query_params.iter()),
+            collection_card_from_row,
+        )?;
 
         let mut cards = Vec::new();
         for card in card_iter {
@@ -321,6 +349,251 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider
         }
 
         Ok(cards)
+    }
+
+    async fn get_card_prices(
+        &self,
+        source: &str,
+        scryfall_ids: &[String],
+    ) -> eyre::Result<std::collections::HashMap<String, CardPrice>> {
+        let mut prices = std::collections::HashMap::new();
+        if scryfall_ids.is_empty() {
+            return Ok(prices);
+        }
+
+        let conn = self.connection.lock().await;
+        let placeholders = scryfall_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 2))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let query = format!(
+            "SELECT source, scryfall_id, usd_cents, usd_foil_cents, usd_etched_cents, fetched_at
+             FROM card_price_cache
+             WHERE source = ?1 AND scryfall_id IN ({placeholders})"
+        );
+        let mut query_params = vec![source.to_string()];
+        query_params.extend(scryfall_ids.iter().cloned());
+        let mut stmt = conn.prepare(&query)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(query_params.iter()), |row| {
+            Ok(CardPrice {
+                source: row.get(0)?,
+                scryfall_id: row.get(1)?,
+                usd_cents: row.get(2)?,
+                usd_foil_cents: row.get(3)?,
+                usd_etched_cents: row.get(4)?,
+                fetched_at: row.get(5)?,
+            })
+        })?;
+
+        for price in rows {
+            let price = price?;
+            prices.insert(price.scryfall_id.clone(), price);
+        }
+
+        Ok(prices)
+    }
+
+    async fn upsert_card_prices(&mut self, prices: &[CardPrice]) -> eyre::Result<()> {
+        if prices.is_empty() {
+            return Ok(());
+        }
+
+        let conn = self.connection.lock().await;
+        let query = "
+INSERT INTO card_price_cache
+    (source, scryfall_id, usd_cents, usd_foil_cents, usd_etched_cents, fetched_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+ON CONFLICT (source, scryfall_id) DO UPDATE SET
+    usd_cents = EXCLUDED.usd_cents,
+    usd_foil_cents = EXCLUDED.usd_foil_cents,
+    usd_etched_cents = EXCLUDED.usd_etched_cents,
+    fetched_at = EXCLUDED.fetched_at";
+
+        for price in prices {
+            conn.execute(
+                query,
+                params![
+                    &price.source,
+                    &price.scryfall_id,
+                    price.usd_cents,
+                    price.usd_foil_cents,
+                    price.usd_etched_cents,
+                    &price.fetched_at
+                ],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    async fn enqueue_card_price_refresh(
+        &mut self,
+        source: &str,
+        scryfall_ids: &[String],
+        priority: i32,
+    ) -> eyre::Result<()> {
+        if scryfall_ids.is_empty() {
+            return Ok(());
+        }
+
+        let conn = self.connection.lock().await;
+        let now = chrono::Utc::now().to_rfc3339();
+        let query = "
+INSERT INTO card_price_refresh_queue (source, scryfall_id, priority, queued_at)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT (source, scryfall_id) DO UPDATE SET
+    priority = max(card_price_refresh_queue.priority, EXCLUDED.priority)";
+
+        for scryfall_id in scryfall_ids {
+            conn.execute(query, params![source, scryfall_id, priority, &now])?;
+        }
+
+        Ok(())
+    }
+
+    async fn take_card_price_refresh_batch(
+        &mut self,
+        source: &str,
+        limit: usize,
+    ) -> eyre::Result<Vec<String>> {
+        let conn = self.connection.lock().await;
+        let mut stmt = conn.prepare(
+            "SELECT scryfall_id
+             FROM card_price_refresh_queue
+             WHERE source = ?1
+               AND attempts < 5
+               AND (last_attempt_at IS NULL OR last_attempt_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes'))
+             ORDER BY priority DESC, queued_at ASC
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![source, limit as i64], |row| row.get(0))?;
+
+        let mut ids = Vec::new();
+        for id in rows {
+            ids.push(id?);
+        }
+        Ok(ids)
+    }
+
+    async fn complete_card_price_refresh(
+        &mut self,
+        source: &str,
+        scryfall_ids: &[String],
+    ) -> eyre::Result<()> {
+        if scryfall_ids.is_empty() {
+            return Ok(());
+        }
+
+        let conn = self.connection.lock().await;
+        let placeholders = scryfall_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 2))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let query = format!(
+            "DELETE FROM card_price_refresh_queue WHERE source = ?1 AND scryfall_id IN ({placeholders})"
+        );
+        let mut query_params = vec![source.to_string()];
+        query_params.extend(scryfall_ids.iter().cloned());
+        conn.execute(&query, rusqlite::params_from_iter(query_params.iter()))?;
+        Ok(())
+    }
+
+    async fn fail_card_price_refresh(
+        &mut self,
+        source: &str,
+        scryfall_ids: &[String],
+    ) -> eyre::Result<()> {
+        if scryfall_ids.is_empty() {
+            return Ok(());
+        }
+
+        let conn = self.connection.lock().await;
+        let placeholders = scryfall_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 2))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut query_params = vec![source.to_string()];
+        query_params.extend(scryfall_ids.iter().cloned());
+        let update_query = format!(
+            "UPDATE card_price_refresh_queue
+             SET attempts = attempts + 1,
+                 last_attempt_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE source = ?1 AND scryfall_id IN ({placeholders})"
+        );
+        conn.execute(&update_query, rusqlite::params_from_iter(query_params.iter()))?;
+        conn.execute(
+            "DELETE FROM card_price_refresh_queue WHERE attempts >= 5",
+            [],
+        )?;
+        Ok(())
+    }
+
+    async fn set_card_purchase_price(
+        &mut self,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
+        purchase_price_cents: Option<i64>,
+        source: Option<&str>,
+        updated_at: &str,
+    ) -> eyre::Result<CollectionCard> {
+        let conn = self.connection.lock().await;
+        let source_value = purchase_price_cents.and_then(|_| source.map(str::to_string));
+        let updated_value = purchase_price_cents.map(|_| updated_at.to_string());
+        let mut stmt = conn.prepare(
+            "UPDATE cards
+             SET purchase_price_cents = ?3,
+                 purchase_price_source = ?4,
+                 purchase_price_updated_at = ?5,
+                 timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE collection = ?1 AND uuid = ?2
+             RETURNING uuid, collection, quantity, foilquantity, timeadded, provider,
+                       purchase_price_cents, purchase_price_source, purchase_price_updated_at",
+        )?;
+
+        let card = stmt.query_row(
+            params![
+                collection_id,
+                card_uuid,
+                purchase_price_cents,
+                source_value,
+                updated_value
+            ],
+            collection_card_from_row,
+        )?;
+
+        Ok(card)
+    }
+
+    async fn set_card_purchase_price_if_missing(
+        &mut self,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
+        purchase_price_cents: i64,
+        source: &str,
+        updated_at: &str,
+    ) -> eyre::Result<()> {
+        let conn = self.connection.lock().await;
+        conn.execute(
+            "UPDATE cards
+             SET purchase_price_cents = ?3,
+                 purchase_price_source = ?4,
+                 purchase_price_updated_at = ?5
+             WHERE collection = ?1 AND uuid = ?2 AND purchase_price_cents IS NULL",
+            params![
+                collection_id,
+                card_uuid,
+                purchase_price_cents,
+                source,
+                updated_at
+            ],
+        )?;
+        Ok(())
     }
 }
 
@@ -746,6 +1019,9 @@ mod tests {
                 time_added: "".to_string(),
                 collection: collection_id.clone(),
                 provider: "".to_string(),
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             DEFAULT.to_string(),
         )
@@ -798,6 +1074,9 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        purchase_price_cents: None,
+                        purchase_price_source: None,
+                        purchase_price_updated_at: None,
                     },
                     CollectionCard {
                         uuid: "12346".to_string(),
@@ -806,6 +1085,9 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        purchase_price_cents: None,
+                        purchase_price_source: None,
+                        purchase_price_updated_at: None,
                     },
                 ],
             )
@@ -835,6 +1117,9 @@ mod tests {
                     time_added: time_added.clone(),
                     provider: "".to_string(),
                     collection: collection_id.clone(),
+                    purchase_price_cents: None,
+                    purchase_price_source: None,
+                    purchase_price_updated_at: None,
                 }],
             )
             .await
@@ -861,6 +1146,9 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        purchase_price_cents: None,
+                        purchase_price_source: None,
+                        purchase_price_updated_at: None,
                     },
                     CollectionCard {
                         uuid: "12346".to_string(),
@@ -869,6 +1157,9 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        purchase_price_cents: None,
+                        purchase_price_source: None,
+                        purchase_price_updated_at: None,
                     },
                 ],
             )
@@ -973,6 +1264,9 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: collection_id.clone(),
                 provider: "".to_string(),
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             DEFAULT.to_string(),
         )
@@ -1086,6 +1380,9 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(), // simulates the API sending empty provider
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             col_b.clone(),
         )
@@ -1141,6 +1438,9 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(), // simulates the API sending empty provider
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             col_b.clone(),
         )
@@ -1194,6 +1494,9 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: col.clone(),
                 provider: "".to_string(),
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             col.clone(),
         )
@@ -1301,6 +1604,9 @@ mod tests {
                 time_added: OLD_TIME.to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(),
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             col_b.clone(),
         )
@@ -1334,6 +1640,9 @@ mod tests {
                 time_added: OLD_TIME.to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(),
+                purchase_price_cents: None,
+                purchase_price_source: None,
+                purchase_price_updated_at: None,
             }],
             col_b.clone(),
         )

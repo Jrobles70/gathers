@@ -124,6 +124,8 @@ pub struct CardToAdd {
     pub quantity: i32,
     #[serde(rename = "foilQuantity")]
     pub foil_quantity: i32,
+    #[serde(rename = "purchasePriceCents")]
+    pub purchase_price_cents: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema, PartialEq)]
@@ -174,6 +176,48 @@ pub struct CollectionCard {
     pub time_added: DateTime<Utc>,
     #[serde(default)]
     pub provider: String,
+    #[serde(rename = "purchasePrice", skip_serializing_if = "Option::is_none")]
+    pub purchase_price: Option<PurchasePrice>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+pub struct PurchasePrice {
+    #[serde(rename = "usdCents")]
+    pub usd_cents: i64,
+    pub source: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct PurchasePriceUpdate {
+    pub id: String,
+    #[serde(rename = "purchasePriceCents")]
+    pub purchase_price_cents: Option<i64>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct CollectionPriceStats {
+    #[serde(rename = "collectionId", skip_serializing_if = "Option::is_none")]
+    pub collection_id: Option<String>,
+    #[serde(rename = "cardCount")]
+    pub card_count: usize,
+    #[serde(rename = "copyCount")]
+    pub copy_count: i64,
+    #[serde(rename = "pricedCopyCount")]
+    pub priced_copy_count: i64,
+    #[serde(rename = "baselineCopyCount")]
+    pub baseline_copy_count: i64,
+    #[serde(rename = "totalValueCents")]
+    pub total_value_cents: i64,
+    #[serde(rename = "trackedCurrentValueCents")]
+    pub tracked_current_value_cents: i64,
+    #[serde(rename = "purchaseValueCents")]
+    pub purchase_value_cents: i64,
+    #[serde(rename = "changeCents", skip_serializing_if = "Option::is_none")]
+    pub change_cents: Option<i64>,
+    #[serde(rename = "changePercent", skip_serializing_if = "Option::is_none")]
+    pub change_percent: Option<f64>,
 }
 
 impl From<&CollectionCard> for models::CollectionCard {
@@ -184,7 +228,10 @@ impl From<&CollectionCard> for models::CollectionCard {
             foil_quantity: value.foil_quantity,
             collection: value.collection_id.to_string(),
             time_added: value.time_added.to_string(),
-            provider: "".to_string(),
+            provider: value.provider.clone(),
+            purchase_price_cents: value.purchase_price.as_ref().map(|p| p.usd_cents),
+            purchase_price_source: value.purchase_price.as_ref().map(|p| p.source.clone()),
+            purchase_price_updated_at: value.purchase_price.as_ref().map(|p| p.updated_at.to_rfc3339()),
         }
     }
 }
@@ -219,6 +266,8 @@ pub struct ResultCardInner {
     pub set_code: String,
     #[serde(rename = "cardIdentifiers")]
     pub card_identifiers: CardIdentInner,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<crate::mtg_api::mtg_api_models::APICardPrice>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<CollectionCard>,
 }

@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import CardDetails from "./CardDetails";
 import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
+import { formatCents, formatPercent, priceTrend, unitPriceCents } from "./priceUtils";
 
 const PROVIDER_LABELS = {
   MagicSQLite: "Magic",
@@ -29,6 +30,7 @@ export default function CardShell({
   targetCollection = null,
   printings = [],
   detailReturnPath = null,
+  priceMode = "search",
 }) {
   const printingOptions = useMemo(
     () => (printings.length > 0 ? printings : [{ id, card, details }]),
@@ -102,6 +104,19 @@ export default function CardShell({
 
   const imagePath = _card != null ? getImagePath(_card) : "";
   const activeProviderLabel = providerLabel(activeDetails?.provider);
+  const activeUnitPrice = unitPriceCents(_card?.price, activeDetails);
+  const activeTrend = priceMode === "collection" ? priceTrend(_card?.price, activeDetails) : null;
+  const priceClass = [
+    "search-card-price",
+    activeTrend?.direction === "up" ? "price-up" : "",
+    activeTrend?.direction === "down" ? "price-down" : "",
+  ].filter(Boolean).join(" ");
+  const priceText = [
+    formatCents(activeUnitPrice),
+    activeTrend && activeTrend.direction !== "flat"
+      ? `(${formatPercent(activeTrend.changePercent)})`
+      : null,
+  ].filter(Boolean).join(" ");
 
   if (listMode) {
     return (
@@ -132,6 +147,7 @@ export default function CardShell({
                 )}
               </>
             )}
+            <span className={priceClass}>{priceText}</span>
           </>
         )}
       </div>
@@ -204,7 +220,9 @@ export default function CardShell({
                           {printing.card?.collectorNumber ? ` #${printing.card.collectorNumber}` : ""}
                         </span>
                       </span>
-                      <span className="search-card-printing-price">$-</span>
+                      <span className="search-card-printing-price">
+                        {formatCents(unitPriceCents(printing.card?.price, printing.details))}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -212,7 +230,7 @@ export default function CardShell({
             )}
           </div>
           <div className="search-card-footer">
-            <span className="search-card-price">$-</span>
+            <span className={priceClass}>{priceText}</span>
             <span className="search-card-set">{_card.setCode}</span>
           </div>
         </div>

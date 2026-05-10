@@ -3,6 +3,7 @@ import { useCollection, useCollections } from "./CollectionContext";
 import { useOperations, useMode } from "../OperationsContext";
 import { useCardsDispatch } from "../Components/CardListContexts/CardsContext";
 import { useRefreshCardList } from "./CardListContexts/RefreshCardListContext";
+import { parseCents } from "./priceUtils";
 
 export function resolveCardUpdateCollection({
   details,
@@ -31,6 +32,11 @@ function detailsToQuantities(details) {
   };
 }
 
+function centsToInput(cents) {
+  if (cents == null) return "";
+  return (Number(cents) / 100).toFixed(2);
+}
+
 export default function CardDetails({
   id,
   details = null,
@@ -51,6 +57,9 @@ export default function CardDetails({
   const [selectedCollection, setSelectedCollection] = useState(null);
   const [foilMode, setFoilMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [purchasePriceInput, setPurchasePriceInput] = useState(() =>
+    centsToInput(details?.purchasePrice?.usdCents),
+  );
   const [quantitiesByPrinting, setQuantitiesByPrinting] = useState(() => ({
     [id]: {
       quantity: detailsQuantity,
@@ -69,6 +78,10 @@ export default function CardDetails({
         },
     }));
   }, [id, hasDetails, detailsQuantity, detailsFoilQuantity]);
+
+  useEffect(() => {
+    setPurchasePriceInput(centsToInput(details?.purchasePrice?.usdCents));
+  }, [details?.purchasePrice?.usdCents, id]);
 
   const updateQuantity = (delta, deltaFoil) => {
     if (!collectionsEnabled && details == null) return;
@@ -128,6 +141,31 @@ export default function CardDetails({
     event.preventDefault();
     event.stopPropagation();
     action();
+  };
+
+  const savePurchasePrice = () => {
+    if (!hasDetails) return;
+    const purchasePriceCents = purchasePriceInput.trim() === ""
+      ? null
+      : parseCents(purchasePriceInput);
+
+    ops
+      .fetch("Updating purchase price for card " + id, {}, `/collection/cards/${details.collectionId}/purchase-price`, {
+        method: "post",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id,
+          purchasePriceCents,
+        }),
+      })
+      .then((updatedCard) => {
+        if (cardsDispatch && updatedCard != null) {
+          cardsDispatch({ type: "added", card: updatedCard });
+        }
+      });
   };
 
   const quantities = quantitiesByPrinting[id] ?? detailsToQuantities(details);
@@ -197,6 +235,30 @@ export default function CardDetails({
               />
               <span>Foil</span>
             </label>
+            {hasDetails && (
+              <label className="search-card-menu-field">
+                <span>Purchase price</span>
+                <div className="search-card-price-edit">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={purchasePriceInput}
+                    onChange={(event) => setPurchasePriceInput(event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    className="form-control form-control-sm"
+                  />
+                  <button
+                    type="button"
+                    className="search-card-menu-button search-card-price-save"
+                    onClick={(event) => handleAction(event, savePurchasePrice)}
+                  >
+                    Save
+                  </button>
+                </div>
+              </label>
+            )}
             <button
               type="button"
               className="search-card-menu-button"

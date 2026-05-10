@@ -15,6 +15,16 @@ pub use crate::sqlite::SQLitePersistenceSystem;
 
 mod csv_models;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CardPrice {
+    pub source: String,
+    pub scryfall_id: String,
+    pub usd_cents: Option<i64>,
+    pub usd_foil_cents: Option<i64>,
+    pub usd_etched_cents: Option<i64>,
+    pub fetched_at: String,
+}
+
 #[derive(Debug, Default, Clone)]
 pub enum CollectionSortField {
     #[default]
@@ -105,6 +115,60 @@ pub trait PersistenceSystemTrait {
         &mut self,
         cards: &[CollectionCard],
         to_collection_id: CollectionID,
+    ) -> impl std::future::Future<Output = eyre::Result<()>>;
+
+    fn get_card_prices(
+        &self,
+        source: &str,
+        scryfall_ids: &[String],
+    ) -> impl std::future::Future<Output = eyre::Result<std::collections::HashMap<String, CardPrice>>>;
+
+    fn upsert_card_prices(
+        &mut self,
+        prices: &[CardPrice],
+    ) -> impl std::future::Future<Output = eyre::Result<()>>;
+
+    fn enqueue_card_price_refresh(
+        &mut self,
+        source: &str,
+        scryfall_ids: &[String],
+        priority: i32,
+    ) -> impl std::future::Future<Output = eyre::Result<()>>;
+
+    fn take_card_price_refresh_batch(
+        &mut self,
+        source: &str,
+        limit: usize,
+    ) -> impl std::future::Future<Output = eyre::Result<Vec<String>>>;
+
+    fn complete_card_price_refresh(
+        &mut self,
+        source: &str,
+        scryfall_ids: &[String],
+    ) -> impl std::future::Future<Output = eyre::Result<()>>;
+
+    fn fail_card_price_refresh(
+        &mut self,
+        source: &str,
+        scryfall_ids: &[String],
+    ) -> impl std::future::Future<Output = eyre::Result<()>>;
+
+    fn set_card_purchase_price(
+        &mut self,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
+        purchase_price_cents: Option<i64>,
+        source: Option<&str>,
+        updated_at: &str,
+    ) -> impl std::future::Future<Output = eyre::Result<CollectionCard>>;
+
+    fn set_card_purchase_price_if_missing(
+        &mut self,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
+        purchase_price_cents: i64,
+        source: &str,
+        updated_at: &str,
     ) -> impl std::future::Future<Output = eyre::Result<()>>;
 }
 
@@ -306,6 +370,9 @@ impl PersistenceSystem {
                     collection: collection_id.clone(),
                     time_added: time_added.clone(),
                     provider: c.3.clone(),
+                    purchase_price_cents: None,
+                    purchase_price_source: None,
+                    purchase_price_updated_at: None,
                 })
                 .collect();
             self.add_cards_to_collection(&collection_id, &batch).await?;

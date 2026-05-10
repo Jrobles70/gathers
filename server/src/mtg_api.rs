@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::{
     ApiError, ErrorPayload, GathersState, collections::collections_models::APICardSearchFilters,
     mtg_api::mtg_api_models::APICard,
+    prices::{api_price_from_cache, cached_prices_for_scryfall_ids},
 };
 pub mod mtg_api_models;
 
@@ -39,7 +40,7 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
         let guard = state.0.lock().await;
         let ret = guard.require_mtg()?;
 
-        ret.search_cards(input.into(), query.skip.into(), query.limit.into())
+        let result = ret.search_cards(input.into(), query.skip.into(), query.limit.into())
             .await
             .map_err(|e| {
                 (
@@ -48,18 +49,41 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
                         error: format!("Failed to search cards. {e}"),
                     }),
                 )
-            })
-            .map(|result| {
-                Json(
-                    result
-                        .iter()
-                        .filter_map(|c| match c {
-                            Card::Magic(p) => Some(p.clone().into()),
-                            _ => None,
-                        })
-                        .collect(),
-                )
-            })
+            })?;
+        drop(guard);
+
+        let price_cache = cached_prices_for_scryfall_ids(
+            &state,
+            result.iter().filter_map(|c| match c {
+                Card::Magic(m) => Some(m.card_identifiers.scryfall_id.clone()),
+                _ => None,
+            }),
+            0,
+        )
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to read card prices. {e}"),
+                }),
+            )
+        })?;
+
+        Ok(Json(
+            result
+                .iter()
+                .filter_map(|c| match c {
+                    Card::Magic(p) => Some(APICard::from_magic_with_price(
+                        p.clone(),
+                        price_cache
+                            .get(&p.card_identifiers.scryfall_id)
+                            .map(api_price_from_cache),
+                    )),
+                    _ => None,
+                })
+                .collect(),
+        ))
     }
 
     #[derive(Deserialize, JsonSchema)]
@@ -75,7 +99,7 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
         let guard = state.0.lock().await;
         let ret = guard.require_mtg()?;
 
-        ret.get_cards_by_ids(query.ids)
+        let result = ret.get_cards_by_ids(query.ids)
             .await
             .map_err(|e| {
                 (
@@ -84,16 +108,41 @@ pub fn mtg_routes() -> ApiRouter<GathersState> {
                         error: format!("Failed to retrieve cards. {e}"),
                     }),
                 )
-            })
-            .map(|d| {
-                d.into_iter()
-                    .filter_map(|(k, v)| match v {
-                        Card::Magic(m) => Some((k, m.into())),
-                        _ => None,
-                    })
-                    .collect()
-            })
-            .map(Json)
+            })?;
+        drop(guard);
+
+        let price_cache = cached_prices_for_scryfall_ids(
+            &state,
+            result.values().filter_map(|c| match c {
+                Card::Magic(m) => Some(m.card_identifiers.scryfall_id.clone()),
+                _ => None,
+            }),
+            1,
+        )
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to read card prices. {e}"),
+                }),
+            )
+        })?;
+
+        Ok(Json(
+            result
+                .into_iter()
+                .filter_map(|(k, v)| match v {
+                    Card::Magic(m) => {
+                        let price = price_cache
+                            .get(&m.card_identifiers.scryfall_id)
+                            .map(api_price_from_cache);
+                        Some((k, APICard::from_magic_with_price(m, price)))
+                    }
+                    _ => None,
+                })
+                .collect(),
+        ))
     }
 
     async fn get_sets(State(state): State<GathersState>) -> Result<Json<Vec<Set>>, ApiError> {

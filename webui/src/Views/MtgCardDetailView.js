@@ -1,6 +1,7 @@
 import React from "react";
 import { useParams } from "react-router-dom";
 import CardDetailLayout from "./CardDetailLayout";
+import { formatCents, unitPriceCents } from "../Components/priceUtils";
 
 const colorMap = { White: "W", Blue: "U", Black: "B", Red: "R", Green: "G", Colourless: "C", Multicoloured: "M" };
 
@@ -35,6 +36,7 @@ function renderRows(card) {
       <tr><th>Set</th><td>{card.setCode}</td></tr>
       <tr><th>Collector Number</th><td>{card.collectorNumber}</td></tr>
       <tr><th>Rarity</th><td>{card.rarity}</td></tr>
+      <tr><th>Price</th><td>{formatCents(unitPriceCents(card.price))}</td></tr>
       <tr><th>Artist</th><td>{card.artist}</td></tr>
       {typeStr && <tr><th>Type</th><td>{typeStr}</td></tr>}
       <tr><th>Color Identity</th><td>{colorStr}</td></tr>

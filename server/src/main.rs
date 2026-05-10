@@ -23,6 +23,7 @@ use crate::riftbound_api::riftbound_routes;
 mod collections;
 mod mtg_api;
 mod pokemon_api;
+mod prices;
 mod riftbound_api;
 
 const DEFAULT_PORT: usize = 5234;
@@ -510,6 +511,7 @@ async fn main() -> eyre::Result<()> {
         }
     }
     let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
+    prices::spawn_scryfall_price_worker(storage.clone());
 
     let mut api = OpenApi {
         info: Info {

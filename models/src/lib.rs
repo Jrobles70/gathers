@@ -48,6 +48,9 @@ pub struct CollectionCard {
     pub time_added: String,
     pub collection: CollectionID,
     pub provider: String,
+    pub purchase_price_cents: Option<i64>,
+    pub purchase_price_source: Option<String>,
+    pub purchase_price_updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]

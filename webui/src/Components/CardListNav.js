@@ -5,12 +5,15 @@ import MoveCards from "./CardListNavButtons/MoveCards";
 import ImportCards from "./CardListNavButtons/ImportCards";
 import DeleteCollection from "./CardListNavButtons/DeleteCollection";
 import ExportCollection from "./CardListNavButtons/ExportCollection";
+import CollectionStats from "./CollectionStats";
 
 export default function CardListNav() {
   const [otherOptionsOpen, setOtherOptionsOpen] = useState(false);
 
   return (
     <nav className="collection-action-panel" data-bs-theme="dark" aria-label="Collection actions">
+      <CollectionStats />
+
       <section className="collection-panel-section">
         <div className="collection-panel-heading">Collection</div>
         <div className="collection-selection-actions">

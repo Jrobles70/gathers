@@ -79,6 +79,18 @@ impl From<APICardColour> for models::CardColour {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, JsonSchema)]
+pub struct APICardPrice {
+    #[serde(rename = "usdCents", skip_serializing_if = "Option::is_none")]
+    pub usd_cents: Option<i64>,
+    #[serde(rename = "usdFoilCents", skip_serializing_if = "Option::is_none")]
+    pub usd_foil_cents: Option<i64>,
+    #[serde(rename = "usdEtchedCents", skip_serializing_if = "Option::is_none")]
+    pub usd_etched_cents: Option<i64>,
+    #[serde(rename = "fetchedAt")]
+    pub fetched_at: String,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct APICard {
     pub id: String,
     pub name: String,
@@ -93,6 +105,8 @@ pub struct APICard {
     pub text: String,
     #[serde(rename = "cardIdentifiers")]
     pub card_identifiers: APICardIdentifiers,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<APICardPrice>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, JsonSchema)]
@@ -114,6 +128,16 @@ impl From<MagicCard> for APICard {
             color_identity: value.color_identity.into_iter().map(Into::into).collect(),
             text: value.text,
             card_identifiers: value.card_identifiers.into(),
+            price: None,
+        }
+    }
+}
+
+impl APICard {
+    pub fn from_magic_with_price(value: MagicCard, price: Option<APICardPrice>) -> Self {
+        APICard {
+            price,
+            ..value.into()
         }
     }
 }

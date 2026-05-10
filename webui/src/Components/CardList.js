@@ -26,7 +26,7 @@ function CardComponent({ viewMode, systemType, id, details }) {
   } else if (effectiveSystem === "PokemonSQLite") {
     return <PokemonCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
   }
-  return <Card id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
+  return <Card id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} priceMode="collection" />;
 }
 
 function buildListUrl(collection, filters, pageNumber, systems) {

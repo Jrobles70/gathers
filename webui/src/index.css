@@ -364,6 +364,31 @@ code {
     font-weight: 600;
 }
 
+.price-up {
+    color: #20c997;
+}
+
+.price-down {
+    color: #ff6b6b;
+}
+
+.search-card-price {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.search-card-price-edit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem;
+}
+
+.search-card-price-save {
+    width: auto;
+    min-height: 0;
+    padding: 0.25rem 0.5rem;
+}
+
 /* Sidebar */
 .sidebar {
     position: fixed;
@@ -581,6 +606,54 @@ code {
     font-weight: 700;
     letter-spacing: 0;
     text-transform: uppercase;
+}
+
+.collection-stats-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.collection-stats-block {
+    display: grid;
+    gap: 0.1rem;
+}
+
+.collection-stats-title {
+    overflow: hidden;
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collection-stats-value {
+    color: #f8f9fa;
+    font-size: 1.15rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.collection-stats-change,
+.collection-stats-meta {
+    color: #adb5bd;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.collection-stats-change.price-up,
+.collection-stats-change.price-down {
+    color: inherit;
+}
+
+.collection-stats-change.price-up {
+    color: #20c997;
+}
+
+.collection-stats-change.price-down {
+    color: #ff6b6b;
 }
 
 .collection-selection-actions {
