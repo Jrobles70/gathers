@@ -1,6 +1,7 @@
 services:
   gathers-api:
     build: .
+    command: ["--system", "sql"]
     ports:
       - "5234:5234"
     volumes:
@@ -15,8 +16,6 @@ services:
   gathers-webui:
     build:
       context: ./webui
-      args:
-        REACT_APP_COLLECTIONS_ENABLED: "true"
     ports:
       - "3000:3000"
     depends_on:
