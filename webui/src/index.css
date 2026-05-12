@@ -1878,7 +1878,7 @@ code {
         position: fixed;
         inset: 0;
         z-index: 1000;
-        background: rgba(0, 0, 0, 0.55);
+        background: rgba(0, 0, 0, 0.65);
         cursor: pointer;
     }
 
@@ -1890,8 +1890,8 @@ code {
         z-index: 1010;
         display: flex;
         flex-direction: column;
-        height: 85dvh;
-        overflow: hidden;
+        height: 42vh;
+        overflow-y: auto;
         border-radius: 1.1rem 1.1rem 0 0;
         background: var(--mobile-panel);
         box-shadow: 0 -0.5rem 2.5rem rgba(0, 0, 0, 0.55);
@@ -1913,15 +1913,21 @@ code {
         background: rgba(255, 255, 255, 0.22);
     }
 
-    /* Carousel: top ~55% of sheet */
+    /* Carousel: floats between top bar and bottom panel */
     .mobile-sheet-carousel {
+        position: fixed;
+        top: 3.5rem;
+        bottom: 42vh;
+        left: 0;
+        right: 0;
         display: flex;
-        flex: 0 0 55%;
-        overflow-x: auto;
+        overflow-x: scroll;
         scroll-snap-type: x mandatory;
         scroll-behavior: smooth;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
+        align-items: center;
+        z-index: 1005;
     }
 
     .mobile-sheet-carousel::-webkit-scrollbar {
@@ -1929,20 +1935,18 @@ code {
     }
 
     .mobile-sheet-carousel-slide {
+        min-width: 100vw;
+        scroll-snap-align: center;
         display: flex;
-        flex: 0 0 100%;
-        align-items: center;
         justify-content: center;
-        padding: 0.5rem 1rem;
-        scroll-snap-align: start;
+        align-items: center;
     }
 
     .mobile-sheet-carousel-slide img {
-        max-width: 100%;
+        max-width: 75vw;
         max-height: 100%;
-        object-fit: contain;
-        border-radius: 0.55rem;
-        box-shadow: 0 0.4rem 1.4rem rgba(0, 0, 0, 0.5);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     }
 
     .mobile-sheet-carousel-placeholder {
@@ -1952,7 +1956,7 @@ code {
         background: var(--mobile-panel-2);
     }
 
-    /* Detail panel: bottom ~45% */
+    /* Detail panel: full bottom panel content */
     .mobile-sheet-detail {
         flex: 1 1 0;
         display: flex;
@@ -1960,7 +1964,6 @@ code {
         gap: 0.45rem;
         padding: 0.9rem 1.1rem 1rem;
         overflow-y: auto;
-        border-top: 1px solid var(--mobile-border);
         background: #1a1b1c;
         border-radius: 0.75rem 0.75rem 0 0;
     }
@@ -2111,6 +2114,11 @@ code {
         display: flex;
         gap: 0.6rem;
         flex-wrap: wrap;
+    }
+
+    .mobile-color-circle {
+        position: relative;
+        cursor: pointer;
     }
 
     .mobile-color-circle input[type="checkbox"] {

@@ -214,16 +214,35 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="mobile-card-sheet-backdrop"
-        onClick={onClose}
-        aria-label="Close card detail"
-        role="button"
-        tabIndex={-1}
-      />
+      {/* Backdrop — dim but not opaque so grid shows through */}
+      <div className="mobile-card-sheet-backdrop" onClick={onClose} />
 
-      {/* Sheet panel */}
+      {/* Carousel — floats between top bar and bottom panel, outside the sheet */}
+      <div
+        ref={carouselRef}
+        className="mobile-sheet-carousel"
+        onScroll={handleCarouselScroll}
+      >
+        {cards.map((card, index) => {
+          const isActive = index === activeIndex;
+          const imgSrc = isActive ? getCardImagePath(activeCardData) : "";
+          return (
+            <div key={card.id ?? index} className="mobile-sheet-carousel-slide">
+              {imgSrc ? (
+                <img
+                  src={imgSrc}
+                  alt={activeCardData?.name ?? "Card"}
+                  loading="eager"
+                />
+              ) : (
+                <div className="mobile-sheet-carousel-placeholder" aria-hidden="true" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bottom panel — info + actions */}
       <div
         className="mobile-card-sheet"
         onTouchStart={handleTouchStart}
@@ -232,35 +251,7 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
         aria-label="Card detail"
         aria-modal="true"
       >
-        {/* Swipe handle */}
         <div className="mobile-sheet-handle" aria-hidden="true" />
-
-        {/* Carousel — show loaded image for active slide, placeholder for others */}
-        <div
-          ref={carouselRef}
-          className="mobile-sheet-carousel"
-          onScroll={handleCarouselScroll}
-        >
-          {cards.map((card, index) => {
-            const isActive = index === activeIndex;
-            const imgSrc = isActive ? getCardImagePath(activeCardData) : "";
-            return (
-              <div key={card.id ?? index} className="mobile-sheet-carousel-slide">
-                {imgSrc ? (
-                  <img
-                    src={imgSrc}
-                    alt={activeCardData?.name ?? "Card"}
-                    loading="eager"
-                  />
-                ) : (
-                  <div className="mobile-sheet-carousel-placeholder" aria-hidden="true" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Detail panel */}
         <div className="mobile-sheet-detail">
           <div className="mobile-sheet-detail-name">
             <span className="mobile-sheet-qty">×{qty}</span>
@@ -290,8 +281,6 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
               )}
             </div>
           )}
-
-          {/* Action row */}
           <div className="mobile-sheet-actions">
             {activeDetails && (
               <CardDetails
