@@ -233,7 +233,12 @@ export default function CardShell({
             )}
           </div>
           <div className="search-card-footer">
-            <span className={priceClass}>{priceText}</span>
+            <span className="search-card-price">{formatCents(activeUnitPrice)}</span>
+            {activeTrend && activeTrend.direction !== "flat" && (
+              <span className={["search-card-price-delta", activeTrend.direction === "up" ? "price-up" : "price-down"].join(" ")}>
+                {(activeTrend.changeCents >= 0 ? "+" : "") + formatCents(activeTrend.changeCents)} ({formatPercent(activeTrend.changePercent)})
+              </span>
+            )}
             <span className="search-card-footer-meta">
               {activeDetails?.collectionId && (
                 <span className="collection-pill" title={activeDetails.collectionId}>
