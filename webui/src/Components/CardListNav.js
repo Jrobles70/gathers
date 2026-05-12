@@ -1,12 +1,8 @@
 import React, { useState } from "react";
-import SelectionTracker from "./CardListNavButtons/SelectionTracker";
-import DeleteCards from "./CardListNavButtons/DeleteCards";
-import MoveCards from "./CardListNavButtons/MoveCards";
 import ImportCards from "./CardListNavButtons/ImportCards";
 import DeleteCollection from "./CardListNavButtons/DeleteCollection";
 import ExportCollection from "./CardListNavButtons/ExportCollection";
 import CollectionStats from "./CollectionStats";
-import ProxyCards from "./CardListNavButtons/ProxyCards";
 import RenameCollection from "./CardListNavButtons/RenameCollection";
 import CollectionProxyToggle from "./CardListNavButtons/CollectionProxyToggle";
 
@@ -17,15 +13,7 @@ export default function CardListNav() {
     <nav className="collection-action-panel" data-bs-theme="dark" aria-label="Collection actions">
       <CollectionStats />
 
-      <section className="collection-panel-section">
-        <div className="collection-panel-heading">Collection</div>
-        <div className="collection-selection-actions">
-          <SelectionTracker />
-          <DeleteCards />
-        </div>
-        <ProxyCards />
-        <MoveCards />
-      </section>
+      {/* Bulk collection actions are hidden until card selection works in the default grid view. */}
 
       <section className="collection-panel-section">
         <ImportCards />
