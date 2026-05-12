@@ -2,14 +2,9 @@ import React from "react";
 import { useParams } from "react-router-dom";
 import CardDetailLayout from "./CardDetailLayout";
 
-const onZoomMove = (e) => {
-  const r = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.transformOrigin = `${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`;
-};
-
 function renderImage(card) {
   return card.image ? (
-    <img src={card.image} alt={card.name} className="img-fluid rounded zoomable" onMouseMove={onZoomMove} />
+    <img src={card.image} alt={card.name} className="img-fluid rounded" />
   ) : (
     <div className="p-3 bg-secondary text-white rounded">No image available</div>
   );

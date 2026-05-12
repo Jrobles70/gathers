@@ -71,7 +71,10 @@ export default function Sidebar() {
 
   return (
     <header>
-      <nav id="sidebarMenu" className="d-lg-block sidebar bg-white">
+      <nav
+        id="sidebarMenu"
+        className={"d-lg-block sidebar bg-white" + (showCollectionTools ? " mobile-collection-sidebar-hidden" : "")}
+      >
         <nav className="navbar navbar-expand-lg navbar-light bg-light">
           <div className="container-fluid">
             <Link className="navbar-brand" to={brandPath}>

@@ -5,17 +5,12 @@ import { formatCents, unitPriceCents } from "../Components/priceUtils";
 
 const colorMap = { White: "W", Blue: "U", Black: "B", Red: "R", Green: "G", Colourless: "C", Multicoloured: "M" };
 
-const onZoomMove = (e) => {
-  const r = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.transformOrigin = `${((e.clientX - r.left) / r.width) * 100}% ${((e.clientY - r.top) / r.height) * 100}%`;
-};
-
 function renderImage(card) {
   const imagePath = card.cardIdentifiers?.scryfallId
     ? `https://api.scryfall.com/cards/${card.cardIdentifiers.scryfallId}?format=image`
     : null;
   return imagePath ? (
-    <img src={imagePath} alt={card.name} className="img-fluid rounded zoomable" onMouseMove={onZoomMove} />
+    <img src={imagePath} alt={card.name} className="img-fluid rounded" />
   ) : (
     <div className="p-3 bg-secondary text-white rounded">No image available</div>
   );
