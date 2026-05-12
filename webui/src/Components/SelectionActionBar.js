@@ -49,6 +49,8 @@ export default function SelectionActionBar() {
         ).then(() => {
           triggerRefresh(true);
           selectedDispatch({ type: "empty" });
+        }).catch(() => {
+          triggerRefresh(true);
         });
       },
       () => {}
@@ -58,10 +60,10 @@ export default function SelectionActionBar() {
   return (
     <div className={"selection-action-bar" + (selected.length > 0 ? " visible" : "")}>
       <span className="selection-action-bar-count">{selected.length} selected</span>
-      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAll}>
+      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={selectAll} disabled={cards.length === 0}>
         Select All
       </button>
-      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={deselectAll}>
+      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={deselectAll} disabled={selected.length === 0}>
         Deselect All
       </button>
       <button type="button" className="btn btn-sm btn-outline-info" onClick={() => setMoveToOpen(true)} disabled={selected.length === 0}>

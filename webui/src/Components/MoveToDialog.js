@@ -102,10 +102,6 @@ export default function MoveToDialog({ onClose }) {
         }
       )
       .then(() => {
-        collectionsDispatch({
-          type: "added",
-          item: { id, parent: newParent || null, canRemove: true },
-        });
         return ops.fetch(
           "Moving cards to " + id,
           [],
@@ -118,6 +114,10 @@ export default function MoveToDialog({ onClose }) {
         );
       })
       .then(() => {
+        collectionsDispatch({
+          type: "added",
+          item: { id, parent: newParent || null, canRemove: true },
+        });
         triggerRefresh(true);
         selectedDispatch({ type: "empty" });
         onClose();
@@ -175,7 +175,6 @@ export default function MoveToDialog({ onClose }) {
                 value={destinationId}
                 onChange={(e) => setDestinationId(e.target.value)}
               >
-                <option value="">-- Select a collection --</option>
                 {destinationOptions.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.id}

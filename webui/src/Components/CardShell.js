@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import CardDetails from "./CardDetails";
-import { useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
+import { useSelectedCards, useSelectedCardsDispatch } from "./CardListContexts/SelectedCardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 import { formatCents, formatPercent, priceTrend, unitPriceCents } from "./priceUtils";
 
@@ -40,7 +40,6 @@ export default function CardShell({
   );
   const [selectedPrintingId, setSelectedPrintingId] = useState(id);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [selected, setSelected] = useState(false);
   const [printingPickerOpen, setPrintingPickerOpen] = useState(false);
   const [printingPickerAlign, setPrintingPickerAlign] = useState("left");
   const [hovered, setHovered] = useState(false);
@@ -59,10 +58,14 @@ export default function CardShell({
   const activeDetails = selectedPrinting?.details ?? details;
   const cardFromProps = selectedPrinting?.card ?? card;
   const activeDetailPath = makeDetailPath ? makeDetailPath(activeId) : detailPath;
+  const selected = selectedCards.some(
+    (c) => c.id === activeDetails?.id && c.collectionId === activeDetails?.collectionId
+  );
   const activeCardKey = `${provider ?? "default"}:${activeId}`;
   const [_card, setCard] = useState(cardFromProps);
   const loadedCardKeyRef = useRef(cardFromProps != null ? activeCardKey : null);
 
+  const selectedCards = useSelectedCards();
   const selectedDispatch = useSelectedCardsDispatch();
   const loader = useCardLoader();
   const location = useLocation();
@@ -99,7 +102,6 @@ export default function CardShell({
   const toggleSelected = () => {
     if (activeDetails != null) {
       selectedDispatch({ type: !selected ? "added" : "deleted", card: activeDetails });
-      setSelected((s) => !s);
     }
   };
 
@@ -227,7 +229,6 @@ export default function CardShell({
               className={"card-checkbox" + (hovered || selected ? " visible" : "")}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelected(); }}
               aria-label={selected ? "Deselect card" : "Select card"}
-              tabIndex={0}
             >
               {selected ? "✓" : "○"}
             </button>
