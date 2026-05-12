@@ -14,6 +14,7 @@ import { useOperations } from "../OperationsContext";
 import { useQuickSearch } from "./QuickSearchContext";
 import { formatCents, formatPercent, priceTrend, unitPriceCents } from "./priceUtils";
 import { useCards } from "./CardListContexts/CardsContext";
+import { useCardLoader } from "./CardListContexts/CardLoaderContext";
 
 const ACCENT_COLORS = ["#ec1f66", "#8cc84b", "#ffbe1b", "#ff4133", "#ff7b22"];
 
@@ -122,7 +123,6 @@ function MobileStatsHeader({ stats }) {
       ref={wrapperRef}
       className="mobile-stats-header"
       aria-label="Collection value"
-      style={{ "--stats-opacity": 1 }}
     >
       <div className="mobile-stats-value">{formatMobileCents(nonProxyValue)}</div>
       <div className={"mobile-stats-change " + trendClass(stats)}>{changeText(stats)}</div>
@@ -138,15 +138,32 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
   const touchStartY = useRef(null);
   const scrollTimeout = useRef(null);
 
-  // Scroll carousel to the initial card on mount
+  // Bug 1: Load card metadata for the active card using useCardLoader
+  const loader = useCardLoader();
+  const [activeCardData, setActiveCardData] = useState(null);
+  const activeDetails = cards[activeIndex]; // flat details object IS the item
+
+  useEffect(() => {
+    if (!activeDetails || !loader) return;
+    let cancelled = false;
+    setActiveCardData(null);
+    loader(activeDetails.id, activeDetails.provider).then((card) => {
+      if (!cancelled) setActiveCardData(card);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeIndex, activeDetails, loader]);
+
+  // Bug 5: Scroll carousel to the initial card on mount without smooth scroll
   useEffect(() => {
     const carousel = carouselRef.current;
     if (!carousel) return;
     const itemWidth = carousel.clientWidth;
+    carousel.style.scrollBehavior = "none";
     carousel.scrollLeft = initialIndex * itemWidth;
+    carousel.style.scrollBehavior = "";
   }, [initialIndex]);
 
-  // Update activeIndex as user swipes carousel
+  // Bug 2: Update activeIndex as user swipes carousel — use functional updater to avoid stale closure
   const handleCarouselScroll = useCallback(() => {
     if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
     scrollTimeout.current = setTimeout(() => {
@@ -154,11 +171,11 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
       if (!carousel) return;
       const itemWidth = carousel.clientWidth;
       const newIndex = Math.round(carousel.scrollLeft / itemWidth);
-      if (newIndex !== activeIndex && newIndex >= 0 && newIndex < cards.length) {
-        setActiveIndex(newIndex);
-      }
+      setActiveIndex((prev) =>
+        newIndex >= 0 && newIndex < cards.length ? newIndex : prev
+      );
     }, 50);
-  }, [activeIndex, cards.length]);
+  }, [cards.length]);
 
   useEffect(() => {
     return () => {
@@ -166,8 +183,9 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     };
   }, []);
 
-  // Swipe-to-dismiss touch handlers
+  // Bug 3: Swipe-to-dismiss touch handlers — bail if touch starts inside detail panel
   function handleTouchStart(e) {
+    if (e.target.closest(".mobile-sheet-detail")) return;
     touchStartY.current = e.touches[0].clientY;
   }
 
@@ -180,11 +198,7 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     }
   }
 
-  const activeCard = cards[activeIndex];
-  const activeDetails = activeCard?.details;
-  const activeCardData = activeCard?.card;
-
-  // Price / trend info
+  // Bug 1: Price / trend info now comes from loaded card data and flat details
   const trend = activeCardData?.price != null
     ? priceTrend(activeCardData.price, activeDetails)
     : null;
@@ -217,21 +231,22 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
         {/* Swipe handle */}
         <div className="mobile-sheet-handle" aria-hidden="true" />
 
-        {/* Carousel */}
+        {/* Carousel — show loaded image for active slide, placeholder for others */}
         <div
           ref={carouselRef}
           className="mobile-sheet-carousel"
           onScroll={handleCarouselScroll}
         >
           {cards.map((card, index) => {
-            const imgSrc = getCardImagePath(card.card);
+            const isActive = index === activeIndex;
+            const imgSrc = isActive ? getCardImagePath(activeCardData) : "";
             return (
               <div key={card.id ?? index} className="mobile-sheet-carousel-slide">
                 {imgSrc ? (
                   <img
                     src={imgSrc}
-                    alt={card.card?.name ?? "Card"}
-                    loading={Math.abs(index - activeIndex) <= 1 ? "eager" : "lazy"}
+                    alt={activeCardData?.name ?? "Card"}
+                    loading="eager"
                   />
                 ) : (
                   <div className="mobile-sheet-carousel-placeholder" aria-hidden="true" />
@@ -245,7 +260,7 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
         <div className="mobile-sheet-detail">
           <div className="mobile-sheet-detail-name">
             <span className="mobile-sheet-qty">×{qty}</span>
-            <strong>{activeCardData?.name ?? activeCard?.id}</strong>
+            <strong>{activeCardData?.name ?? activeDetails?.id}</strong>
           </div>
           <div className="mobile-sheet-detail-meta">
             {activeCardData?.setCode && (
@@ -274,9 +289,9 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
 
           {/* Action row */}
           <div className="mobile-sheet-actions">
-            {activeCard && (
+            {activeDetails && (
               <CardDetails
-                id={activeCard.id}
+                id={activeDetails.id}
                 details={activeDetails}
                 showCollectionSelect={false}
                 targetCollection={activeDetails?.collectionId ?? null}
