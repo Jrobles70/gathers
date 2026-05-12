@@ -63,6 +63,7 @@ export default function Sidebar() {
     !isSearchOnly &&
     collectionsEnabled &&
     (location.pathname.startsWith("/c/") || location.pathname.startsWith("/collections"));
+  const hideSidebarOnMobile = showCollectionTools || location.pathname.startsWith("/search");
   const filteredCollections = collections.filter((c) =>
     c.id.toLowerCase().includes(collectionQuery.trim().toLowerCase()),
   );
@@ -73,7 +74,7 @@ export default function Sidebar() {
     <header>
       <nav
         id="sidebarMenu"
-        className={"d-lg-block sidebar bg-white" + (showCollectionTools ? " mobile-collection-sidebar-hidden" : "")}
+        className={"d-lg-block sidebar bg-white" + (hideSidebarOnMobile ? " mobile-collection-sidebar-hidden" : "")}
       >
         <nav className="navbar navbar-expand-lg navbar-light bg-light">
           <div className="container-fluid">

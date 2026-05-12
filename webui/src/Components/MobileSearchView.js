@@ -266,7 +266,7 @@ export default function MobileSearchView() {
         )}
 
         {/* Results */}
-        <div className="mobile-search-results">
+        <div className="mobile-search-results mobile-card-grid">
           {loading ? (
             <p>Loading…</p>
           ) : (
