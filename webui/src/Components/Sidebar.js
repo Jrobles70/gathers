@@ -44,6 +44,10 @@ function useServerStatus() {
   return status;
 }
 
+export function getSidebarBrandPath({ isSearchOnly = false, collectionsEnabled = false } = {}) {
+  return !isSearchOnly && collectionsEnabled ? "/collections/1" : "/search";
+}
+
 export default function Sidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(true);
@@ -63,7 +67,7 @@ export default function Sidebar() {
     c.id.toLowerCase().includes(collectionQuery.trim().toLowerCase()),
   );
   const allCollectionsActive = collection === ALL_COLLECTIONS_ID;
-  const brandPath = !isSearchOnly && collectionsEnabled ? "/collections/1" : "/search";
+  const brandPath = getSidebarBrandPath({ isSearchOnly, collectionsEnabled });
 
   return (
     <header>

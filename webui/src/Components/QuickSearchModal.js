@@ -45,7 +45,7 @@ export default function QuickSearchModal() {
       >
         <header className="quick-search-header">
           <div className="quick-search-heading">
-            <h2 id="quick-search-title">Quick Search</h2>
+            <h2 id="quick-search-title">Quick Add</h2>
             <div className="quick-search-target-summary">
               Adding cards to <strong>{targetCollection}</strong>
             </div>
@@ -54,7 +54,7 @@ export default function QuickSearchModal() {
             type="button"
             className="btn btn-outline-secondary"
             onClick={closeQuickSearch}
-            aria-label="Close quick search"
+            aria-label="Close quick add"
           >
             Close
           </button>

@@ -7,8 +7,12 @@ import MtgCardDetailView from "./Views/MtgCardDetailView";
 import RiftboundCardDetailView from "./Views/RiftboundCardDetailView";
 import PokemonCardDetailView from "./Views/PokemonCardDetailView";
 
+export function getHomePath({ mode = "full", collectionsEnabled = false } = {}) {
+  return collectionsEnabled && mode !== "search-only" ? "/collections/1" : "/search";
+}
+
 export default function BaseApp({ mode = "full", collectionsEnabled = false }) {
-  const collectionsHome = collectionsEnabled && mode !== "search-only" ? "/collections/1" : "/search";
+  const collectionsHome = getHomePath({ mode, collectionsEnabled });
 
   return (
     <ModeProvider mode={mode} collectionsEnabled={collectionsEnabled}>
