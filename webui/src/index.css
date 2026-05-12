@@ -1475,60 +1475,41 @@ code {
         letter-spacing: 0;
     }
 
-    .mobile-collection-summary {
+    /* B1: Stats header (replaces donut ring summary) */
+    .mobile-stats-header {
         display: grid;
         place-items: center;
-        padding: 0.2rem 1rem 1.25rem;
+        padding: 1.4rem 1rem 1.1rem;
+        opacity: var(--stats-opacity, 1);
+        transition: opacity 0.05s linear;
     }
 
-    .mobile-value-ring {
-        display: grid;
-        width: min(46vw, 11.5rem);
-        aspect-ratio: 1;
-        place-items: center;
-        border-radius: 999px;
-        background:
-            conic-gradient(
-                #8cc84b 0 13%,
-                #ec1f66 13% 25%,
-                #ffd177 25% 56%,
-                #ffbe1b 56% 75%,
-                #ff4b35 75% 84%,
-                #ff7b22 84% 100%
-            );
-        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.34);
-    }
-
-    .mobile-value-ring-inner {
-        display: grid;
-        width: calc(100% - 1.25rem);
-        aspect-ratio: 1;
-        place-items: center;
-        align-content: center;
-        border: 2px solid #343437;
-        border-radius: inherit;
-        background: #18191a;
-    }
-
-    .mobile-summary-change,
-    .mobile-summary-count {
-        color: var(--mobile-muted);
-        font-weight: 800;
-    }
-
-    .mobile-summary-change {
-        font-size: 1rem;
-    }
-
-    .mobile-summary-value {
+    .mobile-stats-value {
         color: var(--mobile-text);
-        font-size: 1.75rem;
+        font-size: 2.6rem;
         font-weight: 900;
         line-height: 1.1;
         font-variant-numeric: tabular-nums;
     }
 
-    .mobile-summary-count {
+    .mobile-stats-change {
+        margin-top: 0.25rem;
+        color: var(--mobile-muted);
+        font-size: 1.08rem;
+        font-weight: 800;
+    }
+
+    .mobile-stats-change.price-up {
+        color: #4cbb7f;
+    }
+
+    .mobile-stats-change.price-down {
+        color: #e05c5c;
+    }
+
+    .mobile-stats-count {
+        margin-top: 0.2rem;
+        color: var(--mobile-muted);
         font-size: 0.98rem;
         font-weight: 700;
     }
@@ -1890,6 +1871,155 @@ code {
         border-radius: 1.45rem;
         background: var(--mobile-accent);
         font-size: 2.35rem;
+    }
+
+    /* B2: Mobile card bottom sheet */
+    .mobile-card-sheet-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.55);
+        cursor: pointer;
+    }
+
+    .mobile-card-sheet {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1010;
+        display: flex;
+        flex-direction: column;
+        height: 85dvh;
+        overflow: hidden;
+        border-radius: 1.1rem 1.1rem 0 0;
+        background: var(--mobile-panel);
+        box-shadow: 0 -0.5rem 2.5rem rgba(0, 0, 0, 0.55);
+        transform: translateY(0);
+        animation: sheet-slide-up 0.28s ease-out;
+    }
+
+    @keyframes sheet-slide-up {
+        from { transform: translateY(100%); }
+        to   { transform: translateY(0); }
+    }
+
+    .mobile-sheet-handle {
+        flex-shrink: 0;
+        width: 2.5rem;
+        height: 0.28rem;
+        margin: 0.65rem auto 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+    }
+
+    /* Carousel: top ~55% of sheet */
+    .mobile-sheet-carousel {
+        display: flex;
+        flex: 0 0 55%;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .mobile-sheet-carousel::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mobile-sheet-carousel-slide {
+        display: flex;
+        flex: 0 0 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem 1rem;
+        scroll-snap-align: start;
+    }
+
+    .mobile-sheet-carousel-slide img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        border-radius: 0.55rem;
+        box-shadow: 0 0.4rem 1.4rem rgba(0, 0, 0, 0.5);
+    }
+
+    .mobile-sheet-carousel-placeholder {
+        width: 10rem;
+        height: 14rem;
+        border-radius: 0.55rem;
+        background: var(--mobile-panel-2);
+    }
+
+    /* Detail panel: bottom ~45% */
+    .mobile-sheet-detail {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        padding: 0.9rem 1.1rem 1rem;
+        overflow-y: auto;
+        border-top: 1px solid var(--mobile-border);
+        background: #1a1b1c;
+        border-radius: 0.75rem 0.75rem 0 0;
+    }
+
+    .mobile-sheet-detail-name {
+        display: flex;
+        align-items: baseline;
+        gap: 0.55rem;
+    }
+
+    .mobile-sheet-qty {
+        flex-shrink: 0;
+        color: var(--mobile-muted);
+        font-size: 1.1rem;
+        font-weight: 800;
+    }
+
+    .mobile-sheet-detail-name strong {
+        color: var(--mobile-text);
+        font-size: 1.22rem;
+        font-weight: 900;
+        line-height: 1.25;
+    }
+
+    .mobile-sheet-detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+    }
+
+    .mobile-sheet-price-row {
+        display: flex;
+        gap: 0.55rem;
+        align-items: baseline;
+    }
+
+    .mobile-sheet-price {
+        color: var(--mobile-text);
+        font-size: 1.3rem;
+        font-weight: 850;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .mobile-sheet-price-delta {
+        font-size: 0.98rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .mobile-sheet-actions {
+        margin-top: 0.35rem;
+    }
+
+    /* Keep CardDetails usable inside sheet */
+    .mobile-sheet-actions .card-details {
+        background: transparent;
+        border: 0;
+        padding: 0;
     }
 }
 
