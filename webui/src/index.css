@@ -1770,6 +1770,7 @@ code {
         order: 3;
         font-size: 0.78rem;
         font-weight: 700;
+        line-height: 1.2;
     }
 
     .mobile-card-grid .search-card-footer-meta {
