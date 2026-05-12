@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Search from "../Components/Search";
 import CardList from "../Components/CardList";
+import SelectionActionBar from "../Components/SelectionActionBar";
 import ViewProviders from "./ViewProviders";
 import { useMode } from "../OperationsContext";
 import MobileCollectionView from "../Components/MobileCollectionView";
@@ -35,6 +36,7 @@ export default function CardListView({ showSearch = false }) {
       ) : (
         <section className="collection-results-panel">
           <CardList />
+          <SelectionActionBar />
         </section>
       )}
     </ViewProviders>
