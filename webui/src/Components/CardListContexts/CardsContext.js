@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer } from "react";
 
-export const pageSize = 24;
+export const pageSize = 50;
 
 export function CardsProvider({ children }) {
   const [cards, cardsDispatch] = useReducer(cardsReducer, []);
