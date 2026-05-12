@@ -2537,3 +2537,84 @@ code {
 .sidebar-add-child-form {
     padding-left: 1.25rem;
 }
+
+/* Card selection outline — no layout shift */
+.card-selected .search-card-art {
+    outline: 2px solid rgba(147, 197, 253, 0.65);
+    outline-offset: 2px;
+    border-radius: 7px;
+}
+
+/* Card selection checkbox */
+.card-checkbox {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 10;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 4px;
+    background: rgba(33, 37, 41, 0.72);
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    padding: 0;
+}
+
+.card-checkbox.visible {
+    opacity: 1;
+}
+
+.card-checkbox:hover,
+.card-checkbox:focus-visible {
+    background: rgba(33, 37, 41, 0.92);
+    outline: none;
+}
+
+/* Selection action bar */
+.selection-action-bar {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(calc(100% + 1.5rem));
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    background: #212529;
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.5);
+    color: #f8f9fa;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+.selection-action-bar.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
+}
+
+.selection-action-bar-count {
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding-right: 0.25rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    margin-right: 0.25rem;
+}
+
+/* List mode selection — consistent color with grid mode */
+.card-list-item.selected {
+    border-left-color: rgba(147, 197, 253, 0.65);
+}
