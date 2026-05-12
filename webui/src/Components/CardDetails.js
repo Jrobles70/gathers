@@ -52,6 +52,8 @@ export default function CardDetails({
   const cardsDispatch = useCardsDispatch();
   const triggerRefresh = useRefreshCardList();
   const hasDetails = details != null;
+  const owningCollection = collections.find((item) => item.id === details?.collectionId);
+  const proxyFromCollection = Boolean(owningCollection?.isProxy);
   const detailsQuantity = details?.quantity ?? 0;
   const detailsFoilQuantity = details?.foilQuantity ?? 0;
   const [selectedCollection, setSelectedCollection] = useState(null);
@@ -96,7 +98,7 @@ export default function CardDetails({
     });
     let add = parseInt(delta) >= 0 && parseInt(deltaFoil) >= 0;
     let url =
-      "/collection/cards/" + collection + "/" + (add ? "add" : "delete");
+      "/collection/cards/" + encodeURIComponent(collection) + "/" + (add ? "add" : "delete");
     let body = {
       id: id,
       collectionId: collection,
@@ -150,7 +152,7 @@ export default function CardDetails({
       : parseCents(purchasePriceInput);
 
     ops
-      .fetch("Updating purchase price for card " + id, {}, `/collection/cards/${details.collectionId}/purchase-price`, {
+      .fetch("Updating purchase price for card " + id, {}, `/collection/cards/${encodeURIComponent(details.collectionId)}/purchase-price`, {
         method: "post",
         headers: {
           Accept: "application/json",
@@ -164,6 +166,31 @@ export default function CardDetails({
       .then((updatedCard) => {
         if (cardsDispatch && updatedCard != null) {
           cardsDispatch({ type: "added", card: updatedCard });
+        }
+      });
+  };
+
+  const setCardProxy = (isProxy) => {
+    if (!hasDetails) return;
+
+    ops
+      .fetch("Updating proxy status for card " + id, {}, `/collection/cards/${encodeURIComponent(details.collectionId)}/proxy`, {
+        method: "post",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id,
+          isProxy,
+        }),
+      })
+      .then((updatedCard) => {
+        if (cardsDispatch && updatedCard != null) {
+          cardsDispatch({ type: "added", card: updatedCard });
+        }
+        if (triggerRefresh) {
+          triggerRefresh(true);
         }
       });
   };
@@ -235,6 +262,17 @@ export default function CardDetails({
               />
               <span>Foil</span>
             </label>
+            {hasDetails && (
+              <label className="search-card-menu-row" title={proxyFromCollection ? "Proxy is inherited from this collection" : "Track this card as proxy"}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(details.isProxy)}
+                  disabled={proxyFromCollection}
+                  onChange={(event) => setCardProxy(event.target.checked)}
+                />
+                <span>{proxyFromCollection ? "Proxy via collection" : "Proxy card"}</span>
+              </label>
+            )}
             {hasDetails && (
               <label className="search-card-menu-field">
                 <span>Purchase price</span>

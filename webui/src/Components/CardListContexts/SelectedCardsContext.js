@@ -23,12 +23,14 @@ export function useSelectedCardsDispatch() {
 }
 
 function selectedCardsReducer(selected, action) {
+  const sameCard = (a, b) => a.id === b.id && a.collectionId === b.collectionId;
   switch (action.type) {
     case "added": {
+      if (selected.some((card) => sameCard(card, action.card))) return selected;
       return [...selected, action.card];
     }
     case "deleted": {
-      return selected.filter((t) => t.id !== action.card.id);
+      return selected.filter((t) => !sameCard(t, action.card));
     }
     case "empty": {
       return [];

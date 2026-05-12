@@ -1,5 +1,6 @@
 use crate::{
     CardPrice, CollectionCard, CollectionCardsParams, CollectionSortField, PersistenceSystemTrait,
+    ProxyFilter,
 };
 use include_dir::{Dir, include_dir};
 use models::CardID;
@@ -14,6 +15,8 @@ use tokio::sync::Mutex;
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 static MIGRATIONS: LazyLock<Migrations<'static>> =
     LazyLock::new(|| Migrations::from_directory(&MIGRATIONS_DIR).expect("AAAAH!"));
+
+const COLLECTION_CARD_SELECT: &str = "SELECT cards.uuid, cards.collection, cards.quantity, cards.foilquantity, cards.timeadded, cards.provider, cards.purchase_price_cents, cards.purchase_price_source, cards.purchase_price_updated_at, (cards.is_proxy OR collection.is_proxy) AS is_proxy FROM cards JOIN collection ON collection.name = cards.collection";
 
 #[derive(Debug, Clone)]
 pub struct SQLitePersistenceSystem {
@@ -52,6 +55,15 @@ fn collection_card_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Collect
         purchase_price_cents: row.get(6)?,
         purchase_price_source: row.get(7)?,
         purchase_price_updated_at: row.get(8)?,
+        is_proxy: row.get(9)?,
+    })
+}
+
+fn collection_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<models::Collection> {
+    Ok(models::Collection {
+        id: row.get(0)?,
+        can_remove: row.get(1)?,
+        is_proxy: row.get(2)?,
     })
 }
 
@@ -71,10 +83,24 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     ) -> eyre::Result<CollectionID> {
         let conn = self.connection.lock().await;
 
+        let can_delete = conn.query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM collection
+                WHERE name = ?1
+                  AND (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1)
+            )",
+            params![name],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if !can_delete {
+            return Err(eyre::eyre!("Cannot remove the last collection"));
+        }
+
         if let Some(target_collection_id) = move_to {
-            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at)
-            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as timeupdated, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at FROM
-	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at FROM cards WHERE collection = ?2) WHERE true
+            let query = "INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at, is_proxy)
+            SELECT uuid, ?1 as collection, quantity, foilquantity, timeadded, strftime('%Y-%m-%dT%H:%M:%SZ', 'now') as timeupdated, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at, is_proxy FROM
+	(SELECT uuid, ?2 as collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at, is_proxy FROM cards WHERE collection = ?2) WHERE true
             ON CONFLICT (uuid, collection)
             DO UPDATE SET
                 quantity = cards.quantity + EXCLUDED.quantity,
@@ -82,7 +108,8 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                 timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
                 purchase_price_cents = COALESCE(cards.purchase_price_cents, EXCLUDED.purchase_price_cents),
                 purchase_price_source = COALESCE(cards.purchase_price_source, EXCLUDED.purchase_price_source),
-                purchase_price_updated_at = COALESCE(cards.purchase_price_updated_at, EXCLUDED.purchase_price_updated_at);";
+                purchase_price_updated_at = COALESCE(cards.purchase_price_updated_at, EXCLUDED.purchase_price_updated_at),
+                is_proxy = cards.is_proxy OR EXCLUDED.is_proxy;";
             conn.execute(query, params![target_collection_id, name])?;
         }
 
@@ -90,11 +117,37 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             "DELETE FROM cards WHERE collection IN (SELECT name FROM collection WHERE name = ?1)";
         conn.execute(delete_cards_query, params![name])?;
 
-        let delete_collection_query =
-            "DELETE FROM collection WHERE name = ?1 AND can_remove = TRUE";
+        let delete_collection_query = "DELETE FROM collection WHERE name = ?1";
         conn.execute(delete_collection_query, params![name])?;
 
         Ok(name.clone())
+    }
+
+    async fn rename_collection(
+        &mut self,
+        old_name: &CollectionID,
+        new_name: CollectionID,
+    ) -> eyre::Result<models::Collection> {
+        let mut conn = self.connection.lock().await;
+        let tx = conn.transaction()?;
+        let updated = tx.execute(
+            "UPDATE collection SET name = ?2 WHERE name = ?1",
+            params![old_name, new_name],
+        )?;
+        if updated == 0 {
+            return Err(eyre::eyre!("Collection not found"));
+        }
+        tx.execute(
+            "UPDATE cards SET collection = ?2 WHERE collection = ?1",
+            params![old_name, new_name],
+        )?;
+        let collection = tx.query_row(
+            "SELECT name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy FROM collection WHERE name = ?1",
+            params![new_name],
+            collection_from_row,
+        )?;
+        tx.commit()?;
+        Ok(collection)
     }
 
     async fn move_cards_between_collections(
@@ -134,6 +187,11 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             )
             .await?;
 
+            if c.is_proxy {
+                self.set_card_proxy(&to_collection_id, &c.uuid, true)
+                    .await?;
+            }
+
             let purchase_price_cents = c.purchase_price_cents.or(source_card.purchase_price_cents);
             let purchase_price_source = c
                 .purchase_price_source
@@ -150,8 +208,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                     &c.uuid,
                     Some(price_cents),
                     purchase_price_source,
-                    purchase_price_updated_at
-                        .unwrap_or(&chrono::Utc::now().to_rfc3339()),
+                    purchase_price_updated_at.unwrap_or(&chrono::Utc::now().to_rfc3339()),
                 )
                 .await?;
             }
@@ -165,8 +222,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         let mut collections = Vec::new();
         if let Some(f) = filter {
             let pattern = format!("%{}%", f);
-            let mut stmt =
-                conn.prepare("SELECT name FROM collection WHERE name LIKE ?1")?;
+            let mut stmt = conn.prepare("SELECT name FROM collection WHERE name LIKE ?1")?;
             let collection_iter = stmt.query_map(params![pattern], |row| {
                 let name: String = row.get(0)?;
                 Ok(name)
@@ -188,27 +244,73 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
         Ok(collections)
     }
 
+    async fn list_collection_details(
+        &self,
+        filter: Option<String>,
+    ) -> eyre::Result<Vec<models::Collection>> {
+        let conn = self.connection.lock().await;
+
+        let query = "SELECT name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy FROM collection";
+        let mut collections = Vec::new();
+        if let Some(f) = filter {
+            let pattern = format!("%{}%", f);
+            let mut stmt = conn.prepare(&format!("{query} WHERE name LIKE ?1"))?;
+            let collection_iter = stmt.query_map(params![pattern], collection_from_row)?;
+            for collection in collection_iter {
+                collections.push(collection?);
+            }
+        } else {
+            let mut stmt = conn.prepare(query)?;
+            let collection_iter = stmt.query_map(params![], collection_from_row)?;
+            for collection in collection_iter {
+                collections.push(collection?);
+            }
+        }
+
+        Ok(collections)
+    }
+
     async fn get_cards_in_collection_count(
         &self,
         collection_id: CollectionID,
         providers: &[String],
+        proxy_filter: ProxyFilter,
     ) -> eyre::Result<usize> {
         let conn = self.connection.lock().await;
 
-        let count: usize = if providers.is_empty() {
-            let mut stmt = conn.prepare("SELECT COUNT(ALL uuid) FROM cards WHERE collection = ?1")?;
-            stmt.query_row(params![collection_id], |row| row.get::<_, u32>(0))? as usize
-        } else {
-            let placeholders: Vec<String> = (2..=providers.len() + 1).map(|i| format!("?{i}")).collect();
-            let query = format!(
-                "SELECT COUNT(ALL uuid) FROM cards WHERE collection = ?1 AND provider IN ({})",
-                placeholders.join(", ")
-            );
-            let mut query_params: Vec<String> = vec![collection_id];
+        let mut conditions = vec!["cards.collection = ?1".to_string()];
+        let mut query_params: Vec<String> = vec![collection_id];
+
+        if !providers.is_empty() {
+            let placeholders: Vec<String> = providers
+                .iter()
+                .enumerate()
+                .map(|(i, _)| format!("?{}", i + 2))
+                .collect();
+            conditions.push(format!("cards.provider IN ({})", placeholders.join(", ")));
             query_params.extend_from_slice(providers);
-            let mut stmt = conn.prepare(&query)?;
-            stmt.query_row(rusqlite::params_from_iter(query_params.iter()), |row| row.get::<_, u32>(0))? as usize
-        };
+        }
+
+        match proxy_filter {
+            ProxyFilter::Include => {}
+            ProxyFilter::Exclude => {
+                conditions
+                    .push("(cards.is_proxy = FALSE AND collection.is_proxy = FALSE)".to_string());
+            }
+            ProxyFilter::Only => {
+                conditions
+                    .push("(cards.is_proxy = TRUE OR collection.is_proxy = TRUE)".to_string());
+            }
+        }
+
+        let query = format!(
+            "SELECT COUNT(ALL cards.uuid) FROM cards JOIN collection ON collection.name = cards.collection WHERE {}",
+            conditions.join(" AND ")
+        );
+        let mut stmt = conn.prepare(&query)?;
+        let count = stmt.query_row(rusqlite::params_from_iter(query_params.iter()), |row| {
+            row.get::<_, u32>(0)
+        })? as usize;
 
         Ok(count)
     }
@@ -232,6 +334,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
                     foil_quantity,
                     time_added: time_added.to_string(),
                     provider: provider.to_string(),
+                    is_proxy: false,
                     purchase_price_cents: None,
                     purchase_price_source: None,
                     purchase_price_updated_at: None,
@@ -255,7 +358,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
 
         let placeholders = cards
             .iter()
-            .map(|_| "(?, ?, ?, ?, ?, ?, ?)")
+            .map(|_| "(?, ?, ?, ?, ?, ?, ?, ?)")
             .collect::<Vec<_>>()
             .join(",");
         let mut params = vec![];
@@ -267,21 +370,24 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             params.push(c.time_added.clone());
             params.push(c.time_added.clone()); // timeupdated = timeadded on creation
             params.push(c.provider.clone());
+            params.push((c.is_proxy as i32).to_string());
         });
         let query = format!(
             "
-INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider)
+INSERT INTO cards (uuid, collection, quantity, foilquantity, timeadded, timeupdated, provider, is_proxy)
 VALUES {}
 ON CONFLICT (uuid, collection) DO UPDATE SET
  quantity = max(cards.quantity + EXCLUDED.quantity, 0),
  foilquantity = max(cards.foilquantity + EXCLUDED.foilquantity, 0),
- timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-RETURNING uuid, collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at
+ timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+ is_proxy = cards.is_proxy OR EXCLUDED.is_proxy
+RETURNING uuid, collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at, (is_proxy OR (SELECT is_proxy FROM collection AS returned_collection WHERE returned_collection.name = cards.collection))
 ",
             placeholders
         );
         let mut stmt = conn.prepare(&query)?;
-        let card_iter = stmt.query_map(rusqlite::params_from_iter(params), collection_card_from_row)?;
+        let card_iter =
+            stmt.query_map(rusqlite::params_from_iter(params), collection_card_from_row)?;
         let mut cards = Vec::new();
         for card in card_iter.flatten() {
             cards.push(card);
@@ -301,33 +407,52 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider, purchas
     ) -> eyre::Result<Vec<CollectionCard>> {
         let conn = self.connection.lock().await;
 
-        let mut conditions = vec!["collection = ?1".to_string()];
+        let mut conditions = vec!["cards.collection = ?1".to_string()];
         let mut query_params: Vec<String> = vec![collection_id.clone()];
         let mut i = 2;
 
         if let Some(provider) = &params.provider {
-            conditions.push(format!("provider = ?{i}"));
+            conditions.push(format!("cards.provider = ?{i}"));
             query_params.push(provider.clone());
             i += 1;
         } else if !params.providers.is_empty() {
-            let placeholders: Vec<String> = params.providers.iter().enumerate()
+            let placeholders: Vec<String> = params
+                .providers
+                .iter()
+                .enumerate()
                 .map(|(j, _)| format!("?{}", i + j))
                 .collect();
-            conditions.push(format!("provider IN ({})", placeholders.join(", ")));
+            conditions.push(format!("cards.provider IN ({})", placeholders.join(", ")));
             query_params.extend(params.providers.clone());
             i += params.providers.len();
         }
 
+        match params.proxy_filter {
+            ProxyFilter::Include => {}
+            ProxyFilter::Exclude => {
+                conditions
+                    .push("(cards.is_proxy = FALSE AND collection.is_proxy = FALSE)".to_string());
+            }
+            ProxyFilter::Only => {
+                conditions
+                    .push("(cards.is_proxy = TRUE OR collection.is_proxy = TRUE)".to_string());
+            }
+        }
+
         let sort_col = match &params.sort_by {
-            Some(CollectionSortField::Quantity) => "quantity",
-            Some(CollectionSortField::FoilQuantity) => "foilquantity",
-            Some(CollectionSortField::Provider) => "provider",
-            _ => "timeadded",
+            Some(CollectionSortField::Quantity) => "cards.quantity",
+            Some(CollectionSortField::FoilQuantity) => "cards.foilquantity",
+            Some(CollectionSortField::Provider) => "cards.provider",
+            _ => "cards.timeadded",
         };
-        let sort_dir = if matches!(&params.sort_order, Some(SortOrder::Desc)) { "DESC" } else { "ASC" };
+        let sort_dir = if matches!(&params.sort_order, Some(SortOrder::Desc)) {
+            "DESC"
+        } else {
+            "ASC"
+        };
 
         let query = format!(
-            "SELECT uuid, collection, quantity, foilquantity, timeadded, provider, purchase_price_cents, purchase_price_source, purchase_price_updated_at FROM cards WHERE {} ORDER BY {} {} LIMIT ?{} OFFSET ?{}",
+            "{COLLECTION_CARD_SELECT} WHERE {} ORDER BY {} {} LIMIT ?{} OFFSET ?{}",
             conditions.join(" AND "),
             sort_col,
             sort_dir,
@@ -526,7 +651,10 @@ ON CONFLICT (source, scryfall_id) DO UPDATE SET
                  last_attempt_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
              WHERE source = ?1 AND scryfall_id IN ({placeholders})"
         );
-        conn.execute(&update_query, rusqlite::params_from_iter(query_params.iter()))?;
+        conn.execute(
+            &update_query,
+            rusqlite::params_from_iter(query_params.iter()),
+        )?;
         conn.execute(
             "DELETE FROM card_price_refresh_queue WHERE attempts >= 5",
             [],
@@ -553,7 +681,8 @@ ON CONFLICT (source, scryfall_id) DO UPDATE SET
                  timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
              WHERE collection = ?1 AND uuid = ?2
              RETURNING uuid, collection, quantity, foilquantity, timeadded, provider,
-                       purchase_price_cents, purchase_price_source, purchase_price_updated_at",
+                       purchase_price_cents, purchase_price_source, purchase_price_updated_at,
+                       (is_proxy OR (SELECT is_proxy FROM collection AS returned_collection WHERE returned_collection.name = cards.collection))",
         )?;
 
         let card = stmt.query_row(
@@ -594,6 +723,47 @@ ON CONFLICT (source, scryfall_id) DO UPDATE SET
             ],
         )?;
         Ok(())
+    }
+
+    async fn set_collection_proxy(
+        &mut self,
+        collection_id: &CollectionID,
+        is_proxy: bool,
+    ) -> eyre::Result<models::Collection> {
+        let conn = self.connection.lock().await;
+        let mut stmt = conn.prepare(
+            "UPDATE collection
+             SET is_proxy = ?2
+             WHERE name = ?1
+             RETURNING name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy",
+        )?;
+
+        let collection = stmt.query_row(params![collection_id, is_proxy], collection_from_row)?;
+
+        Ok(collection)
+    }
+
+    async fn set_card_proxy(
+        &mut self,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
+        is_proxy: bool,
+    ) -> eyre::Result<CollectionCard> {
+        let conn = self.connection.lock().await;
+        conn.execute(
+            "UPDATE cards
+             SET is_proxy = ?3,
+                 timeupdated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE collection = ?1 AND uuid = ?2",
+            params![collection_id, card_uuid, is_proxy],
+        )?;
+
+        let mut stmt = conn.prepare(&format!(
+            "{COLLECTION_CARD_SELECT} WHERE cards.collection = ?1 AND cards.uuid = ?2"
+        ))?;
+        let card = stmt.query_row(params![collection_id, card_uuid], collection_card_from_row)?;
+
+        Ok(card)
     }
 }
 
@@ -683,15 +853,14 @@ mod tests {
             add_card_to_collection(&mut p, &DEFAULT.into(), &"default_card".to_string(), 3, 1)
                 .await;
 
-        // Try to remove the Default collection (should not be removed because can_remove is false)
-        // But cards should still be moved to the test collection
+        // Default can be removed once another collection exists, and its cards can be moved first.
         p.remove_collection(&DEFAULT.into(), Some(collection_id.clone()))
             .await
             .unwrap();
 
-        // Verify Default collection still exists
+        // Verify Default collection is gone
         let collections = p.list_collections(None).await.unwrap();
-        assert!(collections.contains(&DEFAULT.into()));
+        assert!(!collections.contains(&DEFAULT.into()));
 
         // Verify cards were moved to collection 1
         let cards = p
@@ -903,7 +1072,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_collection_that_cant_be_removed() {
+    async fn test_remove_default_collection_when_another_exists() {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let collection_id = p
             .add_collection("Test Collection".to_string())
@@ -911,14 +1080,14 @@ mod tests {
             .unwrap();
         add_card_to_collection(&mut p, &collection_id, &"12345".to_string(), 5, 3).await;
         let c = p
-            .get_cards_in_collection_count(DEFAULT.into(), &[])
+            .get_cards_in_collection_count(DEFAULT.into(), &[], ProxyFilter::Include)
             .await
             .unwrap();
         assert_eq!(c, 0);
 
         add_card_to_collection(&mut p, &DEFAULT.into(), &"12346".to_string(), 2, 8).await;
         let c = p
-            .get_cards_in_collection_count(DEFAULT.into(), &[])
+            .get_cards_in_collection_count(DEFAULT.into(), &[], ProxyFilter::Include)
             .await
             .unwrap();
         assert_eq!(c, 1);
@@ -930,14 +1099,40 @@ mod tests {
         assert_eq!(cards.len(), 1);
         assert_eq!(p.list_collections(None).await.unwrap().len(), 2);
         p.remove_collection(&DEFAULT.into(), None).await.unwrap();
-        assert_eq!(p.list_collections(None).await.unwrap().len(), 2);
-        p.remove_collection(&collection_id, None).await.unwrap();
         assert_eq!(p.list_collections(None).await.unwrap().len(), 1);
+        assert!(
+            !p.list_collections(None)
+                .await
+                .unwrap()
+                .contains(&DEFAULT.into())
+        );
         let cards = p
             .get_cards_in_collection_paginated(&DEFAULT.into(), CollectionCardsParams::new(0, 5))
             .await
             .unwrap();
         assert_eq!(cards.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_remove_last_collection_is_rejected() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        add_card_to_collection(&mut p, &DEFAULT.into(), &"12346".to_string(), 2, 8).await;
+
+        let err = p
+            .remove_collection(&DEFAULT.into(), None)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Cannot remove the last collection")
+        );
+        let collections = p.list_collections(None).await.unwrap();
+        assert_eq!(collections, vec![DEFAULT.to_string()]);
+        let cards = p
+            .get_cards_in_collection_paginated(&DEFAULT.into(), CollectionCardsParams::new(0, 5))
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 1);
     }
 
     #[tokio::test]
@@ -1005,7 +1200,10 @@ mod tests {
         add_card_to_collection(&mut p, &DEFAULT.into(), &"default_card".to_string(), 3, 1).await;
 
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.to_string(), CollectionCardsParams::new(0, 100))
+            .get_cards_in_collection_paginated(
+                &DEFAULT.to_string(),
+                CollectionCardsParams::new(0, 100),
+            )
             .await
             .unwrap();
 
@@ -1019,6 +1217,7 @@ mod tests {
                 time_added: "".to_string(),
                 collection: collection_id.clone(),
                 provider: "".to_string(),
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1032,7 +1231,10 @@ mod tests {
         assert!(collections.contains(&DEFAULT.to_string()));
 
         let cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.to_string(), CollectionCardsParams::new(0, 100))
+            .get_cards_in_collection_paginated(
+                &DEFAULT.to_string(),
+                CollectionCardsParams::new(0, 100),
+            )
             .await
             .unwrap();
         assert_eq!(cards.len(), 2);
@@ -1074,6 +1276,7 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        is_proxy: false,
                         purchase_price_cents: None,
                         purchase_price_source: None,
                         purchase_price_updated_at: None,
@@ -1085,6 +1288,7 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        is_proxy: false,
                         purchase_price_cents: None,
                         purchase_price_source: None,
                         purchase_price_updated_at: None,
@@ -1117,6 +1321,7 @@ mod tests {
                     time_added: time_added.clone(),
                     provider: "".to_string(),
                     collection: collection_id.clone(),
+                    is_proxy: false,
                     purchase_price_cents: None,
                     purchase_price_source: None,
                     purchase_price_updated_at: None,
@@ -1146,6 +1351,7 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        is_proxy: false,
                         purchase_price_cents: None,
                         purchase_price_source: None,
                         purchase_price_updated_at: None,
@@ -1157,6 +1363,7 @@ mod tests {
                         time_added: time_added.clone(),
                         provider: "".to_string(),
                         collection: collection_id.clone(),
+                        is_proxy: false,
                         purchase_price_cents: None,
                         purchase_price_source: None,
                         purchase_price_updated_at: None,
@@ -1212,6 +1419,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_rename_collection_preserves_cards_and_proxy_flag() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let original = p.add_collection("Old Name".to_string()).await.unwrap();
+        p.set_collection_proxy(&original, true).await.unwrap();
+        add_card_to_collection(&mut p, &original, &"card1".to_string(), 3, 0).await;
+
+        let renamed = p
+            .rename_collection(&original, "New Name".to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(renamed.id, "New Name");
+        assert!(renamed.is_proxy);
+        let collections = p.list_collections(None).await.unwrap();
+        assert!(!collections.contains(&original));
+        assert!(collections.contains(&"New Name".to_string()));
+
+        let cards = p
+            .get_cards_in_collection_paginated(
+                &"New Name".to_string(),
+                CollectionCardsParams::new(0, 10),
+            )
+            .await
+            .unwrap();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].uuid, "card1");
+        assert!(cards[0].is_proxy);
+    }
+
+    #[tokio::test]
+    async fn test_proxy_filters_include_collection_and_card_proxy() {
+        let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
+        let regular = p.add_collection("Regular".to_string()).await.unwrap();
+        let proxy = p.add_collection("Proxy".to_string()).await.unwrap();
+        p.set_collection_proxy(&proxy, true).await.unwrap();
+
+        add_card_to_collection(&mut p, &regular, &"regular_card".to_string(), 1, 0).await;
+        add_card_to_collection(&mut p, &regular, &"card_proxy".to_string(), 1, 0).await;
+        p.set_card_proxy(&regular, &"card_proxy".to_string(), true)
+            .await
+            .unwrap();
+        add_card_to_collection(&mut p, &proxy, &"collection_proxy".to_string(), 1, 0).await;
+
+        let mut only_proxy = CollectionCardsParams::new(0, 10);
+        only_proxy.proxy_filter = ProxyFilter::Only;
+        let regular_proxy_cards = p
+            .get_cards_in_collection_paginated(&regular, only_proxy)
+            .await
+            .unwrap();
+        assert_eq!(regular_proxy_cards.len(), 1);
+        assert_eq!(regular_proxy_cards[0].uuid, "card_proxy");
+
+        let mut exclude_proxy = CollectionCardsParams::new(0, 10);
+        exclude_proxy.proxy_filter = ProxyFilter::Exclude;
+        let proxy_collection_regular_cards = p
+            .get_cards_in_collection_paginated(&proxy, exclude_proxy)
+            .await
+            .unwrap();
+        assert!(proxy_collection_regular_cards.is_empty());
+
+        let proxy_count = p
+            .get_cards_in_collection_count(regular, &[], ProxyFilter::Only)
+            .await
+            .unwrap();
+        assert_eq!(proxy_count, 1);
+    }
+
+    #[tokio::test]
     async fn test_quantity_floor_cannot_go_negative() {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
 
@@ -1264,6 +1539,7 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: collection_id.clone(),
                 provider: "".to_string(),
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1284,7 +1560,10 @@ mod tests {
 
         // Default collection untouched
         let default_cards = p
-            .get_cards_in_collection_paginated(&DEFAULT.to_string(), CollectionCardsParams::new(0, 10))
+            .get_cards_in_collection_paginated(
+                &DEFAULT.to_string(),
+                CollectionCardsParams::new(0, 10),
+            )
             .await
             .unwrap();
         assert_eq!(default_cards.len(), 0);
@@ -1380,6 +1659,7 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(), // simulates the API sending empty provider
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1438,6 +1718,7 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(), // simulates the API sending empty provider
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1494,6 +1775,7 @@ mod tests {
                 time_added: "2023-01-01T00:00:00Z".to_string(),
                 collection: col.clone(),
                 provider: "".to_string(),
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1604,6 +1886,7 @@ mod tests {
                 time_added: OLD_TIME.to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(),
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1640,6 +1923,7 @@ mod tests {
                 time_added: OLD_TIME.to_string(),
                 collection: col_a.clone(),
                 provider: "".to_string(),
+                is_proxy: false,
                 purchase_price_cents: None,
                 purchase_price_source: None,
                 purchase_price_updated_at: None,
@@ -1680,9 +1964,15 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"card_a".to_string(), 5, 0, OLD_TIME, "").await.unwrap();
-        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 0, OLD_TIME, "").await.unwrap();
-        p.add_card_to_collection(&col, &"card_c".to_string(), 3, 0, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_a".to_string(), 5, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"card_c".to_string(), 3, 0, OLD_TIME, "")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1691,8 +1981,12 @@ mod tests {
             sort_order: Some(SortOrder::Asc),
             provider: None,
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert_eq!(cards.len(), 3);
         assert_eq!(cards[0].quantity, 1);
@@ -1705,9 +1999,15 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"card_a".to_string(), 5, 0, OLD_TIME, "").await.unwrap();
-        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 0, OLD_TIME, "").await.unwrap();
-        p.add_card_to_collection(&col, &"card_c".to_string(), 3, 0, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_a".to_string(), 5, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 0, OLD_TIME, "")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"card_c".to_string(), 3, 0, OLD_TIME, "")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1716,8 +2016,12 @@ mod tests {
             sort_order: Some(SortOrder::Desc),
             provider: None,
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert_eq!(cards.len(), 3);
         assert_eq!(cards[0].quantity, 5);
@@ -1730,9 +2034,15 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"card_a".to_string(), 1, 10, OLD_TIME, "").await.unwrap();
-        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 2, OLD_TIME, "").await.unwrap();
-        p.add_card_to_collection(&col, &"card_c".to_string(), 1, 7, OLD_TIME, "").await.unwrap();
+        p.add_card_to_collection(&col, &"card_a".to_string(), 1, 10, OLD_TIME, "")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"card_b".to_string(), 1, 2, OLD_TIME, "")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"card_c".to_string(), 1, 7, OLD_TIME, "")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1741,8 +2051,12 @@ mod tests {
             sort_order: Some(SortOrder::Desc),
             provider: None,
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert_eq!(cards.len(), 3);
         assert_eq!(cards[0].foil_quantity, 10);
@@ -1755,9 +2069,15 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"mtg1".to_string(), 1, 0, OLD_TIME, "MagicSQLite").await.unwrap();
-        p.add_card_to_collection(&col, &"mtg2".to_string(), 2, 0, OLD_TIME, "MagicSQLite").await.unwrap();
-        p.add_card_to_collection(&col, &"rb1".to_string(), 1, 0, OLD_TIME, "RiftboundSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"mtg1".to_string(), 1, 0, OLD_TIME, "MagicSQLite")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"mtg2".to_string(), 2, 0, OLD_TIME, "MagicSQLite")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"rb1".to_string(), 1, 0, OLD_TIME, "RiftboundSQLite")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1766,8 +2086,12 @@ mod tests {
             sort_order: None,
             provider: Some("MagicSQLite".to_string()),
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert_eq!(cards.len(), 2);
         assert!(cards.iter().all(|c| c.provider == "MagicSQLite"));
@@ -1778,7 +2102,9 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"card1".to_string(), 1, 0, OLD_TIME, "MagicSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"card1".to_string(), 1, 0, OLD_TIME, "MagicSQLite")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1787,8 +2113,12 @@ mod tests {
             sort_order: None,
             provider: Some("PokemonSQLite".to_string()),
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert!(cards.is_empty());
     }
@@ -1798,9 +2128,15 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"mtg_high".to_string(), 5, 0, OLD_TIME, "MagicSQLite").await.unwrap();
-        p.add_card_to_collection(&col, &"mtg_low".to_string(), 1, 0, OLD_TIME, "MagicSQLite").await.unwrap();
-        p.add_card_to_collection(&col, &"rb1".to_string(), 99, 0, OLD_TIME, "RiftboundSQLite").await.unwrap();
+        p.add_card_to_collection(&col, &"mtg_high".to_string(), 5, 0, OLD_TIME, "MagicSQLite")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"mtg_low".to_string(), 1, 0, OLD_TIME, "MagicSQLite")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"rb1".to_string(), 99, 0, OLD_TIME, "RiftboundSQLite")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1809,8 +2145,12 @@ mod tests {
             sort_order: Some(SortOrder::Asc),
             provider: Some("MagicSQLite".to_string()),
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert_eq!(cards.len(), 2);
         assert_eq!(cards[0].uuid, "mtg_low");
@@ -1822,9 +2162,15 @@ mod tests {
         let mut p = SQLitePersistenceSystem::new(true, None).unwrap();
         let col = p.add_collection("Col".to_string()).await.unwrap();
 
-        p.add_card_to_collection(&col, &"z_card".to_string(), 1, 0, OLD_TIME, "ZProvider").await.unwrap();
-        p.add_card_to_collection(&col, &"a_card".to_string(), 1, 0, OLD_TIME, "AProvider").await.unwrap();
-        p.add_card_to_collection(&col, &"m_card".to_string(), 1, 0, OLD_TIME, "MProvider").await.unwrap();
+        p.add_card_to_collection(&col, &"z_card".to_string(), 1, 0, OLD_TIME, "ZProvider")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"a_card".to_string(), 1, 0, OLD_TIME, "AProvider")
+            .await
+            .unwrap();
+        p.add_card_to_collection(&col, &"m_card".to_string(), 1, 0, OLD_TIME, "MProvider")
+            .await
+            .unwrap();
 
         let params = CollectionCardsParams {
             offset: 0,
@@ -1833,8 +2179,12 @@ mod tests {
             sort_order: Some(SortOrder::Asc),
             provider: None,
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         };
-        let cards = p.get_cards_in_collection_paginated(&col, params).await.unwrap();
+        let cards = p
+            .get_cards_in_collection_paginated(&col, params)
+            .await
+            .unwrap();
 
         assert_eq!(cards.len(), 3);
         assert_eq!(cards[0].provider, "AProvider");

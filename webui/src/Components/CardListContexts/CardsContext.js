@@ -25,11 +25,12 @@ export function useCardsDispatch() {
 }
 
 function cardsReducer(cards, action) {
+  const sameCard = (a, b) => a.id === b.id && a.collectionId === b.collectionId;
   switch (action.type) {
     case "added": {
       let updated = false;
       const newCards = cards.map((c) => {
-        if (c.id === action.card.id) {
+        if (sameCard(c, action.card)) {
           updated = true;
           return action.card;
         }
@@ -41,7 +42,7 @@ function cardsReducer(cards, action) {
       return cards;
     }
     case "deleted": {
-      return cards.filter((t) => t.id !== action.card.id);
+      return cards.filter((t) => !sameCard(t, action.card));
     }
     case "overwrite": {
       return action.cards;

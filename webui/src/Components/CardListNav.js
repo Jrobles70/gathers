@@ -6,6 +6,9 @@ import ImportCards from "./CardListNavButtons/ImportCards";
 import DeleteCollection from "./CardListNavButtons/DeleteCollection";
 import ExportCollection from "./CardListNavButtons/ExportCollection";
 import CollectionStats from "./CollectionStats";
+import ProxyCards from "./CardListNavButtons/ProxyCards";
+import RenameCollection from "./CardListNavButtons/RenameCollection";
+import CollectionProxyToggle from "./CardListNavButtons/CollectionProxyToggle";
 
 export default function CardListNav() {
   const [otherOptionsOpen, setOtherOptionsOpen] = useState(false);
@@ -20,6 +23,7 @@ export default function CardListNav() {
           <SelectionTracker />
           <DeleteCards />
         </div>
+        <ProxyCards />
         <MoveCards />
       </section>
 
@@ -39,6 +43,8 @@ export default function CardListNav() {
         </button>
         {otherOptionsOpen && (
           <div className="collection-panel-dropdown">
+            <RenameCollection />
+            <CollectionProxyToggle />
             <ExportCollection />
             <DeleteCollection />
           </div>

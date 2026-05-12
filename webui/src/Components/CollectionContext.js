@@ -5,10 +5,25 @@ import {
   useReducer,
 } from "react";
 import { useOperations, useMode } from "../OperationsContext";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
+
+export const ALL_COLLECTIONS_ID = "__all__";
+export const ALL_COLLECTIONS_LABEL = "All Collections";
+
+export function isAllCollections(collection) {
+  return collection === ALL_COLLECTIONS_ID;
+}
+
+export function collectionDisplayName(collection) {
+  return isAllCollections(collection) ? ALL_COLLECTIONS_LABEL : collection;
+}
 
 export function CollectionsProvider({ children }) {
   const { collection = "Main", pageNumber = 1 } = useParams();
+  const location = useLocation();
+  const activeCollection = location.pathname.startsWith("/collections")
+    ? ALL_COLLECTIONS_ID
+    : collection;
   const [collections, collectionsDispatch] = useReducer(collectionsReducer, []);
 
   const { fetch: opsFetch } = useOperations();
@@ -25,7 +40,7 @@ export function CollectionsProvider({ children }) {
   }, [collectionsEnabled, opsFetch]);
 
   return (
-    <CollectionContext.Provider value={collection}>
+    <CollectionContext.Provider value={activeCollection}>
       <PageNumberContext.Provider value={pageNumber}>
         <CollectionsContext.Provider value={collections}>
           <CollectionsDispatchContext.Provider value={collectionsDispatch}>
@@ -60,7 +75,8 @@ export function useCollectionsDispatch() {
 function collectionsReducer(collections, action) {
   switch (action.type) {
     case "added": {
-      return [...collections, action.item];
+      const exists = collections.some((collection) => collection.id === action.item.id);
+      return exists ? collections : [...collections, action.item];
     }
     case "addrange": {
       return [...collections, ...action.collections];
@@ -70,6 +86,16 @@ function collectionsReducer(collections, action) {
     }
     case "deleted": {
       return collections.filter((t) => t.id !== action.id);
+    }
+    case "renamed": {
+      return collections.map((collection) =>
+        collection.id === action.from ? action.item : collection,
+      );
+    }
+    case "updated": {
+      return collections.map((collection) =>
+        collection.id === action.item.id ? action.item : collection,
+      );
     }
     default: {
       throw Error("Unknown action: " + action.type);

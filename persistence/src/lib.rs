@@ -34,6 +34,14 @@ pub enum CollectionSortField {
     Provider,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ProxyFilter {
+    #[default]
+    Include,
+    Exclude,
+    Only,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct CollectionCardsParams {
     pub offset: usize,
@@ -44,6 +52,7 @@ pub struct CollectionCardsParams {
     pub provider: Option<String>,
     /// Filter to any of these providers (ignored if `provider` is set).
     pub providers: Vec<String>,
+    pub proxy_filter: ProxyFilter,
 }
 
 impl CollectionCardsParams {
@@ -55,6 +64,7 @@ impl CollectionCardsParams {
             sort_order: None,
             provider: None,
             providers: vec![],
+            proxy_filter: ProxyFilter::Include,
         }
     }
 }
@@ -78,15 +88,27 @@ pub trait PersistenceSystemTrait {
         move_to: Option<CollectionID>,
     ) -> impl std::future::Future<Output = eyre::Result<CollectionID>>;
 
+    fn rename_collection(
+        &mut self,
+        old_name: &CollectionID,
+        new_name: CollectionID,
+    ) -> impl std::future::Future<Output = eyre::Result<models::Collection>>;
+
     fn list_collections(
         &self,
         filter: Option<String>,
     ) -> impl std::future::Future<Output = eyre::Result<Vec<CollectionID>>>;
 
+    fn list_collection_details(
+        &self,
+        filter: Option<String>,
+    ) -> impl std::future::Future<Output = eyre::Result<Vec<models::Collection>>>;
+
     fn get_cards_in_collection_count(
         &self,
         collection_id: CollectionID,
         providers: &[String],
+        proxy_filter: ProxyFilter,
     ) -> impl std::future::Future<Output = eyre::Result<usize>>;
 
     fn add_card_to_collection(
@@ -170,6 +192,19 @@ pub trait PersistenceSystemTrait {
         source: &str,
         updated_at: &str,
     ) -> impl std::future::Future<Output = eyre::Result<()>>;
+
+    fn set_collection_proxy(
+        &mut self,
+        collection_id: &CollectionID,
+        is_proxy: bool,
+    ) -> impl std::future::Future<Output = eyre::Result<models::Collection>>;
+
+    fn set_card_proxy(
+        &mut self,
+        collection_id: &CollectionID,
+        card_uuid: &CardID,
+        is_proxy: bool,
+    ) -> impl std::future::Future<Output = eyre::Result<CollectionCard>>;
 }
 
 fn csv_cards_from_text(csv_text: &str) -> eyre::Result<Vec<CSVCard>> {
@@ -200,9 +235,10 @@ fn csv_cards_from_manabox_records<R: std::io::Read>(
             let set_code = manabox_field(&record, set_code_index, "Set code")?
                 .trim()
                 .to_ascii_uppercase();
-            let collector_number = manabox_field(&record, collector_number_index, "Collector number")?
-                .trim()
-                .to_string();
+            let collector_number =
+                manabox_field(&record, collector_number_index, "Collector number")?
+                    .trim()
+                    .to_string();
             let quantity = manabox_field(&record, quantity_index, "Quantity")?
                 .trim()
                 .parse::<u32>()?;
@@ -234,7 +270,10 @@ fn manabox_header_index(headers: &csv::StringRecord, expected: &str) -> eyre::Re
 }
 
 fn normalize_manabox_header(header: &str) -> String {
-    header.trim_start_matches('\u{feff}').trim().to_ascii_lowercase()
+    header
+        .trim_start_matches('\u{feff}')
+        .trim()
+        .to_ascii_lowercase()
 }
 
 fn manabox_field<'a>(
@@ -370,6 +409,7 @@ impl PersistenceSystem {
                     collection: collection_id.clone(),
                     time_added: time_added.clone(),
                     provider: c.3.clone(),
+                    is_proxy: false,
                     purchase_price_cents: None,
                     purchase_price_source: None,
                     purchase_price_updated_at: None,
@@ -399,7 +439,10 @@ impl PersistenceSystem {
         let limit = 100;
         loop {
             let cards = self
-                .get_cards_in_collection_paginated(collection_id, CollectionCardsParams::new(offset, limit))
+                .get_cards_in_collection_paginated(
+                    collection_id,
+                    CollectionCardsParams::new(offset, limit),
+                )
                 .await?;
             if cards.is_empty() {
                 break;
@@ -419,11 +462,12 @@ impl PersistenceSystem {
                 Default::default();
             for (provider, ids) in &ids_by_provider {
                 if let Some(system) = systems_by_name.get(provider)
-                    && let Ok(result) = system.get_cards_by_ids(ids.clone()).await {
-                        for (uuid, card) in result {
-                            looked_up.insert(uuid, (card, system.name().to_string()));
-                        }
+                    && let Ok(result) = system.get_cards_by_ids(ids.clone()).await
+                {
+                    for (uuid, card) in result {
+                        looked_up.insert(uuid, (card, system.name().to_string()));
                     }
+                }
             }
 
             // Fall back: try every system for cards not yet resolved.
@@ -485,16 +529,21 @@ mod tests {
         let r = RetrievalSystem::MagicSQLiteRetrievalSystem(
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
-        s.import_csv("../data/test.csv".to_string(), "New Collection".to_string(), &[r.clone()], Some(sender))
-            .await
-            .unwrap();
+        s.import_csv(
+            "../data/test.csv".to_string(),
+            "New Collection".to_string(),
+            &[r.clone()],
+            Some(sender),
+        )
+        .await
+        .unwrap();
 
         let collections = s.list_collections(None).await.unwrap();
         assert_eq!(collections.len(), 2); // Default and the new one
         let new_collection = collections.iter().find(|c| !"Default".eq(*c)).unwrap();
 
         let card_count = s
-            .get_cards_in_collection_count(new_collection.clone(), &[])
+            .get_cards_in_collection_count(new_collection.clone(), &[], ProxyFilter::Include)
             .await
             .unwrap();
         assert_eq!(card_count, 2);
@@ -530,9 +579,13 @@ mod tests {
         let provider = "MagicSQLite";
         assert!(
             export
-                == format!("Set,CollectorNumber,Quantity,FoilQuantity,Provider\nM13,39,2,1,{provider}\nISD,173,0,4,{provider}\n")
+                == format!(
+                    "Set,CollectorNumber,Quantity,FoilQuantity,Provider\nM13,39,2,1,{provider}\nISD,173,0,4,{provider}\n"
+                )
                 || export
-                    == format!("Set,CollectorNumber,Quantity,FoilQuantity,Provider\nISD,173,0,4,{provider}\nM13,39,2,1,{provider}\n")
+                    == format!(
+                        "Set,CollectorNumber,Quantity,FoilQuantity,Provider\nISD,173,0,4,{provider}\nM13,39,2,1,{provider}\n"
+                    )
         );
     }
 
@@ -547,14 +600,9 @@ mod tests {
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
 
-        s.import_csv_text(
-            csv,
-            "Pasted Collection".to_string(),
-            &[r],
-            None,
-        )
-        .await
-        .unwrap();
+        s.import_csv_text(csv, "Pasted Collection".to_string(), &[r], None)
+            .await
+            .unwrap();
 
         let collections = s.list_collections(None).await.unwrap();
         let new_collection = collections
@@ -563,7 +611,7 @@ mod tests {
             .unwrap();
 
         let card_count = s
-            .get_cards_in_collection_count(new_collection.clone(), &[])
+            .get_cards_in_collection_count(new_collection.clone(), &[], ProxyFilter::Include)
             .await
             .unwrap();
         assert_eq!(card_count, 2);

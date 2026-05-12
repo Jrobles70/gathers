@@ -3,9 +3,18 @@ import { Button, Form } from "react-bootstrap";
 import { useOperations } from "../OperationsContext";
 import { useCollectionsDispatch } from "./CollectionContext";
 
+export function buildNewCollectionImportFormData({ name, text }) {
+  const formData = new FormData();
+  formData.append("collection", name);
+  formData.append("text", text);
+  return formData;
+}
+
 function AddCollectionForm() {
   const [showForm, setShowForm] = useState(false);
   const [newItem, setNewItem] = useState("");
+  const [importText, setImportText] = useState("");
+  const [isProxy, setIsProxy] = useState(false);
   const [error, setError] = useState(null);
 
   const collectionsDispatch = useCollectionsDispatch();
@@ -23,18 +32,38 @@ function AddCollectionForm() {
   const handleSubmit = (event) => {
     event.preventDefault();
     setError(null);
-    ops
-      .fetch("Adding new collection", {}, "/collection/add", {
+
+    const name = newItem.trim();
+    const text = importText.trim();
+    const saveCollection = text.length > 0
+      ? ops.fetch("Importing new collection", {}, "/collection/import", {
+        method: "POST",
+        body: buildNewCollectionImportFormData({ name, text: importText }),
+      })
+      : ops.fetch("Adding new collection", {}, "/collection/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: newItem }),
-      })
+        body: JSON.stringify({ id: name, isProxy }),
+      });
+
+    saveCollection
+      .then(() => (
+        text.length > 0 && isProxy
+          ? ops.fetch("Marking collection as proxy", {}, "/collection/proxy/" + encodeURIComponent(name), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isProxy: true }),
+          })
+          : null
+      ))
       .then(() => {
         collectionsDispatch({
           type: "added",
-          item: { id: newItem },
+          item: { id: name, isProxy, canRemove: true },
         });
         setNewItem("");
+        setImportText("");
+        setIsProxy(false);
         setShowForm(false);
       })
       .catch((e) => {
@@ -53,15 +82,33 @@ function AddCollectionForm() {
             <Form.Control
               type="text"
               value={newItem}
-              placeholder="New Collection"
+              placeholder="Collection name"
               onChange={(event) => setNewItem(event.target.value)}
               isInvalid={!!error}
             />
             <Form.Control.Feedback type="invalid">{error}</Form.Control.Feedback>
           </Form.Group>
+          <Form.Group controlId="newCollectionImportText">
+            <Form.Label>Text import</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={5}
+              value={importText}
+              placeholder="Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,..."
+              onChange={(event) => setImportText(event.target.value)}
+            />
+          </Form.Group>
+          <label className="add-collection-proxy-row">
+            <input
+              type="checkbox"
+              checked={isProxy}
+              onChange={(event) => setIsProxy(event.target.checked)}
+            />
+            <span>Proxy collection</span>
+          </label>
           <div className="add-collection-actions">
             <Button disabled={newItem.trim() === ""} variant="primary" type="submit">
-              Submit
+              Save
             </Button>
             <Button variant="secondary" onClick={handleHideForm}>
               Cancel

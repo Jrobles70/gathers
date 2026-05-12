@@ -18,6 +18,7 @@ import {
   useRefreshCardList,
 } from "./CardListContexts/RefreshCardListContext";
 import { useCollectionFilters, collectionFiltersActive } from "./CollectionFilterBar";
+import { isAllCollections } from "./CollectionContext";
 
 function CardComponent({ viewMode, systemType, id, details }) {
   const effectiveSystem = details?.provider || systemType;
@@ -40,7 +41,8 @@ function buildListUrl(collection, filters, pageNumber, systems) {
   } else if (systems.length > 0) {
     params.set("providers", systems.join(","));
   }
-  return `/collection/cards/${collection}/list?${params.toString()}`;
+  if (filters.proxyMode && filters.proxyMode !== "all") params.set("proxy", filters.proxyMode);
+  return `/collection/cards/${encodeURIComponent(collection)}/list?${params.toString()}`;
 }
 
 function buildSearchBody(filters) {
@@ -81,7 +83,8 @@ function buildSearchUrl(collection, filters, pageNumber, systems, isCount = fals
       params.set("providers", systems.join(","));
     }
   }
-  const base = `/collection/cards/${collection}/search`;
+  if (filters.proxyMode && filters.proxyMode !== "all") params.set("proxy", filters.proxyMode);
+  const base = `/collection/cards/${encodeURIComponent(collection)}/search`;
   return isCount ? `${base}/count?${params.toString()}` : `${base}?${params.toString()}`;
 }
 
@@ -108,6 +111,7 @@ export default function CardList() {
   const filterDeps = [
     filtersActive, filters.name, filters.setCode, filters.rarity, filters.artist,
     filters.text, filters.provider, filters.sortBy, filters.sortOrder,
+    filters.proxyMode,
     JSON.stringify(filters.colorIdentities),
     JSON.stringify(filters.domains),
     JSON.stringify(filters.energyTypes),
@@ -159,18 +163,24 @@ export default function CardList() {
       } else if (systems.length > 0) {
         countParams.set("providers", systems.join(","));
       }
+      if (filters.proxyMode && filters.proxyMode !== "all") countParams.set("proxy", filters.proxyMode);
       ops
-        .fetch("Getting card count in " + collection, 0, `/collection/cards/${collection}/count?${countParams.toString()}`)
+        .fetch("Getting card count in " + collection, 0, `/collection/cards/${encodeURIComponent(collection)}/count?${countParams.toString()}`)
         .then((data) => setCardCount(data));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection, pageNumber, refresh, ...filterDeps]);
 
   const handlePageChange = (event) => {
-    navigate("/c/" + collection + "/" + (parseInt(event.selected) + 1) + location.search);
+    const nextPage = parseInt(event.selected) + 1;
+    const base = isAllCollections(collection)
+      ? "/collections/"
+      : "/c/" + encodeURIComponent(collection) + "/";
+    navigate(base + nextPage + location.search);
   };
 
   const viewMode = filters.viewMode;
+  const pageCount = Math.ceil(Number(cardCount) / pageSize);
 
   return (
     <>
@@ -191,26 +201,28 @@ export default function CardList() {
           </React.Fragment>
         )}
       </div>
-      <ReactPaginate
-        previousLabel="Previous"
-        nextLabel="Next"
-        pageClassName="page-item"
-        pageLinkClassName="page-link"
-        previousClassName="page-item"
-        previousLinkClassName="page-link"
-        nextClassName="page-item"
-        nextLinkClassName="page-link"
-        breakLabel="..."
-        breakClassName="page-item"
-        breakLinkClassName="page-link"
-        containerClassName="pagination"
-        activeClassName="active"
-        pageCount={Math.ceil(parseInt(cardCount) / pageSize)}
-        marginPagesDisplayed={2}
-        pageRangeDisplayed={5}
-        onPageChange={handlePageChange}
-        forcePage={cardCount > 0 ? Math.max(0, pageNumber - 1) : -1}
-      />
+      {pageCount > 1 && (
+        <ReactPaginate
+          previousLabel="Previous"
+          nextLabel="Next"
+          pageClassName="page-item"
+          pageLinkClassName="page-link"
+          previousClassName="page-item"
+          previousLinkClassName="page-link"
+          nextClassName="page-item"
+          nextLinkClassName="page-link"
+          breakLabel="..."
+          breakClassName="page-item"
+          breakLinkClassName="page-link"
+          containerClassName="pagination"
+          activeClassName="active"
+          pageCount={pageCount}
+          marginPagesDisplayed={2}
+          pageRangeDisplayed={5}
+          onPageChange={handlePageChange}
+          forcePage={cardCount > 0 ? Math.max(0, pageNumber - 1) : -1}
+        />
+      )}
     </>
   );
 }

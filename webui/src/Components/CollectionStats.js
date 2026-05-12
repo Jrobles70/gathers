@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useOperations } from "../OperationsContext";
-import { useCollection } from "./CollectionContext";
+import {
+  collectionDisplayName,
+  isAllCollections,
+  useCollection,
+} from "./CollectionContext";
 import { useRefresh } from "./CardListContexts/RefreshCardListContext";
 import { useCards } from "./CardListContexts/CardsContext";
 import { formatCents, formatPercent } from "./priceUtils";
@@ -28,6 +32,11 @@ function StatsBlock({ title, stats }) {
       <div className="collection-stats-meta">
         {stats?.copyCount ?? 0} copies - {stats?.pricedCopyCount ?? 0} priced
       </div>
+      {(stats?.proxyCopyCount ?? 0) > 0 && (
+        <div className="collection-stats-meta proxy">
+          Proxy {formatCents(stats?.proxyTotalValueCents)} - {stats?.proxyCopyCount ?? 0} copies
+        </div>
+      )}
     </div>
   );
 }
@@ -46,9 +55,13 @@ export default function CollectionStats() {
     ops
       .fetch("Getting collection value", null, `/collection/cards/${encodeURIComponent(collection)}/stats`)
       .then(setCurrentStats);
-    ops
-      .fetch("Getting all collection value", null, "/collection/stats")
-      .then(setAllStats);
+    if (isAllCollections(collection)) {
+      setAllStats(null);
+    } else {
+      ops
+        .fetch("Getting all collection value", null, "/collection/stats")
+        .then(setAllStats);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection, refresh, cards, statsOpen]);
 
@@ -65,8 +78,8 @@ export default function CollectionStats() {
       </button>
       {statsOpen && (
         <div className="collection-panel-dropdown collection-stats-dropdown">
-          <StatsBlock title={collection} stats={currentStats} />
-          <StatsBlock title="All collections" stats={allStats} />
+          <StatsBlock title={collectionDisplayName(collection)} stats={currentStats} />
+          {!isAllCollections(collection) && <StatsBlock title="All collections" stats={allStats} />}
         </div>
       )}
     </section>

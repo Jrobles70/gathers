@@ -43,6 +43,7 @@ function readFilters(searchParams) {
     sortBy:          SORT_FIELD_VALUES.has(sortBy) ? sortBy : "Name",
     sortOrder:       searchParams.get("cf_sortOrder") ?? "Asc",
     viewMode:        searchParams.get("cf_viewMode") ?? "grid",
+    proxyMode:       searchParams.get("cf_proxy") ?? "all",
     colorIdentities: searchParams.getAll("cf_color"),
     domains:         [],
     energyTypes:     [],
@@ -61,7 +62,8 @@ export function collectionFiltersActive(filters) {
     filters.rarity !== "" ||
     filters.artist !== "" ||
     filters.text !== "" ||
-    filters.colorIdentities.length > 0
+    filters.colorIdentities.length > 0 ||
+    filters.proxyMode !== "all"
   );
 }
 
@@ -73,7 +75,7 @@ export default function CollectionFilterBar() {
 
   const setFilter = (key, value) => {
     const next = new URLSearchParams(searchParams);
-    if (value === "" || value === null) {
+    if (value === "" || value === null || (key === "cf_proxy" && value === "all")) {
       next.delete(key);
     } else {
       next.set(key, value);
@@ -95,7 +97,7 @@ export default function CollectionFilterBar() {
   const clearFilters = () => {
     const next = new URLSearchParams(searchParams);
     ["cf_name","cf_setCode","cf_rarity","cf_artist","cf_text","cf_provider",
-     "cf_sortBy","cf_sortOrder","cf_color","cf_domain","cf_energy","page"].forEach((k) => next.delete(k));
+     "cf_sortBy","cf_sortOrder","cf_proxy","cf_color","cf_domain","cf_energy","page"].forEach((k) => next.delete(k));
     setSearchParams(next);
   };
 
@@ -245,6 +247,26 @@ export default function CollectionFilterBar() {
               setSearchParams(next);
             }}
           />
+
+          <div className="collection-filter-row">
+            <span className="collection-filter-label">Proxy</span>
+            <div className="btn-group btn-group-sm" role="group" aria-label="Proxy filter">
+              {[
+                ["all", "All"],
+                ["regular", "Regular"],
+                ["proxy", "Proxy"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`btn ${filters.proxyMode === value ? "btn-secondary" : "btn-outline-secondary"}`}
+                  onClick={() => setFilter("cf_proxy", value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="collection-filter-row">
             <span className="collection-filter-label">View</span>

@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOperations } from "../../OperationsContext";
-import { useCollection, useCollections } from "../CollectionContext";
+import { isAllCollections, useCollection, useCollections } from "../CollectionContext";
 import {
   useSelectedCards,
   useSelectedCardsDispatch,
@@ -14,9 +14,24 @@ export default function MoveCards() {
   const selected = useSelectedCards();
   const selectedDispatch = useSelectedCardsDispatch();
   const triggerRefresh = useRefreshCardList();
+  const destinationOptions = useMemo(
+    () => collections.filter((item) => !isAllCollections(item.id)),
+    [collections],
+  );
 
   const [destinationCollection, setDestinationCollection] =
-    useState(collection);
+    useState(isAllCollections(collection) ? "" : collection);
+  useEffect(() => {
+    if (isAllCollections(collection)) {
+      setDestinationCollection((current) =>
+        destinationOptions.some((item) => item.id === current)
+          ? current
+          : destinationOptions[0]?.id ?? "",
+      );
+      return;
+    }
+    setDestinationCollection(collection);
+  }, [collection, destinationOptions]);
   const canMove = selected.length > 0 && Boolean(destinationCollection);
 
   const moveCards = () => {
@@ -24,7 +39,7 @@ export default function MoveCards() {
       .fetch(
         "Moving items between " + collection + " and " + destinationCollection,
         [],
-        "/collection/move/" + destinationCollection,
+        "/collection/move/" + encodeURIComponent(destinationCollection),
         {
           method: "post",
           headers: {
@@ -56,7 +71,7 @@ export default function MoveCards() {
         className="form-select form-select-sm"
         id="exampleFormControlSelect1"
       >
-        {collections.map((c) => (
+        {destinationOptions.map((c) => (
           <option key={"cardlistcol-" + c.id} value={c.id}>
             {c.id}
           </option>

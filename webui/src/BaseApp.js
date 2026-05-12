@@ -8,21 +8,29 @@ import RiftboundCardDetailView from "./Views/RiftboundCardDetailView";
 import PokemonCardDetailView from "./Views/PokemonCardDetailView";
 
 export default function BaseApp({ mode = "full", collectionsEnabled = false }) {
+  const collectionsHome = collectionsEnabled && mode !== "search-only" ? "/collections/1" : "/search";
+
   return (
     <ModeProvider mode={mode} collectionsEnabled={collectionsEnabled}>
       <OperationsProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Navigate to="/search" />} />
+            <Route path="/" element={<Navigate to={collectionsHome} replace />} />
             <Route path="/search" element={<SearchView />} />
             <Route path="/card/mtg/:id" element={<MtgCardDetailView />} />
             <Route path="/card/riftbound/:id" element={<RiftboundCardDetailView />} />
             <Route path="/card/pokemon/:id" element={<PokemonCardDetailView />} />
             {collectionsEnabled ? (
-              <Route path="/c/:collection">
-                <Route index element={<Navigate to="1" replace />} />
-                <Route path=":pageNumber" element={<CardListView />} />
-              </Route>
+              <>
+                <Route path="/collections">
+                  <Route index element={<Navigate to="1" replace />} />
+                  <Route path=":pageNumber" element={<CardListView />} />
+                </Route>
+                <Route path="/c/:collection">
+                  <Route index element={<Navigate to="1" replace />} />
+                  <Route path=":pageNumber" element={<CardListView />} />
+                </Route>
+              </>
             ) : (
               <Route path="/c/*" element={<Navigate to="/search" />} />
             )}

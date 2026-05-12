@@ -145,6 +145,9 @@ export default function CardShell({
                 {activeProviderLabel && (
                   <span className="card-list-provider badge bg-dark ms-1">{activeProviderLabel}</span>
                 )}
+                {activeDetails.isProxy && (
+                  <span className="card-list-proxy badge bg-warning text-dark ms-1">Proxy</span>
+                )}
               </>
             )}
             <span className={priceClass}>{priceText}</span>
@@ -231,7 +234,10 @@ export default function CardShell({
           </div>
           <div className="search-card-footer">
             <span className={priceClass}>{priceText}</span>
-            <span className="search-card-set">{_card.setCode}</span>
+            <span className="search-card-footer-meta">
+              {activeDetails?.isProxy && <span className="proxy-pill">Proxy</span>}
+              <span className="search-card-set">{_card.setCode}</span>
+            </span>
           </div>
         </div>
       )}

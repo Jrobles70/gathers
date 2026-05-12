@@ -18,21 +18,27 @@ export default function DeleteCards() {
   const deleteCards = () => {
     confirm({ confirmType: "cards", selectedCount: selected.length }).then(
       ({ input }) => {
-        ops
-          .fetch(
-            "Removing items from " + collection,
-            [],
-            "/collection/cards/" + collection + "/remove",
-            {
-              method: "post",
-              headers: {
-                Accept: "application/json",
-                "Content-Type": "application/json",
+        Promise
+          .all(selected.map((card) => (
+            ops.fetch(
+              "Removing " + card.id + " from " + card.collectionId,
+              [],
+              "/collection/cards/" + encodeURIComponent(card.collectionId ?? collection) + "/delete",
+              {
+                method: "post",
+                headers: {
+                  Accept: "application/json",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  id: card.id,
+                  quantity: card.quantity,
+                  foilQuantity: card.foilQuantity,
+                }),
               },
-              body: JSON.stringify(selected),
-            },
-          )
-          .then((data) => {
+            )
+          )))
+          .then(() => {
             triggerRefresh(true);
             selectedDispatch({ type: "empty" });
           });

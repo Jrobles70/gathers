@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import AddCollectionForm from "./AddCollectionForm";
-import { useCollection, useCollections } from "./CollectionContext";
+import {
+  ALL_COLLECTIONS_ID,
+  useCollection,
+  useCollections,
+} from "./CollectionContext";
 import OperationsTracker from "./CardListNavButtons/OperationsTracker";
 import { useMode } from "../OperationsContext";
 import { useQuickSearch } from "./QuickSearchContext";
@@ -54,35 +58,36 @@ export default function Sidebar() {
   const showCollectionTools =
     !isSearchOnly &&
     collectionsEnabled &&
-    location.pathname.startsWith("/c/");
+    (location.pathname.startsWith("/c/") || location.pathname.startsWith("/collections"));
   const filteredCollections = collections.filter((c) =>
     c.id.toLowerCase().includes(collectionQuery.trim().toLowerCase()),
   );
+  const allCollectionsActive = collection === ALL_COLLECTIONS_ID;
+  const brandPath = !isSearchOnly && collectionsEnabled ? "/collections/1" : "/search";
 
   return (
     <header>
       <nav id="sidebarMenu" className="d-lg-block sidebar bg-white">
         <nav className="navbar navbar-expand-lg navbar-light bg-light">
           <div className="container-fluid">
-            <a className="navbar-brand" href="/">
+            <Link className="navbar-brand" to={brandPath}>
               GatheRs
-            </a>
+            </Link>
           </div>
         </nav>
         <div className="position-sticky sidebar-content">
           <div
-            className="nav flex-column nav-pills me-3"
+            className="nav flex-column nav-pills me-3 sidebar-top-actions"
             role="tablist"
             aria-orientation="vertical"
           >
-            {!isSearchOnly && collectionsEnabled ? (
-              <button type="button" className="btn btn-secondary" onClick={openQuickSearch}>
-                Search
+            <Link to={"/search"} className="btn btn-secondary">
+              Search
+            </Link>
+            {!isSearchOnly && collectionsEnabled && (
+              <button type="button" className="btn btn-primary" onClick={openQuickSearch}>
+                Quick Add
               </button>
-            ) : (
-              <Link to={"/search"} className="btn btn-secondary">
-                Search
-              </Link>
             )}
           </div>
           {!serverStatus.ready && (
@@ -157,14 +162,21 @@ export default function Sidebar() {
                       onChange={(event) => setCollectionQuery(event.target.value)}
                     />
                     <div className="sidebar-collection-list">
+                      <Link
+                        to="/collections/1"
+                        className={"nav-link sidebar-collection-link" + (allCollectionsActive ? " active" : "")}
+                      >
+                        <span>All Collections</span>
+                      </Link>
                       {filteredCollections.length > 0 ? (
                         filteredCollections.map((c) => (
                           <Link
-                            to={"/c/" + c.id + "/1"}
+                            to={"/c/" + encodeURIComponent(c.id) + "/1"}
                             key={c.id}
-                            className={"nav-link" + (c.id === collection ? " active" : "")}
+                            className={"nav-link sidebar-collection-link" + (c.id === collection ? " active" : "")}
                           >
-                            {c.id}
+                            <span>{c.id}</span>
+                            {c.isProxy && <span className="proxy-pill">Proxy</span>}
                           </Link>
                         ))
                       ) : (

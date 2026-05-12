@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useOperations } from "../../OperationsContext";
-import { useCollection } from "../CollectionContext";
+import { isAllCollections, useCollection } from "../CollectionContext";
 import { useRefreshCardList } from "../CardListContexts/RefreshCardListContext";
 
 export function buildImportFormData({ importMode, file, text, collection }) {
@@ -23,6 +23,8 @@ export default function ImportCards() {
   const [file, setFile] = useState();
   const [text, setText] = useState("");
   const [importMode, setImportMode] = useState("text");
+
+  if (isAllCollections(collection)) return null;
 
   const handleFileChange = (e) => {
     if (e.target.files) {
@@ -82,8 +84,8 @@ export default function ImportCards() {
             onChange={(e) => setImportMode(e.target.value)}
             value={importMode}
           >
-            <option value="file">File</option>
             <option value="text">Text</option>
+            <option value="file">File</option>
           </select>
 
           {importMode === "file" ? (

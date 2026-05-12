@@ -35,7 +35,7 @@ const ConfirmCollectionDelete = ({
             <select ref={inputRef} className="form-control" defaultValue="">
               {collections.map((c) => (
                 <option key={"confirm" + c.id} value={c.id}>
-                  {c.id}
+                  {c.id || "Do not move cards"}
                 </option>
               ))}
             </select>
@@ -47,7 +47,7 @@ const ConfirmCollectionDelete = ({
           </Modal.Body>
         ) : null}
         <Modal.Footer>
-          <Button className="button-l" onClick={handleOnClick()}>
+          <Button className="button-l" onClick={handleOnClick}>
             Yes
           </Button>
           <Button onClick={cancel}>Cancel</Button>

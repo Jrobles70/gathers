@@ -1,9 +1,11 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import CardDetails, {
   applyQuantityDelta,
   resolveCardUpdateCollection,
 } from "./CardDetails";
+import { CollectionsProvider } from "./CollectionContext";
 import { ModeProvider, OperationsContext } from "../OperationsContext";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -96,6 +98,105 @@ describe("CardDetails", () => {
 
     expect(container.querySelector(".search-card-menu").textContent).toContain("Foil");
     expect(Array.from(container.querySelectorAll("button")).every((button) => button.type === "button")).toBe(true);
+
+    cleanup();
+  });
+
+  it("can mark an individual owned card as proxy", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      id: "card-1",
+      collectionId: "Main",
+      isProxy: true,
+    });
+    const { container, cleanup } = renderIntoForm(
+      <OperationsContext.Provider value={{ fetch: fetchMock }}>
+        <ModeProvider collectionsEnabled={true}>
+          <CardDetails
+            id="card-1"
+            details={{ collectionId: "Main", quantity: 1, foilQuantity: 0, isProxy: false }}
+          />
+        </ModeProvider>
+      </OperationsContext.Provider>,
+    );
+
+    const menuButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "...");
+
+    act(() => {
+      menuButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const proxyCheckbox = Array.from(container.querySelectorAll("input[type='checkbox']"))
+      .find((input) => input.closest("label").textContent.includes("Proxy card"));
+
+    await act(async () => {
+      proxyCheckbox.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "Updating proxy status for card card-1",
+      {},
+      "/collection/cards/Main/proxy",
+      expect.objectContaining({
+        body: JSON.stringify({
+          id: "card-1",
+          isProxy: true,
+        }),
+      }),
+    );
+
+    cleanup();
+  });
+
+  it("shows inherited proxy state from proxy collections", async () => {
+    const fetchMock = jest.fn().mockImplementation((_, fallback, url) => {
+      if (url === "/collection/list") {
+        return Promise.resolve([{ id: "Proxy Box", isProxy: true }]);
+      }
+      return Promise.resolve(fallback);
+    });
+    const { container, cleanup } = renderIntoForm(
+      <OperationsContext.Provider value={{ fetch: fetchMock }}>
+        <ModeProvider collectionsEnabled={true}>
+          <MemoryRouter
+            initialEntries={["/c/Proxy%20Box/1"]}
+            future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          >
+            <Routes>
+              <Route
+                path="/c/:collection/:pageNumber"
+                element={(
+                  <CollectionsProvider>
+                    <CardDetails
+                      id="card-1"
+                      details={{ collectionId: "Proxy Box", quantity: 1, foilQuantity: 0, isProxy: true }}
+                    />
+                  </CollectionsProvider>
+                )}
+              />
+            </Routes>
+          </MemoryRouter>
+        </ModeProvider>
+      </OperationsContext.Provider>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const menuButton = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "...");
+
+    act(() => {
+      menuButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const proxyCheckbox = Array.from(container.querySelectorAll("input[type='checkbox']"))
+      .find((input) => input.closest("label").textContent.includes("Proxy via collection"));
+
+    expect(proxyCheckbox.checked).toBe(true);
+    expect(proxyCheckbox.disabled).toBe(true);
 
     cleanup();
   });

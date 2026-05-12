@@ -105,6 +105,10 @@ impl From<APICardSearchFilters> for models::filters::CardSearchFilters {
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Collection {
     pub id: String,
+    #[serde(default, rename = "canRemove")]
+    pub can_remove: bool,
+    #[serde(default, rename = "isProxy")]
+    pub is_proxy: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -116,6 +120,14 @@ pub struct CollectionAddResponse {
 #[derive(Serialize, JsonSchema)]
 pub struct CollectionRemoveResponse {
     pub message: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CollectionRemoveQuery {
+    #[serde(default, rename = "keepCardsInCollection")]
+    pub keep_cards_in_collection: Option<String>,
+    #[serde(default, rename = "moveTo")]
+    pub move_to: Option<String>,
 }
 
 #[derive(Deserialize, Debug, JsonSchema)]
@@ -162,6 +174,8 @@ pub struct CollectionCardsQuery {
     /// Multiple provider inclusion filter — comma-separated: `?providers=X,Y`.
     #[serde(default)]
     pub providers: Option<String>,
+    #[serde(default)]
+    pub proxy: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -176,8 +190,35 @@ pub struct CollectionCard {
     pub time_added: DateTime<Utc>,
     #[serde(default)]
     pub provider: String,
+    #[serde(default, rename = "isProxy")]
+    pub is_proxy: bool,
     #[serde(rename = "purchasePrice", skip_serializing_if = "Option::is_none")]
     pub purchase_price: Option<PurchasePrice>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CollectionRename {
+    pub id: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct ProxyUpdate {
+    #[serde(rename = "isProxy")]
+    pub is_proxy: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CardProxyUpdate {
+    pub id: String,
+    #[serde(rename = "isProxy")]
+    pub is_proxy: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CardsProxyUpdate {
+    pub cards: Vec<CollectionCard>,
+    #[serde(rename = "isProxy")]
+    pub is_proxy: bool,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
@@ -218,6 +259,14 @@ pub struct CollectionPriceStats {
     pub change_cents: Option<i64>,
     #[serde(rename = "changePercent", skip_serializing_if = "Option::is_none")]
     pub change_percent: Option<f64>,
+    #[serde(rename = "proxyCardCount")]
+    pub proxy_card_count: usize,
+    #[serde(rename = "proxyCopyCount")]
+    pub proxy_copy_count: i64,
+    #[serde(rename = "proxyPricedCopyCount")]
+    pub proxy_priced_copy_count: i64,
+    #[serde(rename = "proxyTotalValueCents")]
+    pub proxy_total_value_cents: i64,
 }
 
 impl From<&CollectionCard> for models::CollectionCard {
@@ -229,9 +278,13 @@ impl From<&CollectionCard> for models::CollectionCard {
             collection: value.collection_id.to_string(),
             time_added: value.time_added.to_string(),
             provider: value.provider.clone(),
+            is_proxy: value.is_proxy,
             purchase_price_cents: value.purchase_price.as_ref().map(|p| p.usd_cents),
             purchase_price_source: value.purchase_price.as_ref().map(|p| p.source.clone()),
-            purchase_price_updated_at: value.purchase_price.as_ref().map(|p| p.updated_at.to_rfc3339()),
+            purchase_price_updated_at: value
+                .purchase_price
+                .as_ref()
+                .map(|p| p.updated_at.to_rfc3339()),
         }
     }
 }

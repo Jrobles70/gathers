@@ -75,6 +75,13 @@ code {
     font-weight: 600;
 }
 
+.search-card-footer-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
 .search-card-set {
     color: #6c757d;
     font-size: 0.82rem;
@@ -147,14 +154,31 @@ code {
     z-index: 2;
     display: flex;
     width: 2.65rem;
-    transform: translateY(-50%);
     flex-direction: column;
     overflow: visible;
     border: 1px solid rgba(255, 255, 255, 0.42);
     border-radius: 6px;
     background: rgba(33, 37, 41, 0.72);
     box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.24);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%) translateX(0.35rem);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.search-card:hover .search-card-action-rail,
+.search-card:focus-within .search-card-action-rail {
+    opacity: 1;
     pointer-events: auto;
+    transform: translateY(-50%);
+}
+
+@media (hover: none), (pointer: coarse) {
+    .search-card-action-rail {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(-50%);
+    }
 }
 
 .search-card-action,
@@ -448,12 +472,17 @@ code {
     gap: 0;
 }
 
+.sidebar-top-actions {
+    gap: 0.5rem;
+}
+
 .sidebar-collections-panel {
     color: #f1f3f5;
 }
 
 .sidebar-collections-panel .form-control,
-.add-collection-form .form-control {
+.add-collection-form .form-control,
+.add-collection-form .form-select {
     background-color: #14181b;
     color: #f1f3f5;
     border-color: rgba(255, 255, 255, 0.22);
@@ -465,7 +494,8 @@ code {
 }
 
 .sidebar-collections-panel .form-control:focus,
-.add-collection-form .form-control:focus {
+.add-collection-form .form-control:focus,
+.add-collection-form .form-select:focus {
     background-color: #171d21;
     color: #fff;
     border-color: #86b7fe;
@@ -483,6 +513,26 @@ code {
 .sidebar-collection-list .nav-link {
     border-radius: 4px;
     color: #f1f3f5;
+}
+
+.sidebar-collection-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+}
+
+.proxy-pill {
+    display: inline-flex;
+    min-height: 1.2rem;
+    align-items: center;
+    padding: 0.08rem 0.35rem;
+    border-radius: 4px;
+    background: #ffc107;
+    color: #111619;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
 }
 
 .sidebar-empty-state {
@@ -504,6 +554,26 @@ code {
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+}
+
+.add-collection-fields .form-label,
+.add-collection-proxy-row {
+    margin: 0;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.add-collection-fields textarea {
+    min-height: 7rem;
+    resize: vertical;
+}
+
+.add-collection-proxy-row,
+.collection-proxy-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
 }
 
 .add-collection-actions {
@@ -684,6 +754,31 @@ code {
 .move-cards-form {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.45rem;
+}
+
+.proxy-cards-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    margin-bottom: 0.65rem;
+}
+
+.collection-rename-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.collection-rename-form label {
+    color: #adb5bd;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.collection-inline-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.45rem;
 }
 

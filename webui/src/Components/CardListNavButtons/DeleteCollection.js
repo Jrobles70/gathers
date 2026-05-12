@@ -2,17 +2,25 @@ import React from "react";
 import { confirm } from "./ConfirmCollectionDelete";
 import { useNavigate } from "react-router-dom";
 import { useOperations } from "../../OperationsContext";
-import { useCollection, useCollections } from "../CollectionContext";
+import {
+  isAllCollections,
+  useCollection,
+  useCollections,
+  useCollectionsDispatch,
+} from "../CollectionContext";
 
 export default function DeleteCollection() {
   const navigate = useNavigate();
   const ops = useOperations();
   const collection = useCollection();
   const collections = useCollections();
+  const collectionsDispatch = useCollectionsDispatch();
+
+  if (isAllCollections(collection)) return null;
 
   const deleteCollection = () => {
     let moveToCollections = collections.filter((s) => s.id !== collection);
-    moveToCollections.push("");
+    moveToCollections.push({ id: "" });
     confirm({
       confirmType: "collection",
       collection: collection,
@@ -24,9 +32,9 @@ export default function DeleteCollection() {
             "Deleting collection " + collection,
             {},
             "/collection/remove/" +
-              collection +
+              encodeURIComponent(collection) +
               "?keepCardsInCollection=" +
-              input,
+              encodeURIComponent(input ?? ""),
             {
               method: "post",
               headers: {
@@ -36,7 +44,8 @@ export default function DeleteCollection() {
             },
           )
           .then((data) => {
-            navigate("/" + (input ? "c/" + input + "/1" : ""));
+            collectionsDispatch({ type: "deleted", id: collection });
+            navigate(input ? "/c/" + encodeURIComponent(input) + "/1" : "/collections/1");
           });
       },
       () => {},
