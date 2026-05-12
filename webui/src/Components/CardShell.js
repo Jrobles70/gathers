@@ -217,11 +217,20 @@ export default function CardShell({
   return (
     <div
       ref={cardRef}
-          className={"card search-card" + (selected ? " border border-primary" : "")}
+          className={"card search-card" + (selected ? " card-selected" : "")}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
           <div className="search-card-art">
+            <button
+              type="button"
+              className={"card-checkbox" + (hovered || selected ? " visible" : "")}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelected(); }}
+              aria-label={selected ? "Deselect card" : "Select card"}
+              tabIndex={0}
+            >
+              {selected ? "✓" : "○"}
+            </button>
             <Link
               to={activeDetailPath}
               state={detailState}
