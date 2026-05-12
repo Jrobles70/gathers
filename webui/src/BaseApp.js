@@ -6,6 +6,7 @@ import SearchView from "./Views/SearchView";
 import MtgCardDetailView from "./Views/MtgCardDetailView";
 import RiftboundCardDetailView from "./Views/RiftboundCardDetailView";
 import PokemonCardDetailView from "./Views/PokemonCardDetailView";
+import DuplicateCollectionsView from "./Views/DuplicateCollectionsView";
 
 export function getHomePath({ mode = "full", collectionsEnabled = false } = {}) {
   return collectionsEnabled && mode !== "search-only" ? "/collections/1" : "/search";
@@ -30,6 +31,7 @@ export default function BaseApp({ mode = "full", collectionsEnabled = false }) {
                   <Route index element={<Navigate to="1" replace />} />
                   <Route path=":pageNumber" element={<CardListView />} />
                 </Route>
+                <Route path="/duplicates" element={<DuplicateCollectionsView />} />
                 <Route path="/c/:collection">
                   <Route index element={<Navigate to="1" replace />} />
                   <Route path=":pageNumber" element={<CardListView />} />

@@ -93,6 +93,14 @@ export default function Sidebar() {
                 Quick Add
               </button>
             )}
+            {!isSearchOnly && collectionsEnabled && (
+              <Link
+                to="/duplicates"
+                className={"btn btn-outline-info" + (location.pathname.startsWith("/duplicates") ? " active" : "")}
+              >
+                Duplicates
+              </Link>
+            )}
           </div>
           {!serverStatus.ready && (
             <>
