@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useCollection, useCollections } from "./CollectionContext";
 import { useOperations, useMode } from "../OperationsContext";
 import { useCardsDispatch } from "../Components/CardListContexts/CardsContext";
@@ -37,14 +37,14 @@ function centsToInput(cents) {
   return (Number(cents) / 100).toFixed(2);
 }
 
-export default function CardDetails({
+const CardDetails = forwardRef(function CardDetails({
   id,
   details = null,
   showCollectionSelect = false,
   targetCollection = null,
   hasPrintings = false,
   onOpenPrintings = null,
-}) {
+}, ref) {
   const ops = useOperations();
   const { collectionsEnabled } = useMode();
   const currentCollection = useCollection();
@@ -59,6 +59,28 @@ export default function CardDetails({
   const [selectedCollection, setSelectedCollection] = useState(null);
   const [foilMode, setFoilMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAlign, setMenuAlign] = useState("left");
+  const railRef = useRef(null);
+  const closeTimerRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({ toggleFoil: () => setFoilMode((f) => !f) }), []);
+
+  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
+
+  const openMenu = () => {
+    clearTimeout(closeTimerRef.current);
+    if (railRef.current) {
+      const rect = railRef.current.getBoundingClientRect();
+      setMenuAlign(rect.left < 220 ? "right" : "left");
+    }
+    setMenuOpen(true);
+  };
+
+  const scheduleClose = () => {
+    closeTimerRef.current = setTimeout(() => setMenuOpen(false), 150);
+  };
+
+  const cancelClose = () => clearTimeout(closeTimerRef.current);
   const [purchasePriceInput, setPurchasePriceInput] = useState(() =>
     centsToInput(details?.purchasePrice?.usdCents),
   );
@@ -203,7 +225,7 @@ export default function CardDetails({
 
   return (
     <div className="card-img-overlay search-card-overlay">
-      <div className="search-card-action-rail" aria-label="Card quantity controls">
+      <div ref={railRef} className="search-card-action-rail" aria-label="Card quantity controls" onMouseLeave={scheduleClose}>
         <button
           type="button"
           onClick={(event) => handleAction(event, () => updateQuantity(foilMode ? 0 : 1, foilMode ? 1 : 0))}
@@ -226,6 +248,7 @@ export default function CardDetails({
         </button>
         <button
           type="button"
+          onMouseEnter={openMenu}
           onClick={(event) => handleAction(event, () => setMenuOpen((open) => !open))}
           className="search-card-action"
           aria-haspopup="menu"
@@ -235,7 +258,12 @@ export default function CardDetails({
           ...
         </button>
         {menuOpen && (
-          <div className="search-card-menu" role="menu">
+          <div
+            className={"search-card-menu" + (menuAlign === "right" ? " align-right" : "")}
+            role="menu"
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
             <div className="search-card-menu-title">
               {foilMode ? "Foil" : "Regular"} quantity
             </div>
@@ -313,4 +341,6 @@ export default function CardDetails({
       </div>
     </div>
   );
-}
+});
+
+export default CardDetails;

@@ -9,6 +9,8 @@ export default function RiftboundCard({
   listMode = false,
   targetCollection = null,
   detailReturnPath = null,
+  onLoad = null,
+  fetchCycle = 0,
 }) {
   return (
     <CardShell
@@ -19,6 +21,8 @@ export default function RiftboundCard({
       listMode={listMode}
       targetCollection={targetCollection}
       detailReturnPath={detailReturnPath}
+      onLoad={onLoad}
+      fetchCycle={fetchCycle}
       detailPath={`/card/riftbound/${encodeURIComponent(id)}`}
       getImagePath={(_card) => _card.image ?? ""}
     />

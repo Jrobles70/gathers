@@ -64,6 +64,13 @@ function SearchMagic({
     defaults: { sortBy: "Name", sortOrder: "Asc" },
   });
 
+  const clearSearch = () => {
+    handleMultiInput({
+      name: "", setCode: "", artist: "", collectorNumber: "", text: "", rarity: "",
+      colorIdentities: [], sortBy: "Name", sortOrder: "Asc",
+    });
+  };
+
   const bulkMode = collectionsEnabled && searchMode === "bulk";
   const parsedBulkCards = React.useMemo(() => parseBulkSearchInput(bulkText), [bulkText]);
 
@@ -219,10 +226,10 @@ function SearchMagic({
                   .slice(0, 20)
                   .map((c) => <option key={c.code} value={`${c.code} — ${c.name}`} />)}
               </datalist>
+              <input onChange={(e) => handleSearchInput(e, "collectorNumber")} type="text" className="form-control" placeholder="Collector #" value={searchOptions.collectorNumber} />
             </div>
             <div className="input-group">
               <input onChange={(e) => handleSearchInput(e, "artist")} type="text" className="form-control" placeholder="Artist" value={searchOptions.artist} />
-              <input onChange={(e) => handleSearchInput(e, "collectorNumber")} type="text" className="form-control" placeholder="Collector Number" value={searchOptions.collectorNumber} />
             </div>
             <div className="input-group">
               <input onChange={(e) => handleSearchInput(e, "text")} type="text" className="form-control" placeholder="Text" value={searchOptions.text} />
@@ -261,6 +268,9 @@ function SearchMagic({
         <div className="input-group">
           <button className="btn btn-outline-secondary" type="submit" id="button-addon2">
             {bulkMode ? "Bulk Search" : "Search"}
+          </button>
+          <button className="btn btn-outline-secondary" type="button" onClick={clearSearch}>
+            Clear
           </button>
           {collectionsEnabled && (
             <select value={searchCollection} onChange={(e) => setSearchCollection(e.target.value)} className="form-control" id="searchInCollection">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Card from "./Card";
 import RiftboundCard from "./RiftboundCard";
 import PokemonCard from "./PokemonCard";
@@ -20,21 +20,23 @@ import {
 import { useCollectionFilters, collectionFiltersActive } from "./CollectionFilterBar";
 import { isAllCollections } from "./CollectionContext";
 
-function CardComponent({ viewMode, systemType, id, details }) {
+function CardComponent({ viewMode, systemType, id, details, onLoad, fetchCycle }) {
   const effectiveSystem = details?.provider || systemType;
   if (effectiveSystem === "RiftboundSQLite") {
-    return <RiftboundCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
+    return <RiftboundCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} onLoad={onLoad} fetchCycle={fetchCycle} />;
   } else if (effectiveSystem === "PokemonSQLite") {
-    return <PokemonCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} />;
+    return <PokemonCard id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} onLoad={onLoad} fetchCycle={fetchCycle} />;
   }
-  return <Card id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} priceMode="collection" />;
+  return <Card id={id} details={details} provider={effectiveSystem} listMode={viewMode === "list"} priceMode="collection" onLoad={onLoad} fetchCycle={fetchCycle} />;
 }
+
+const LIST_SORT_FIELDS = new Set(["TimeAdded", "Quantity", "FoilQuantity", "Provider", "PurchasePrice"]);
 
 function buildListUrl(collection, filters, pageNumber, systems) {
   const params = new URLSearchParams();
   params.set("offset", String((pageNumber - 1) * pageSize));
   params.set("limit", String(pageSize));
-  if (filters.sortBy && filters.sortBy !== "Name") params.set("sort_by", filters.sortBy);
+  if (filters.sortBy && LIST_SORT_FIELDS.has(filters.sortBy)) params.set("sort_by", filters.sortBy);
   if (filters.sortOrder && filters.sortOrder !== "Asc") params.set("sort_order", filters.sortOrder);
   if (filters.provider) {
     params.set("provider", filters.provider);
@@ -106,6 +108,12 @@ export default function CardList() {
   const cardsDispatch = useCardsDispatch();
   const [loading, setLoading] = useState(true);
   const [cardCount, setCardCount] = useState(0);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [fetchCycle, setFetchCycle] = useState(0);
+
+  const handleCardLoad = useCallback(() => {
+    setLoadedCount((c) => c + 1);
+  }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const filterDeps = [
@@ -133,6 +141,8 @@ export default function CardList() {
         })
         .then((data) => {
           cardsDispatch({ type: "overwrite", cards: data });
+          setLoadedCount(0);
+          setFetchCycle((c) => c + 1);
           setLoading(false);
           setRefresh(false);
           selectedDispatch({ type: "empty" });
@@ -152,6 +162,8 @@ export default function CardList() {
         .fetch("Listing items in " + collection, [], listUrl)
         .then((data) => {
           cardsDispatch({ type: "overwrite", cards: data });
+          setLoadedCount(0);
+          setFetchCycle((c) => c + 1);
           setLoading(false);
           setRefresh(false);
           selectedDispatch({ type: "empty" });
@@ -181,27 +193,29 @@ export default function CardList() {
 
   const viewMode = filters.viewMode;
   const pageCount = Math.ceil(Number(cardCount) / pageSize);
+  const allCardsLoaded = cards.length === 0 || loadedCount >= cards.length;
+  const isLoading = loading || refresh || !allCardsLoaded;
 
   return (
     <>
-      <div className={viewMode === "list" ? "card-list" : "card-grid list"}>
-        {(loading || refresh) && cards.length === 0 ? (
-          <p>Loading...</p>
-        ) : (
-          <React.Fragment>
-            {cards.map((card) => (
-              <CardComponent
-                viewMode={viewMode}
-                systemType={systemType}
-                id={card.id}
-                details={card}
-                key={card.collectionId + "-" + card.id}
-              />
-            ))}
-          </React.Fragment>
-        )}
+      {isLoading && <p className="cards-loading-text">Loading...</p>}
+      <div
+        className={viewMode === "list" ? "card-list" : "card-grid list"}
+        style={isLoading ? { display: "none" } : undefined}
+      >
+        {cards.map((card) => (
+          <CardComponent
+            viewMode={viewMode}
+            systemType={systemType}
+            id={card.id}
+            details={card}
+            key={card.collectionId + "-" + card.id}
+            onLoad={handleCardLoad}
+            fetchCycle={fetchCycle}
+          />
+        ))}
       </div>
-      {pageCount > 1 && (
+      {!isLoading && pageCount > 1 && (
         <ReactPaginate
           previousLabel="Previous"
           nextLabel="Next"

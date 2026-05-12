@@ -12,6 +12,8 @@ export default function MtGCard({
   printings = [],
   detailReturnPath = null,
   priceMode = "search",
+  onLoad = null,
+  fetchCycle = 0,
 }) {
   return (
     <CardShell
@@ -25,6 +27,8 @@ export default function MtGCard({
       printings={printings}
       detailReturnPath={detailReturnPath}
       priceMode={priceMode}
+      onLoad={onLoad}
+      fetchCycle={fetchCycle}
       detailPath={`/card/mtg/${encodeURIComponent(id)}`}
       makeDetailPath={(cardId) => `/card/mtg/${encodeURIComponent(cardId)}`}
       getImagePath={(_card) =>

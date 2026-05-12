@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSystems } from "./SystemTypeContext";
-import SortControls from "./SortControls";
 import { ReactComponent as ColorlessSymbol } from "../assets/card-symbols/C.svg";
 import "mana-font/css/mana.min.css";
 
@@ -14,21 +13,14 @@ const MTG_COLORS = [
   { value: "Colorless",  Symbol: ColorlessSymbol, bg: "#cac5c0", border: "#8f8780", title: "Colorless" },
 ];
 
-const SORT_FIELDS = [
-  { value: "Name",             label: "Name" },
-  { value: "SetCode",          label: "Set" },
-  { value: "Rarity",           label: "Rarity" },
-  { value: "CollectorNumber",  label: "No." },
-];
-
-const SORT_FIELD_VALUES = new Set(SORT_FIELDS.map(({ value }) => value));
-
 const SYSTEM_LABELS = {
   MagicSQLite: "MTG",
   RiftboundSQLite: "Riftbound",
   PokemonSQLite: "Pokémon",
   Scryfall: "Scryfall",
 };
+
+const VALID_SORT_FIELDS = new Set(["Name", "SetCode", "Rarity", "CollectorNumber", "PurchasePrice", "TimeAdded"]);
 
 function readFilters(searchParams) {
   const sortBy = searchParams.get("cf_sortBy");
@@ -40,7 +32,7 @@ function readFilters(searchParams) {
     artist:          searchParams.get("cf_artist") ?? "",
     text:            searchParams.get("cf_text") ?? "",
     provider:        searchParams.get("cf_provider") ?? "",
-    sortBy:          SORT_FIELD_VALUES.has(sortBy) ? sortBy : "Name",
+    sortBy:          VALID_SORT_FIELDS.has(sortBy) ? sortBy : "Name",
     sortOrder:       searchParams.get("cf_sortOrder") ?? "Asc",
     viewMode:        searchParams.get("cf_viewMode") ?? "grid",
     proxyMode:       searchParams.get("cf_proxy") ?? "all",
@@ -234,61 +226,6 @@ export default function CollectionFilterBar() {
               </div>
             </div>
           )}
-
-          <SortControls
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
-            fields={SORT_FIELDS}
-            onChange={(field, order) => {
-              const next = new URLSearchParams(searchParams);
-              next.set("cf_sortBy", field);
-              next.set("cf_sortOrder", order);
-              next.set("page", "1");
-              setSearchParams(next);
-            }}
-          />
-
-          <div className="collection-filter-row">
-            <span className="collection-filter-label">Proxy</span>
-            <div className="btn-group btn-group-sm" role="group" aria-label="Proxy filter">
-              {[
-                ["all", "All"],
-                ["regular", "Regular"],
-                ["proxy", "Proxy"],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`btn ${filters.proxyMode === value ? "btn-secondary" : "btn-outline-secondary"}`}
-                  onClick={() => setFilter("cf_proxy", value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="collection-filter-row">
-            <span className="collection-filter-label">View</span>
-            <div className="btn-group btn-group-sm" role="group" aria-label="View mode">
-              <button
-                type="button"
-                className={`btn ${filters.viewMode === "grid" ? "btn-secondary" : "btn-outline-secondary"}`}
-                onClick={() => setFilter("cf_viewMode", "grid")}
-                title="Grid view"
-              >
-                Grid
-              </button>
-              <button
-                type="button"
-                className={`btn ${filters.viewMode === "list" ? "btn-secondary" : "btn-outline-secondary"}`}
-                onClick={() => setFilter("cf_viewMode", "list")}
-                title="List view"
-              >
-                List
-              </button>
-            </div>
-          </div>
 
           {hasActive && (
             <button className="btn btn-outline-danger btn-sm" onClick={clearFilters} type="button">

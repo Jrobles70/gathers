@@ -10,6 +10,8 @@ pub enum SortField {
     SetCode,
     CollectorNumber,
     Artist,
+    TimeAdded,
+    PurchasePrice,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]

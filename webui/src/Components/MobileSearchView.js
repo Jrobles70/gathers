@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import useCardSearch from "./useCardSearch";
 import { useCardSets } from "./ReusableConstants/CardSets";
 import { useCollections } from "./CollectionContext";
@@ -38,6 +38,7 @@ export default function MobileSearchView() {
   const [bulkResults, setBulkResults] = useState([]);
   const [searchCollection, setSearchCollection] = useState("");
   const [setCodeFocused, setSetCodeFocused] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   const {
     cards, setCards,
@@ -56,6 +57,16 @@ export default function MobileSearchView() {
     startSearch: false,
     defaults: { sortBy: "Name", sortOrder: "Asc" },
   });
+
+  const triggerSearchRef = useRef(triggerSearch);
+  useEffect(() => { triggerSearchRef.current = triggerSearch; });
+
+  const searchOptionsKey = JSON.stringify(searchOptions);
+  useEffect(() => {
+    if (!hasInteracted || searchMode !== "single") return;
+    const t = setTimeout(() => triggerSearchRef.current(), 350);
+    return () => clearTimeout(t);
+  }, [searchOptionsKey, searchCollection, hasInteracted, searchMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBulkSearch = () => {
     const cardsToFind = parseBulkSearchInput(bulkText);
@@ -112,21 +123,6 @@ export default function MobileSearchView() {
 
   return (
     <div className="mobile-collection-app">
-      {/* Top bar with search input */}
-      <header className="mobile-collection-topbar mobile-search-topbar">
-        <form onSubmit={(e) => { e.preventDefault(); bulkMode ? handleBulkSearch() : triggerSearch(); }}
-              style={{ flex: 1, display: "flex", alignItems: "center" }}>
-          <input
-            className="mobile-search-bar"
-            type="search"
-            placeholder="Search cards"
-            value={searchOptions.name}
-            onChange={(e) => handleSearchInput(e, "name")}
-            aria-label="Card name"
-          />
-        </form>
-      </header>
-
       {/* Single / Bulk tabs — only show if collectionsEnabled */}
       {collectionsEnabled && (
         <div className="mobile-search-tabs" role="tablist">
@@ -170,6 +166,19 @@ export default function MobileSearchView() {
         ) : (
           /* Single mode filters */
           <>
+            {/* Name */}
+            <div className="mobile-filter-group">
+              <span className="mobile-filter-group-label">Name</span>
+              <input
+                className="mobile-filter-input"
+                type="search"
+                placeholder="Search cards"
+                value={searchOptions.name}
+                onChange={(e) => { setHasInteracted(true); handleSearchInput(e, "name"); }}
+                aria-label="Card name"
+              />
+            </div>
+
             {/* Colors */}
             <div className="mobile-filter-group">
               <span className="mobile-filter-group-label">Colors</span>
@@ -180,7 +189,7 @@ export default function MobileSearchView() {
                       type="checkbox"
                       value={value}
                       checked={searchOptions.colorIdentities.includes(value)}
-                      onChange={(e) => handleArrayInput("colorIdentities", e)}
+                      onChange={(e) => { setHasInteracted(true); handleArrayInput("colorIdentities", e); }}
                       aria-label={title}
                     />
                     <span className={"mobile-color-circle-swatch mobile-color-" + value.toLowerCase()}>
@@ -203,6 +212,7 @@ export default function MobileSearchView() {
                 onFocus={() => setSetCodeFocused(true)}
                 onBlur={() => setSetCodeFocused(false)}
                 onChange={(e) => {
+                  setHasInteracted(true);
                   const raw = e.target.value;
                   const code = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
                   handleSearchInput({ target: { value: code } }, "setCode");
@@ -222,14 +232,16 @@ export default function MobileSearchView() {
             <div className="mobile-filter-group">
               <span className="mobile-filter-group-label">Text</span>
               <input className="mobile-filter-input" type="text" placeholder="Card text"
-                value={searchOptions.text} onChange={(e) => handleSearchInput(e, "text")} />
+                value={searchOptions.text}
+                onChange={(e) => { setHasInteracted(true); handleSearchInput(e, "text"); }} />
             </div>
 
             {/* Artist */}
             <div className="mobile-filter-group">
               <span className="mobile-filter-group-label">Artist</span>
               <input className="mobile-filter-input" type="text" placeholder="Artist name"
-                value={searchOptions.artist} onChange={(e) => handleSearchInput(e, "artist")} />
+                value={searchOptions.artist}
+                onChange={(e) => { setHasInteracted(true); handleSearchInput(e, "artist"); }} />
             </div>
 
             {/* Sort */}
@@ -244,7 +256,7 @@ export default function MobileSearchView() {
                   { value: "SetCode", label: "Set Code" },
                   { value: "Artist", label: "Artist" },
                 ]}
-                onChange={(field, order) => handleMultiInput({ sortBy: field, sortOrder: order }, { search: true })}
+                onChange={(field, order) => { setHasInteracted(true); handleMultiInput({ sortBy: field, sortOrder: order }); }}
               />
             </div>
 
@@ -253,7 +265,7 @@ export default function MobileSearchView() {
               <div className="mobile-filter-group">
                 <span className="mobile-filter-group-label">Search in</span>
                 <select className="mobile-filter-input" value={searchCollection}
-                  onChange={(e) => setSearchCollection(e.target.value)}>
+                  onChange={(e) => { setHasInteracted(true); setSearchCollection(e.target.value); }}>
                   <option value="">MTG database</option>
                   <option value="skipNotOwned">All collections</option>
                   {collections.map((c) => (
@@ -294,7 +306,7 @@ export default function MobileSearchView() {
         type="button"
         className="mobile-search-fab"
         aria-label="Search"
-        onClick={() => bulkMode ? handleBulkSearch() : triggerSearch()}
+        onClick={() => { setHasInteracted(true); bulkMode ? handleBulkSearch() : triggerSearch(); }}
       >
         ⌕
       </button>

@@ -31,6 +31,8 @@ export default function CardShell({
   printings = [],
   detailReturnPath = null,
   priceMode = "search",
+  onLoad = null,
+  fetchCycle = 0,
 }) {
   const printingOptions = useMemo(
     () => (printings.length > 0 ? printings : [{ id, card, details }]),
@@ -40,6 +42,10 @@ export default function CardShell({
   const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState(false);
   const [printingPickerOpen, setPrintingPickerOpen] = useState(false);
+  const [printingPickerAlign, setPrintingPickerAlign] = useState("left");
+  const [hovered, setHovered] = useState(false);
+  const cardRef = useRef(null);
+  const cardDetailsRef = useRef(null);
 
   useEffect(() => {
     setSelectedPrintingId(id);
@@ -60,6 +66,34 @@ export default function CardShell({
   const selectedDispatch = useSelectedCardsDispatch();
   const loader = useCardLoader();
   const location = useLocation();
+  const onLoadFiredRef = useRef(false);
+
+  // When a new fetch cycle starts, reset the fired flag and immediately report
+  // if this card's data is already available (e.g. cached or re-render).
+  useEffect(() => {
+    onLoadFiredRef.current = false;
+    if ((_card != null || loadFailed) && onLoad) {
+      onLoadFiredRef.current = true;
+      onLoad();
+    }
+    // Intentionally omit _card / loadFailed — only re-run when fetchCycle changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchCycle, onLoad]);
+
+  useEffect(() => {
+    if (_card != null && !onLoadFiredRef.current) {
+      onLoadFiredRef.current = true;
+      onLoad?.();
+    }
+  }, [_card, onLoad]);
+
+  useEffect(() => {
+    if (loadFailed && !onLoadFiredRef.current) {
+      onLoadFiredRef.current = true;
+      onLoad?.();
+    }
+  }, [loadFailed, onLoad]);
+
   const detailState = { returnTo: detailReturnPath ?? `${location.pathname}${location.search}` };
 
   const toggleSelected = () => {
@@ -99,6 +133,27 @@ export default function CardShell({
       cancelled = true;
     };
   }, [activeCardKey, activeId, cardFromProps, loader, provider]);
+
+  useEffect(() => {
+    if (!hovered) return;
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        cardDetailsRef.current?.toggleFoil();
+      } else if ((e.key === "p" || e.key === "P") && printingOptions.length > 1) {
+        e.preventDefault();
+        if (cardRef.current) {
+          const rect = cardRef.current.getBoundingClientRect();
+          const pickerWidth = Math.min(544, window.innerWidth - 32);
+          setPrintingPickerAlign(rect.left + pickerWidth > window.innerWidth - 8 ? "right" : "left");
+        }
+        setPrintingPickerOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [hovered, printingOptions.length]);
 
   if (loadFailed) return null;
 
@@ -157,12 +212,15 @@ export default function CardShell({
     );
   }
 
+  if (_card == null) return null;
+
   return (
-    <>
-      {_card == null ? (
-        <p>Loading...</p>
-      ) : (
-        <div className={"card search-card" + (selected ? " border border-primary" : "")}>
+    <div
+      ref={cardRef}
+          className={"card search-card" + (selected ? " border border-primary" : "")}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
           <div className="search-card-art">
             <Link
               to={activeDetailPath}
@@ -173,15 +231,27 @@ export default function CardShell({
               <img src={imagePath} alt={_card.name} loading="lazy" />
             </Link>
             <CardDetails
+              ref={cardDetailsRef}
               id={activeId}
               details={activeDetails}
               showCollectionSelect={showCollectionSelect}
               targetCollection={targetCollection}
               hasPrintings={printingOptions.length > 1}
-              onOpenPrintings={() => setPrintingPickerOpen(true)}
+              onOpenPrintings={() => {
+                if (cardRef.current) {
+                  const rect = cardRef.current.getBoundingClientRect();
+                  const pickerWidth = Math.min(544, window.innerWidth - 32);
+                  setPrintingPickerAlign(rect.left + pickerWidth > window.innerWidth - 8 ? "right" : "left");
+                }
+                setPrintingPickerOpen(true);
+              }}
             />
             {printingPickerOpen && (
-              <div className="search-card-printing-picker" role="dialog" aria-label="Select a printing">
+              <div
+                className={"search-card-printing-picker" + (printingPickerAlign === "right" ? " align-right" : "")}
+                role="dialog"
+                aria-label="Select a printing"
+              >
                 <div className="search-card-printing-header">
                   <strong>Select a printing</strong>
                   <button
@@ -249,8 +319,6 @@ export default function CardShell({
               <span className="search-card-set">{_card.setCode}</span>
             </span>
           </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

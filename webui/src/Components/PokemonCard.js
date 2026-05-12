@@ -9,6 +9,8 @@ export default function PokemonCard({
   listMode = false,
   targetCollection = null,
   detailReturnPath = null,
+  onLoad = null,
+  fetchCycle = 0,
 }) {
   return (
     <CardShell
@@ -19,6 +21,8 @@ export default function PokemonCard({
       listMode={listMode}
       targetCollection={targetCollection}
       detailReturnPath={detailReturnPath}
+      onLoad={onLoad}
+      fetchCycle={fetchCycle}
       detailPath={`/card/pokemon/${encodeURIComponent(id)}`}
       getImagePath={(_card) => _card.image ?? ""}
     />
