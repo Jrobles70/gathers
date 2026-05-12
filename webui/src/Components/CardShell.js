@@ -235,6 +235,11 @@ export default function CardShell({
           <div className="search-card-footer">
             <span className={priceClass}>{priceText}</span>
             <span className="search-card-footer-meta">
+              {activeDetails?.collectionId && (
+                <span className="collection-pill" title={activeDetails.collectionId}>
+                  {activeDetails.collectionId}
+                </span>
+              )}
               {activeDetails?.isProxy && <span className="proxy-pill">Proxy</span>}
               <span className="search-card-set">{_card.setCode}</span>
             </span>

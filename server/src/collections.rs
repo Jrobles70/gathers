@@ -19,10 +19,11 @@ use retrieval::{NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait
 use crate::{
     ApiError, ErrorPayload, GathersState,
     collections::collections_models::{
-        APICardSearchFilters, CardIdentInner, CardProxyUpdate, CardToAdd, CardsProxyUpdate,
-        CollectionAddResponse, CollectionCard, CollectionCardsQuery, CollectionPriceStats,
-        CollectionRemoveQuery, CollectionRemoveResponse, CollectionRename, CollectionsSearchQuery,
-        ProxyUpdate, PurchasePrice, PurchasePriceUpdate, ResultCard, ResultCardInner,
+        APICardSearchFilters, BulkCollectionSearch, BulkCollectionSearchResult, CardIdentInner,
+        CardProxyUpdate, CardToAdd, CardsProxyUpdate, CollectionAddResponse, CollectionCard,
+        CollectionCardsQuery, CollectionPriceStats, CollectionRemoveQuery,
+        CollectionRemoveResponse, CollectionRename, CollectionsSearchQuery, ProxyUpdate,
+        PurchasePrice, PurchasePriceUpdate, ResultCard, ResultCardInner,
     },
     prices::{api_price_from_cache, cached_prices_for_scryfall_ids},
 };
@@ -174,6 +175,13 @@ fn card_name(card: &Card) -> &str {
         Card::Riftbound(r) => &r.name,
         Card::Pokemon(p) => &p.name,
     }
+}
+
+fn normalized_card_name(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn card_rarity_order(card: &Card) -> u8 {
@@ -1369,6 +1377,132 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         ))
     }
 
+    async fn bulk_search(
+        State(state): State<GathersState>,
+        Query(query): Query<CollectionsSearchQuery>,
+        Json(input): Json<BulkCollectionSearch>,
+    ) -> Result<Json<Vec<BulkCollectionSearchResult>>, ApiError> {
+        let mut requests: Vec<(String, String, i32)> = Vec::new();
+        let mut request_indexes: HashMap<String, usize> = HashMap::new();
+
+        for card in input.cards {
+            let key = normalized_card_name(&card.name);
+            if key.is_empty() || card.quantity <= 0 {
+                continue;
+            }
+
+            if let Some(index) = request_indexes.get(&key).copied() {
+                requests[index].2 += card.quantity;
+            } else {
+                request_indexes.insert(key.clone(), requests.len());
+                requests.push((key, card.name.trim().to_string(), card.quantity));
+            }
+        }
+
+        if requests.is_empty() {
+            return Ok(Json(Vec::new()));
+        }
+
+        let collection_cards =
+            get_collection_cards_for_search(&state, query.collection.as_deref()).await?;
+        let retrieval_systems = clone_retrieval_systems_by_name(&state).await;
+
+        let mut by_provider: HashMap<String, Vec<models::CollectionCard>> = HashMap::new();
+        for card in collection_cards {
+            by_provider
+                .entry(card.provider.clone())
+                .or_default()
+                .push(card);
+        }
+
+        let mut card_data: HashMap<String, Card> = HashMap::new();
+        for (provider, cards) in &by_provider {
+            if let Some(retrieval) = retrieval_systems.get(provider) {
+                let ids: Vec<String> = cards.iter().map(|c| c.uuid.clone()).collect();
+                if let Ok(data) = retrieval.get_cards_by_ids(ids).await {
+                    card_data.extend(data);
+                }
+            }
+        }
+
+        let mut matched: Vec<&models::CollectionCard> = by_provider
+            .values()
+            .flatten()
+            .filter(|cc| {
+                card_data
+                    .get(&cc.uuid)
+                    .map(|card| {
+                        matches!(card, Card::Magic(_))
+                            && request_indexes.contains_key(&normalized_card_name(card_name(card)))
+                    })
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        sort_collection_cards(
+            &mut matched,
+            &card_data,
+            &Some(crate::collections::collections_models::APISortField::Name),
+            &Some(crate::collections::collections_models::APISortOrder::Asc),
+        );
+
+        let price_cache = cached_prices_for_scryfall_ids(
+            &state,
+            matched
+                .iter()
+                .filter_map(|cc| match card_data.get(&cc.uuid) {
+                    Some(Card::Magic(card)) => Some(card.card_identifiers.scryfall_id.clone()),
+                    _ => None,
+                }),
+            1,
+        )
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to read card prices. {e}"),
+                }),
+            )
+        })?;
+
+        let mut owned_by_name: HashMap<String, i32> = HashMap::new();
+        let mut matches_by_name: HashMap<String, Vec<ResultCard>> = HashMap::new();
+
+        for cc in matched {
+            if let Some(Card::Magic(card)) = card_data.get(&cc.uuid) {
+                let key = normalized_card_name(&card.name);
+                *owned_by_name.entry(key.clone()).or_insert(0) += cc.quantity + cc.foil_quantity;
+                matches_by_name
+                    .entry(key)
+                    .or_default()
+                    .push(result_card_from_magic(
+                        card,
+                        Some(collection_card_response(cc)),
+                        price_cache
+                            .get(&card.card_identifiers.scryfall_id)
+                            .map(api_price_from_cache),
+                    ));
+            }
+        }
+
+        Ok(Json(
+            requests
+                .into_iter()
+                .map(|(key, name, requested_quantity)| {
+                    let owned_quantity = owned_by_name.get(&key).copied().unwrap_or(0);
+                    BulkCollectionSearchResult {
+                        name,
+                        requested_quantity,
+                        owned_quantity,
+                        needed_quantity: (requested_quantity - owned_quantity).max(0),
+                        matches: matches_by_name.remove(&key).unwrap_or_default(),
+                    }
+                })
+                .collect(),
+        ))
+    }
+
     async fn export(
         State(state): State<GathersState>,
         Path(collection_id): Path<String>,
@@ -1666,6 +1800,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             post(collection_cards_search_count),
         )
         .api_route("/search", post(search_temp))
+        .api_route("/bulk-search", post(bulk_search))
         .api_route("/cards/{id}/add", post(cards_add))
         .api_route("/cards/{id}/delete", post(cards_remove))
         .api_route("/cards/{id}/purchase-price", post(purchase_price_update))

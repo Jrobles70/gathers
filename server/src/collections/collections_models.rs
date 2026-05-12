@@ -305,6 +305,29 @@ pub struct CollectionsSearchQuery {
     pub collection: Option<String>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+pub struct BulkCollectionSearchCard {
+    pub name: String,
+    pub quantity: i32,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct BulkCollectionSearch {
+    pub cards: Vec<BulkCollectionSearchCard>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct BulkCollectionSearchResult {
+    pub name: String,
+    #[serde(rename = "requestedQuantity")]
+    pub requested_quantity: i32,
+    #[serde(rename = "ownedQuantity")]
+    pub owned_quantity: i32,
+    #[serde(rename = "neededQuantity")]
+    pub needed_quantity: i32,
+    pub matches: Vec<ResultCard>,
+}
+
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CardIdentInner {
     #[serde(rename = "scryfallId")]

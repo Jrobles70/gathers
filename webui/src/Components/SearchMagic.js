@@ -11,6 +11,11 @@ import {
   groupMagicSearchResults,
   listMagicSearchResultsByPrinting,
 } from "./searchPrintings";
+import {
+  bulkSearchTotals,
+  flattenBulkMatches,
+  parseBulkSearchInput,
+} from "./bulkSearch";
 
 const PAGE_SIZE = 24;
 
@@ -37,6 +42,9 @@ function SearchMagic({
 
   const [searchCollection, setSearchCollection] = React.useState("");
   const [setCodeFocused, setSetCodeFocused] = React.useState(false);
+  const [searchMode, setSearchMode] = React.useState("single");
+  const [bulkText, setBulkText] = React.useState("");
+  const [bulkResults, setBulkResults] = React.useState([]);
 
   const {
     cards, setCards,
@@ -55,6 +63,39 @@ function SearchMagic({
     startSearch,
     defaults: { sortBy: "Name", sortOrder: "Asc" },
   });
+
+  const bulkMode = collectionsEnabled && searchMode === "bulk";
+  const parsedBulkCards = React.useMemo(() => parseBulkSearchInput(bulkText), [bulkText]);
+
+  const handleBulkSearch = () => {
+    const cardsToFind = parseBulkSearchInput(bulkText);
+    if (cardsToFind.length === 0) {
+      setBulkResults([]);
+      setCards([]);
+      return;
+    }
+
+    setLoading(true);
+    setShouldSearch(false);
+
+    const params = new URLSearchParams();
+    if (searchCollection !== "" && searchCollection !== "skipNotOwned") {
+      params.set("collection", searchCollection);
+    }
+    const query = params.toString();
+
+    ops
+      .fetch("Bulk searching", [], `/collection/bulk-search${query ? `?${query}` : ""}`, {
+        method: "post",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ cards: cardsToFind }),
+      })
+      .then((data) => {
+        setBulkResults(data);
+        setCards(flattenBulkMatches(data));
+        setLoading(false);
+      });
+  };
 
   useEffect(() => {
     if (!shouldSearch) return;
@@ -101,6 +142,10 @@ function SearchMagic({
   const cardGroups = shouldGroupPrintings
     ? groupMagicSearchResults(cards, collectionsEnabled)
     : listMagicSearchResultsByPrinting(cards, collectionsEnabled);
+  const bulkCardGroups = listMagicSearchResultsByPrinting(flattenBulkMatches(bulkResults), true);
+  const displayedCardGroups = bulkMode ? bulkCardGroups : cardGroups;
+  const missingBulkCards = bulkResults.filter((result) => (result.neededQuantity ?? 0) > 0);
+  const totals = bulkSearchTotals(bulkResults);
 
   return (
     <div
@@ -108,88 +153,151 @@ function SearchMagic({
       id={dedicatedPage ? "main-search" : "search"}
     >
       {showTitle && <h2>Search</h2>}
-      <form onSubmit={(e) => { e.preventDefault(); triggerSearch(); }} className="list-group list-group-flush mx-3 mt-4">
-        <div className="input-group">
-          <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
-          <input
-            onChange={(e) => {
-              const raw = e.target.value;
-              const code = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
-              handleSearchInput({ target: { value: code } }, "setCode");
-            }}
-            onFocus={() => setSetCodeFocused(true)}
-            onBlur={() => setSetCodeFocused(false)}
-            className="form-control"
-            list="datalistOptions"
-            placeholder="Set Code"
-            value={searchOptions.setCode}
-          />
-          <datalist id="datalistOptions">
-            {setCodeFocused && cardSets
-              .filter(c => c.code && (!searchOptions.setCode ||
-                c.code.toLowerCase().startsWith(searchOptions.setCode.toLowerCase()) ||
-                c.name.toLowerCase().includes(searchOptions.setCode.toLowerCase())))
-              .slice(0, 20)
-              .map((c) => <option key={c.code} value={`${c.code} — ${c.name}`} />)}
-          </datalist>
-        </div>
-        <div className="input-group">
-          <input onChange={(e) => handleSearchInput(e, "artist")} type="text" className="form-control" placeholder="Artist" value={searchOptions.artist} />
-          <input onChange={(e) => handleSearchInput(e, "collectorNumber")} type="text" className="form-control" placeholder="Collector Number" value={searchOptions.collectorNumber} />
-        </div>
-        <div className="input-group">
-          <input onChange={(e) => handleSearchInput(e, "text")} type="text" className="form-control" placeholder="Text" value={searchOptions.text} />
-        </div>
-        <div className="input-group">
-          {colors.map(({ value, label, Symbol, title = value }, i) => (
-            <div key={value} className="form-check form-check-inline">
-              <input
-                onChange={(e) => handleArrayInput("colorIdentities", e)}
-                className="form-check-input"
-                type="checkbox"
-                id={`inlineCheckbox${i + 1}`}
-                value={value}
-                checked={searchOptions.colorIdentities.includes(value)}
-              />
-              <label className="form-check-label" htmlFor={`inlineCheckbox${i + 1}`} title={title}>
-                {Symbol ? (
-                  <Symbol className="mana-checkbox-symbol" aria-label={title} />
-                ) : (
-                  label
-                )}
-              </label>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          bulkMode ? handleBulkSearch() : triggerSearch();
+        }}
+        className="list-group list-group-flush mx-3 mt-4"
+      >
+        {collectionsEnabled && (
+          <div className="search-mode-toggle" role="group" aria-label="Search mode">
+            <button
+              type="button"
+              className={"btn " + (!bulkMode ? "btn-secondary" : "btn-outline-secondary")}
+              onClick={() => setSearchMode("single")}
+            >
+              Single
+            </button>
+            <button
+              type="button"
+              className={"btn " + (bulkMode ? "btn-secondary" : "btn-outline-secondary")}
+              onClick={() => setSearchMode("bulk")}
+            >
+              Bulk
+            </button>
+          </div>
+        )}
+        {bulkMode ? (
+          <div className="bulk-search-panel">
+            <textarea
+              className="form-control bulk-search-input"
+              value={bulkText}
+              onChange={(event) => setBulkText(event.target.value)}
+              placeholder={"5 Swamp\n1 Tainted Peak\n1 Talisman of Indulgence\n1 The Master, Multiplied\n1 Twinflame"}
+              rows={7}
+            />
+            <div className="bulk-search-meta">
+              <span>{parsedBulkCards.length} cards parsed</span>
+              {bulkResults.length > 0 && (
+                <span>{totals.owned}/{totals.requested} owned</span>
+              )}
             </div>
-          ))}
-        </div>
-        <div className="input-group">
-          <SortControls
-            sortBy={searchOptions.sortBy}
-            sortOrder={searchOptions.sortOrder}
-            fields={SORT_FIELDS}
-            onChange={(field, order) => handleMultiInput({ sortBy: field, sortOrder: order }, { search: true })}
-          />
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="input-group">
+              <input onChange={(e) => handleSearchInput(e, "name")} type="text" className="form-control" placeholder="Name" value={searchOptions.name} />
+              <input
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const code = raw.includes(" — ") ? raw.split(" — ")[0] : raw;
+                  handleSearchInput({ target: { value: code } }, "setCode");
+                }}
+                onFocus={() => setSetCodeFocused(true)}
+                onBlur={() => setSetCodeFocused(false)}
+                className="form-control"
+                list="datalistOptions"
+                placeholder="Set Code"
+                value={searchOptions.setCode}
+              />
+              <datalist id="datalistOptions">
+                {setCodeFocused && cardSets
+                  .filter(c => c.code && (!searchOptions.setCode ||
+                    c.code.toLowerCase().startsWith(searchOptions.setCode.toLowerCase()) ||
+                    c.name.toLowerCase().includes(searchOptions.setCode.toLowerCase())))
+                  .slice(0, 20)
+                  .map((c) => <option key={c.code} value={`${c.code} — ${c.name}`} />)}
+              </datalist>
+            </div>
+            <div className="input-group">
+              <input onChange={(e) => handleSearchInput(e, "artist")} type="text" className="form-control" placeholder="Artist" value={searchOptions.artist} />
+              <input onChange={(e) => handleSearchInput(e, "collectorNumber")} type="text" className="form-control" placeholder="Collector Number" value={searchOptions.collectorNumber} />
+            </div>
+            <div className="input-group">
+              <input onChange={(e) => handleSearchInput(e, "text")} type="text" className="form-control" placeholder="Text" value={searchOptions.text} />
+            </div>
+            <div className="input-group">
+              {colors.map(({ value, label, Symbol, title = value }, i) => (
+                <div key={value} className="form-check form-check-inline">
+                  <input
+                    onChange={(e) => handleArrayInput("colorIdentities", e)}
+                    className="form-check-input"
+                    type="checkbox"
+                    id={`inlineCheckbox${i + 1}`}
+                    value={value}
+                    checked={searchOptions.colorIdentities.includes(value)}
+                  />
+                  <label className="form-check-label" htmlFor={`inlineCheckbox${i + 1}`} title={title}>
+                    {Symbol ? (
+                      <Symbol className="mana-checkbox-symbol" aria-label={title} />
+                    ) : (
+                      label
+                    )}
+                  </label>
+                </div>
+              ))}
+            </div>
+            <div className="input-group">
+              <SortControls
+                sortBy={searchOptions.sortBy}
+                sortOrder={searchOptions.sortOrder}
+                fields={SORT_FIELDS}
+                onChange={(field, order) => handleMultiInput({ sortBy: field, sortOrder: order }, { search: true })}
+              />
+            </div>
+          </>
+        )}
         <div className="input-group">
           <button className="btn btn-outline-secondary" type="submit" id="button-addon2">
-            Search
+            {bulkMode ? "Bulk Search" : "Search"}
           </button>
           {collectionsEnabled && (
-            <select onChange={(e) => setSearchCollection(e.target.value)} className="form-control" id="searchInCollection">
-              <option value="">in MtG database</option>
-              <option value="skipNotOwned">in all collections</option>
+            <select value={searchCollection} onChange={(e) => setSearchCollection(e.target.value)} className="form-control" id="searchInCollection">
+              <option value="">{bulkMode ? "in all collections" : "in MtG database"}</option>
+              {!bulkMode && <option value="skipNotOwned">in all collections</option>}
               {collections.map((c) => (
                 <option key={"searchincol-" + c.id} value={c.id}>{"in " + c.id}</option>
               ))}
             </select>
           )}
         </div>
+        {bulkMode && bulkResults.length > 0 && (
+          <div className="bulk-search-summary">
+            <div className="bulk-search-summary-header">
+              <strong>Still need {totals.needed}</strong>
+              <span>{missingBulkCards.length} card names</span>
+            </div>
+            {missingBulkCards.length > 0 ? (
+              <div className="bulk-needed-list">
+                {missingBulkCards.map((result) => (
+                  <span className="bulk-needed-pill" key={result.name}>
+                    {result.neededQuantity} {result.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="bulk-search-complete">All requested cards are covered.</div>
+            )}
+          </div>
+        )}
         <div className="search-results" id="search-results">
           {loading ? (
             <p>Loading...</p>
           ) : (
             <div className="card-grid list">
               {collectionsEnabled
-                ? cardGroups.map(({ primary, printings }) => (
+                ? displayedCardGroups.map(({ primary, printings }) => (
                     <Card
                       key={primary.id + "-" + (primary.details != null ? primary.details.collectionId : "")}
                       id={primary.id}
@@ -201,7 +309,7 @@ function SearchMagic({
                       detailReturnPath={detailReturnPath}
                     />
                   ))
-                : cardGroups.map(({ primary, printings }) => (
+                : displayedCardGroups.map(({ primary, printings }) => (
                     <Card
                       key={primary.id}
                       id={primary.id}
@@ -215,7 +323,9 @@ function SearchMagic({
             </div>
           )}
         </div>
-        <SearchPagination cards={cards} pageSize={PAGE_SIZE} pageNumber={pageNumber} onPageChange={handlePageChange} />
+        {!bulkMode && (
+          <SearchPagination cards={cards} pageSize={PAGE_SIZE} pageNumber={pageNumber} onPageChange={handlePageChange} />
+        )}
       </form>
       <hr />
     </div>
