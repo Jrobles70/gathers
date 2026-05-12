@@ -77,7 +77,7 @@ impl RetrievalSystemTrait for MagicSQLiteRetrievalSystem {
             for colour in colours {
                 if matches!(colour, CardColour::Colourless) {
                     conditions.push(
-                        "(a.colorIdentity IS NULL OR TRIM(a.colorIdentity) = '')".to_string(),
+                        "(a.colorIdentity IS NULL OR TRIM(a.colorIdentity) = '' OR UPPER(TRIM(a.colorIdentity)) = 'C')".to_string(),
                     );
                 } else {
                     conditions.push(format!("a.colorIdentity LIKE ?{i}"));
