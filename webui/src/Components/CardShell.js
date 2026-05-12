@@ -58,15 +58,15 @@ export default function CardShell({
   const activeDetails = selectedPrinting?.details ?? details;
   const cardFromProps = selectedPrinting?.card ?? card;
   const activeDetailPath = makeDetailPath ? makeDetailPath(activeId) : detailPath;
-  const selected = selectedCards.some(
-    (c) => c.id === activeDetails?.id && c.collectionId === activeDetails?.collectionId
-  );
   const activeCardKey = `${provider ?? "default"}:${activeId}`;
   const [_card, setCard] = useState(cardFromProps);
   const loadedCardKeyRef = useRef(cardFromProps != null ? activeCardKey : null);
 
   const selectedCards = useSelectedCards();
   const selectedDispatch = useSelectedCardsDispatch();
+  const selected = selectedCards.some(
+    (c) => c.id === activeDetails?.id && c.collectionId === activeDetails?.collectionId
+  );
   const loader = useCardLoader();
   const location = useLocation();
   const onLoadFiredRef = useRef(false);
