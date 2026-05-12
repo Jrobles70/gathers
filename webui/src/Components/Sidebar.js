@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
@@ -50,34 +51,47 @@ export function getSidebarBrandPath({ isSearchOnly = false, collectionsEnabled =
   return !isSearchOnly && collectionsEnabled ? "/collections/1" : "/search";
 }
 
-function useDotMenuClose(open, setOpen, ref) {
-  useEffect(() => {
-    if (!open) return;
-    function handler(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open, setOpen, ref]);
-}
 
 function CollectionDotMenu({ collectionId, collectionType, onRename, onDelete, onMoveParent, onRemoveFromParent }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef();
-  useDotMenuClose(open, setOpen, ref);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const btnRef = useRef();
+  const closeTimer = useRef(null);
+
+  const handleMouseEnter = () => {
+    clearTimeout(closeTimer.current);
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom, right: window.innerWidth - rect.right });
+    }
+    setOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 80);
+  };
 
   return (
-    <div className="collection-dot-menu" ref={ref}>
+    <div
+      className="collection-dot-menu"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
+        ref={btnRef}
         type="button"
         className="collection-dot-menu-btn"
         aria-label={"Options for " + collectionId}
-        onClick={(e) => { e.preventDefault(); setOpen((o) => !o); }}
       >
         ···
       </button>
-      {open && (
-        <div className="collection-dot-menu-dropdown">
+      {open && createPortal(
+        <div
+          className="collection-dot-menu-dropdown"
+          style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}
+          onMouseEnter={() => clearTimeout(closeTimer.current)}
+          onMouseLeave={handleMouseLeave}
+        >
           <button onClick={() => { setOpen(false); onRename(); }}>Rename</button>
           <button onClick={() => { setOpen(false); onDelete(); }}>Delete</button>
           {collectionType === "leaf" && (
@@ -89,7 +103,8 @@ function CollectionDotMenu({ collectionId, collectionType, onRename, onDelete, o
           {collectionType === "child" && (
             <button onClick={() => { setOpen(false); onRemoveFromParent(); }}>Remove from parent</button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
