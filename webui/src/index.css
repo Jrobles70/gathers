@@ -791,8 +791,8 @@ code {
 }
 
 .card-list-item.selected {
-    background-color: rgba(13, 110, 253, 0.2);
-    border-color: #0d6efd;
+    background-color: rgba(147, 197, 253, 0.1);
+    border-color: rgba(147, 197, 253, 0.65);
 }
 
 .card-list-name {
@@ -2612,9 +2612,4 @@ code {
     padding-right: 0.25rem;
     border-right: 1px solid rgba(255, 255, 255, 0.2);
     margin-right: 0.25rem;
-}
-
-/* List mode selection — consistent color with grid mode */
-.card-list-item.selected {
-    border-left-color: rgba(147, 197, 253, 0.65);
 }
