@@ -64,6 +64,7 @@ fn collection_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<models::Coll
         id: row.get(0)?,
         can_remove: row.get(1)?,
         is_proxy: row.get(2)?,
+        parent: row.get(3)?,
     })
 }
 
@@ -141,8 +142,12 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
             "UPDATE cards SET collection = ?2 WHERE collection = ?1",
             params![old_name, new_name],
         )?;
+        tx.execute(
+            "UPDATE collection SET parent = ?2 WHERE parent = ?1",
+            params![old_name, new_name],
+        )?;
         let collection = tx.query_row(
-            "SELECT name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy FROM collection WHERE name = ?1",
+            "SELECT name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy, parent FROM collection WHERE name = ?1",
             params![new_name],
             collection_from_row,
         )?;
@@ -250,7 +255,7 @@ impl PersistenceSystemTrait for SQLitePersistenceSystem {
     ) -> eyre::Result<Vec<models::Collection>> {
         let conn = self.connection.lock().await;
 
-        let query = "SELECT name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy FROM collection";
+        let query = "SELECT name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy, parent FROM collection";
         let mut collections = Vec::new();
         if let Some(f) = filter {
             let pattern = format!("%{}%", f);
@@ -443,6 +448,7 @@ RETURNING uuid, collection, quantity, foilquantity, timeadded, provider, purchas
             Some(CollectionSortField::Quantity) => "cards.quantity",
             Some(CollectionSortField::FoilQuantity) => "cards.foilquantity",
             Some(CollectionSortField::Provider) => "cards.provider",
+            Some(CollectionSortField::PurchasePrice) => "cards.purchase_price_cents",
             _ => "cards.timeadded",
         };
         let sort_dir = if matches!(&params.sort_order, Some(SortOrder::Desc)) {
@@ -735,7 +741,7 @@ ON CONFLICT (source, scryfall_id) DO UPDATE SET
             "UPDATE collection
              SET is_proxy = ?2
              WHERE name = ?1
-             RETURNING name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy",
+             RETURNING name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy, parent",
         )?;
 
         let collection = stmt.query_row(params![collection_id, is_proxy], collection_from_row)?;
@@ -764,6 +770,23 @@ ON CONFLICT (source, scryfall_id) DO UPDATE SET
         let card = stmt.query_row(params![collection_id, card_uuid], collection_card_from_row)?;
 
         Ok(card)
+    }
+
+    async fn set_collection_parent(
+        &mut self,
+        collection_id: &CollectionID,
+        parent: Option<CollectionID>,
+    ) -> eyre::Result<models::Collection> {
+        let conn = self.connection.lock().await;
+        let mut stmt = conn.prepare(
+            "UPDATE collection
+             SET parent = ?2
+             WHERE name = ?1
+             RETURNING name, (can_remove = TRUE OR (SELECT COUNT(*) FROM collection) > 1) AS can_remove, is_proxy, parent",
+        )?;
+        let collection =
+            stmt.query_row(params![collection_id, parent], collection_from_row)?;
+        Ok(collection)
     }
 }
 

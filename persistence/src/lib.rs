@@ -32,6 +32,7 @@ pub enum CollectionSortField {
     Quantity,
     FoilQuantity,
     Provider,
+    PurchasePrice,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -205,6 +206,12 @@ pub trait PersistenceSystemTrait {
         card_uuid: &CardID,
         is_proxy: bool,
     ) -> impl std::future::Future<Output = eyre::Result<CollectionCard>>;
+
+    fn set_collection_parent(
+        &mut self,
+        collection_id: &CollectionID,
+        parent: Option<CollectionID>,
+    ) -> impl std::future::Future<Output = eyre::Result<models::Collection>>;
 }
 
 fn csv_cards_from_text(csv_text: &str) -> eyre::Result<Vec<CSVCard>> {

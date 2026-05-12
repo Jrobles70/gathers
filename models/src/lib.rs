@@ -59,4 +59,5 @@ pub struct Collection {
     pub id: CollectionID,
     pub can_remove: bool,
     pub is_proxy: bool,
+    pub parent: Option<String>,
 }

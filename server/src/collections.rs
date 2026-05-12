@@ -12,7 +12,7 @@ use axum::{
     extract::{Path, Query, State},
 };
 use chrono::{DateTime, Utc};
-use models::Card;
+use models::{Card, Collection as ModelCollection};
 use persistence::{CollectionCardsParams, PersistenceSystem, PersistenceSystemTrait};
 use retrieval::{NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
 
@@ -22,8 +22,8 @@ use crate::{
         APICardSearchFilters, BulkCollectionSearch, BulkCollectionSearchResult, CardIdentInner,
         CardProxyUpdate, CardToAdd, CardsProxyUpdate, CollectionAddResponse, CollectionCard,
         CollectionCardsQuery, CollectionPriceStats, CollectionRemoveQuery,
-        CollectionRemoveResponse, CollectionRename, CollectionsSearchQuery, ProxyUpdate,
-        PurchasePrice, PurchasePriceUpdate, ResultCard, ResultCardInner,
+        CollectionRemoveResponse, CollectionRename, CollectionSetParent, CollectionsSearchQuery,
+        ProxyUpdate, PurchasePrice, PurchasePriceUpdate, ResultCard, ResultCardInner,
     },
     prices::{api_price_from_cache, cached_prices_for_scryfall_ids},
 };
@@ -253,6 +253,12 @@ fn sort_collection_cards(
                 };
                 aa.cmp(ab)
             }
+            APISortField::TimeAdded => a.time_added.cmp(&b.time_added),
+            APISortField::PurchasePrice => {
+                let pa = a.purchase_price_cents.unwrap_or(0);
+                let pb = b.purchase_price_cents.unwrap_or(0);
+                pa.cmp(&pb)
+            }
         };
         if desc { ord.reverse() } else { ord }
     });
@@ -459,6 +465,11 @@ fn sort_collection_rows(cards: &mut [models::CollectionCard], params: &Collectio
                 a.foil_quantity.cmp(&b.foil_quantity)
             }
             Some(persistence::CollectionSortField::Provider) => a.provider.cmp(&b.provider),
+            Some(persistence::CollectionSortField::PurchasePrice) => {
+                let pa = a.purchase_price_cents.unwrap_or(0);
+                let pb = b.purchase_price_cents.unwrap_or(0);
+                pa.cmp(&pb)
+            }
             _ => a.time_added.cmp(&b.time_added),
         };
         if desc { ord.reverse() } else { ord }
@@ -471,7 +482,58 @@ async fn get_cards_for_collection_scope(
     params: CollectionCardsParams,
 ) -> Result<Vec<models::CollectionCard>, ApiError> {
     let storage = &state.1.lock().await.storage;
-    if collection_id != ALL_COLLECTIONS_ID {
+
+    if collection_id == ALL_COLLECTIONS_ID {
+        let collections = storage.list_collections(None).await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to list collections. {e}"),
+                }),
+            )
+        })?;
+        let mut cards = Vec::new();
+        let unpaged = unpaged_params(&params);
+        for collection in collections {
+            cards.extend(
+                storage
+                    .get_cards_in_collection_paginated(&collection, unpaged.clone())
+                    .await
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorPayload {
+                                error: format!("Failed to get cards from collection. {e}"),
+                            }),
+                        )
+                    })?,
+            );
+        }
+        sort_collection_rows(&mut cards, &params);
+        return Ok(cards
+            .into_iter()
+            .skip(params.offset)
+            .take(params.limit)
+            .collect());
+    }
+
+    let children: Vec<String> = storage
+        .list_collection_details(None)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to list collections. {e}"),
+                }),
+            )
+        })?
+        .into_iter()
+        .filter(|c| c.parent.as_deref() == Some(collection_id))
+        .map(|c| c.id)
+        .collect();
+
+    if children.is_empty() {
         return storage
             .get_cards_in_collection_paginated(&collection_id.to_string(), params)
             .await
@@ -485,20 +547,12 @@ async fn get_cards_for_collection_scope(
             });
     }
 
-    let collections = storage.list_collections(None).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorPayload {
-                error: format!("Failed to list collections. {e}"),
-            }),
-        )
-    })?;
-    let mut cards = Vec::new();
     let unpaged = unpaged_params(&params);
-    for collection in collections {
+    let mut cards = Vec::new();
+    for child in children {
         cards.extend(
             storage
-                .get_cards_in_collection_paginated(&collection, unpaged.clone())
+                .get_cards_in_collection_paginated(&child, unpaged.clone())
                 .await
                 .map_err(|e| {
                     (
@@ -720,6 +774,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                         id: c.id.clone(),
                         can_remove: c.can_remove,
                         is_proxy: c.is_proxy,
+                        parent: c.parent.clone(),
                     })
                     .collect(),
             )),
@@ -740,35 +795,47 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
 
         let storage = &mut state.1.lock().await.storage;
 
-        match storage.add_collection(input.id.clone()).await {
-            Ok(collection_id) if input.is_proxy => {
-                storage
-                    .set_collection_proxy(&collection_id, true)
-                    .await
-                    .map_err(|e| {
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorPayload {
-                                error: format!("Failed to mark collection as proxy. {e}"),
-                            }),
-                        )
-                    })?;
-                Ok(Json(CollectionAddResponse {
-                    id: collection_id,
-                    name: input.id,
-                }))
-            }
-            Ok(collection_id) => Ok(Json(CollectionAddResponse {
-                id: collection_id,
-                name: input.id,
-            })),
-            Err(e) => Err((
+        let collection_id = storage.add_collection(input.id.clone()).await.map_err(|e| {
+            (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {
                     error: format!("Failed to add collection. {e}"),
                 }),
-            )),
+            )
+        })?;
+
+        if input.is_proxy {
+            storage
+                .set_collection_proxy(&collection_id, true)
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to mark collection as proxy. {e}"),
+                        }),
+                    )
+                })?;
         }
+
+        if let Some(ref parent_id) = input.parent {
+            storage
+                .set_collection_parent(&collection_id, Some(parent_id.clone()))
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to set collection parent. {e}"),
+                        }),
+                    )
+                })?;
+        }
+
+        Ok(Json(CollectionAddResponse {
+            id: collection_id,
+            name: input.id,
+        }))
     }
 
     async fn remove(
@@ -777,6 +844,36 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         Query(query): Query<CollectionRemoveQuery>,
     ) -> Result<Json<CollectionRemoveResponse>, ApiError> {
         let storage = &mut state.1.lock().await.storage;
+
+        let reparent_children_to = query.reparent_children_to.filter(|v| !v.trim().is_empty());
+        let children: Vec<ModelCollection> = storage
+            .list_collection_details(None)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to list collections. {e}"),
+                    }),
+                )
+            })?
+            .into_iter()
+            .filter(|c| c.parent.as_deref() == Some(id.as_str()))
+            .collect();
+
+        for child in children {
+            storage
+                .set_collection_parent(&child.id, reparent_children_to.clone())
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorPayload {
+                            error: format!("Failed to reparent child collection. {e}"),
+                        }),
+                    )
+                })?;
+        }
 
         let move_to = query
             .keep_cards_in_collection
@@ -805,6 +902,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 id: collection.id,
                 can_remove: collection.can_remove,
                 is_proxy: collection.is_proxy,
+                parent: collection.parent,
             })),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -826,6 +924,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
                 id: collection.id,
                 can_remove: collection.can_remove,
                 is_proxy: collection.is_proxy,
+                parent: collection.parent,
             })),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -1026,6 +1125,28 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             return Err((StatusCode::INTERNAL_SERVER_ERROR, e));
         };
 
+        let is_parent = storage
+            .list_collection_details(None)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to list collections. {e}"),
+                    }),
+                )
+            })?
+            .iter()
+            .any(|c| c.parent.as_deref() == Some(collection_id.as_str()));
+        if is_parent {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorPayload {
+                    error: "Cards cannot be added directly to a parent collection".to_string(),
+                }),
+            ));
+        }
+
         mutate_card_quantities(
             storage,
             &collection_id,
@@ -1113,34 +1234,18 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         };
         let proxy_filter = proxy_filter_from_query(query.proxy.as_deref());
 
-        if collection_id == ALL_COLLECTIONS_ID {
-            let params = CollectionCardsParams {
-                offset: 0,
-                limit: i64::MAX as usize,
-                sort_by: None,
-                sort_order: None,
-                provider: None,
-                providers,
-                proxy_filter,
-            };
-            return get_cards_for_collection_scope(&state, &collection_id, params)
-                .await
-                .map(|cards| Json(cards.len()));
-        }
-
-        let storage = &mut state.1.lock().await.storage;
-        match storage
-            .get_cards_in_collection_count(collection_id, &providers, proxy_filter)
+        let params = CollectionCardsParams {
+            offset: 0,
+            limit: i64::MAX as usize,
+            sort_by: None,
+            sort_order: None,
+            provider: None,
+            providers,
+            proxy_filter,
+        };
+        get_cards_for_collection_scope(&state, &collection_id, params)
             .await
-        {
-            Ok(count) => Ok(Json(count)),
-            Err(e) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorPayload {
-                    error: format!("Failed to get card count for collection. {e}"),
-                }),
-            )),
-        }
+            .map(|cards| Json(cards.len()))
     }
 
     async fn collection_cards_stats(
@@ -1151,32 +1256,20 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             return all_collections_stats(State(state)).await;
         }
 
-        let cards = state
-            .1
-            .lock()
-            .await
-            .storage
-            .get_cards_in_collection_paginated(
-                &collection_id,
-                CollectionCardsParams {
-                    offset: 0,
-                    limit: i64::MAX as usize,
-                    sort_by: None,
-                    sort_order: None,
-                    provider: None,
-                    providers: vec![],
-                    proxy_filter: persistence::ProxyFilter::Include,
-                },
-            )
-            .await
-            .map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorPayload {
-                        error: format!("Failed to get cards from collection. {e}"),
-                    }),
-                )
-            })?;
+        let cards = get_cards_for_collection_scope(
+            &state,
+            &collection_id,
+            CollectionCardsParams {
+                offset: 0,
+                limit: i64::MAX as usize,
+                sort_by: None,
+                sort_order: None,
+                provider: None,
+                providers: vec![],
+                proxy_filter: persistence::ProxyFilter::Include,
+            },
+        )
+        .await?;
 
         price_stats_for_collection_cards(&state, Some(collection_id), cards)
             .await
@@ -1783,12 +1876,80 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         Ok(Json(count))
     }
 
+    async fn set_parent(
+        State(state): State<GathersState>,
+        Path(id): Path<String>,
+        Json(input): Json<CollectionSetParent>,
+    ) -> Result<Json<Collection>, ApiError> {
+        let storage = &mut state.1.lock().await.storage;
+
+        if let Some(ref parent_id) = input.parent {
+            if parent_id == &id {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorPayload {
+                        error: "A collection cannot be its own parent".to_string(),
+                    }),
+                ));
+            }
+            let all = storage.list_collection_details(None).await.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorPayload {
+                        error: format!("Failed to list collections. {e}"),
+                    }),
+                )
+            })?;
+            let parent = all.iter().find(|c| &c.id == parent_id).ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorPayload {
+                        error: "Parent collection not found".to_string(),
+                    }),
+                )
+            })?;
+            if parent.parent.is_some() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorPayload {
+                        error: "Target parent is itself a child collection".to_string(),
+                    }),
+                ));
+            }
+            let target_is_parent = all.iter().any(|c| c.parent.as_deref() == Some(id.as_str()));
+            if target_is_parent {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorPayload {
+                        error: "A parent collection cannot be assigned a parent".to_string(),
+                    }),
+                ));
+            }
+        }
+
+        match storage.set_collection_parent(&id, input.parent).await {
+            Ok(collection) => Ok(Json(Collection {
+                id: collection.id,
+                can_remove: collection.can_remove,
+                is_proxy: collection.is_proxy,
+                parent: collection.parent,
+            })),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorPayload {
+                    error: format!("Failed to set collection parent. {e}"),
+                }),
+            )),
+        }
+    }
+
     ApiRouter::new()
         .api_route("/list", get(list))
         .api_route("/add", post(add))
         .api_route("/rename/{id}", post(rename))
         .api_route("/proxy/{id}", post(collection_proxy_update))
         .api_route("/remove/{id}", post(remove))
+        .api_route("/set-parent/{id}", post(set_parent))
         .api_route("/move/{id}", post(move_to))
         .api_route("/stats", get(all_collections_stats))
         .api_route("/cards/{id}/list", get(cards_get))

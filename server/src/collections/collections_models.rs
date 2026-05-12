@@ -15,6 +15,8 @@ pub enum APISortField {
     SetCode,
     CollectorNumber,
     Artist,
+    TimeAdded,
+    PurchasePrice,
 }
 
 impl From<APISortField> for models::filters::SortField {
@@ -25,6 +27,8 @@ impl From<APISortField> for models::filters::SortField {
             APISortField::SetCode => models::filters::SortField::SetCode,
             APISortField::CollectorNumber => models::filters::SortField::CollectorNumber,
             APISortField::Artist => models::filters::SortField::Artist,
+            APISortField::TimeAdded => models::filters::SortField::TimeAdded,
+            APISortField::PurchasePrice => models::filters::SortField::PurchasePrice,
         }
     }
 }
@@ -109,6 +113,13 @@ pub struct Collection {
     pub can_remove: bool,
     #[serde(default, rename = "isProxy")]
     pub is_proxy: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CollectionSetParent {
+    pub parent: Option<String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -128,6 +139,8 @@ pub struct CollectionRemoveQuery {
     pub keep_cards_in_collection: Option<String>,
     #[serde(default, rename = "moveTo")]
     pub move_to: Option<String>,
+    #[serde(default, rename = "reparentChildrenTo")]
+    pub reparent_children_to: Option<String>,
 }
 
 #[derive(Deserialize, Debug, JsonSchema)]
@@ -147,6 +160,7 @@ pub enum APICollectionSortField {
     Quantity,
     FoilQuantity,
     Provider,
+    PurchasePrice,
 }
 
 impl From<APICollectionSortField> for persistence::CollectionSortField {
@@ -156,6 +170,7 @@ impl From<APICollectionSortField> for persistence::CollectionSortField {
             APICollectionSortField::Quantity => persistence::CollectionSortField::Quantity,
             APICollectionSortField::FoilQuantity => persistence::CollectionSortField::FoilQuantity,
             APICollectionSortField::Provider => persistence::CollectionSortField::Provider,
+            APICollectionSortField::PurchasePrice => persistence::CollectionSortField::PurchasePrice,
         }
     }
 }
