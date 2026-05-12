@@ -2,7 +2,10 @@ import React from "react";
 import ReactPaginate from "react-paginate";
 
 export default function SearchPagination({ cards, pageSize, pageNumber, onPageChange }) {
-  if (cards.length === 0) return null;
+  const pageCount = cards.length >= pageSize ? pageNumber + 1 : pageNumber;
+
+  if (cards.length === 0 || pageCount <= 1) return null;
+
   return (
     <ReactPaginate
       previousLabel="Previous"
@@ -18,7 +21,7 @@ export default function SearchPagination({ cards, pageSize, pageNumber, onPageCh
       breakLinkClassName="page-link"
       containerClassName="pagination"
       activeClassName="active"
-      pageCount={cards.length >= pageSize ? pageNumber + 1 : pageNumber}
+      pageCount={pageCount}
       marginPagesDisplayed={2}
       pageRangeDisplayed={5}
       onPageChange={onPageChange}
