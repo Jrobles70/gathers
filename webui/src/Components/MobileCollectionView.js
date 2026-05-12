@@ -66,18 +66,18 @@ function MobileTopBar({ title, backTo = null }) {
   );
 }
 
-function MobileBottomNav() {
+export function MobileBottomNav({ activeTab = "collection" }) {
   return (
     <nav className="mobile-bottom-nav" aria-label="Primary">
-      <Link to="/collections/1" className="mobile-bottom-nav-item">
+      <Link to="/collections/1" className={"mobile-bottom-nav-item" + (activeTab === "home" ? " active" : "")}>
         <span aria-hidden="true">⌂</span>
         Home
       </Link>
-      <Link to="/search" className="mobile-bottom-nav-item">
+      <Link to="/search" className={"mobile-bottom-nav-item" + (activeTab === "search" ? " active" : "")}>
         <span aria-hidden="true">⌕</span>
         Search
       </Link>
-      <Link to="/collections/1" className="mobile-bottom-nav-item active">
+      <Link to="/collections/1" className={"mobile-bottom-nav-item" + (activeTab === "collection" ? " active" : "")}>
         <span aria-hidden="true">▣</span>
         Collection
       </Link>
@@ -136,6 +136,7 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const carouselRef = useRef(null);
   const touchStartY = useRef(null);
+  const touchStartX = useRef(null);
   const scrollTimeout = useRef(null);
 
   // Bug 1: Load card metadata for the active card using useCardLoader
@@ -183,17 +184,20 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     };
   }, []);
 
-  // Bug 3: Swipe-to-dismiss touch handlers — bail if touch starts inside detail panel
+  // Swipe-to-dismiss: track both axes so horizontal carousel scroll doesn't trigger dismiss
   function handleTouchStart(e) {
     if (e.target.closest(".mobile-sheet-detail")) return;
     touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
   }
 
   function handleTouchEnd(e) {
     if (touchStartY.current == null) return;
     const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     touchStartY.current = null;
-    if (deltaY > 80) {
+    touchStartX.current = null;
+    if (deltaY > 80 && deltaY > Math.abs(deltaX)) {
       onClose();
     }
   }

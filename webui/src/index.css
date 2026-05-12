@@ -2021,6 +2021,170 @@ code {
         border: 0;
         padding: 0;
     }
+
+    /* Mobile Search View */
+    .mobile-search-topbar {
+        padding: 0.5rem 0.85rem;
+        gap: 0.5rem;
+    }
+
+    .mobile-search-bar {
+        flex: 1;
+        height: 2.6rem;
+        padding: 0 1rem;
+        border: none;
+        border-radius: 999px;
+        background: var(--mobile-panel-2, #2a2b2c);
+        color: var(--mobile-text, #f0f0f0);
+        font-size: 1rem;
+        outline: none;
+        width: 100%;
+    }
+
+    .mobile-search-bar::placeholder {
+        color: var(--mobile-muted, #888);
+    }
+
+    .mobile-search-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--mobile-border, #333);
+        background: var(--mobile-panel, #1a1b1c);
+    }
+
+    .mobile-search-tab {
+        flex: 1;
+        padding: 0.6rem 0;
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--mobile-muted, #888);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .mobile-search-tab.active {
+        color: var(--mobile-accent, #f0a500);
+        border-bottom-color: var(--mobile-accent, #f0a500);
+    }
+
+    .mobile-search-filters-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem 1rem 6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+    }
+
+    .mobile-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .mobile-filter-group-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--mobile-accent, #f0a500);
+    }
+
+    .mobile-filter-input {
+        background: var(--mobile-panel-2, #2a2b2c);
+        border: none;
+        border-bottom: 1px solid var(--mobile-border, #444);
+        border-radius: 0;
+        color: var(--mobile-text, #f0f0f0);
+        font-size: 1rem;
+        padding: 0.4rem 0;
+        width: 100%;
+        outline: none;
+    }
+
+    .mobile-filter-input:focus {
+        border-bottom-color: var(--mobile-accent, #f0a500);
+    }
+
+    .mobile-color-circles {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+    }
+
+    .mobile-color-circle input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .mobile-color-circle-swatch {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 50%;
+        border: 2px solid var(--mobile-border, #444);
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #fff;
+        opacity: 0.4;
+        transition: opacity 0.15s, border-color 0.15s;
+    }
+
+    .mobile-color-circle input[type="checkbox"]:checked + .mobile-color-circle-swatch {
+        opacity: 1;
+        border-color: var(--mobile-accent, #f0a500);
+    }
+
+    .mobile-color-white  { background: #f9f0d0; color: #333; }
+    .mobile-color-blue   { background: #0e68ab; }
+    .mobile-color-black  { background: #2a2a2a; }
+    .mobile-color-red    { background: #d32029; }
+    .mobile-color-green  { background: #00733e; }
+    .mobile-color-colorless { background: #999; }
+
+    .mobile-search-fab {
+        position: fixed;
+        right: 1rem;
+        bottom: calc(3.8rem + 1rem);
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 50%;
+        border: none;
+        background: var(--mobile-accent, #f0a500);
+        color: #fff;
+        font-size: 1.6rem;
+        cursor: pointer;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .mobile-search-results {
+        margin-top: 0.5rem;
+    }
+
+    .mobile-search-bulk-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+    }
+
+    .mobile-search-bulk-body textarea.mobile-filter-input {
+        resize: vertical;
+        min-height: 8rem;
+        padding: 0.5rem;
+        border-radius: 0.4rem;
+        border: 1px solid var(--mobile-border, #444);
+        font-family: monospace;
+    }
 }
 
 .settings-section .btn {
