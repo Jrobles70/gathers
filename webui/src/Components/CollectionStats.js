@@ -22,10 +22,11 @@ function changeText(stats) {
 }
 
 function StatsBlock({ title, stats }) {
+  const nonProxyValue = (stats?.totalValueCents ?? 0) - (stats?.proxyTotalValueCents ?? 0);
   return (
     <div className="collection-stats-block">
       <div className="collection-stats-title">{title}</div>
-      <div className="collection-stats-value">{formatCents(stats?.totalValueCents)}</div>
+      <div className="collection-stats-value">{formatCents(nonProxyValue)}</div>
       <div className={"collection-stats-change " + statTone(stats)}>
         {changeText(stats)}
       </div>
@@ -34,7 +35,7 @@ function StatsBlock({ title, stats }) {
       </div>
       {(stats?.proxyCopyCount ?? 0) > 0 && (
         <div className="collection-stats-meta proxy">
-          Proxy {formatCents(stats?.proxyTotalValueCents)} - {stats?.proxyCopyCount ?? 0} copies
+          Saved {formatCents(stats?.proxyTotalValueCents)} ({stats?.proxyCopyCount ?? 0} proxy copies)
         </div>
       )}
     </div>

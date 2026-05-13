@@ -492,6 +492,10 @@ code {
     font-variant-numeric: tabular-nums;
 }
 
+.proxy-saved {
+  color: #8cc84b;
+}
+
 .search-card-price-edit {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1495,12 +1499,17 @@ code {
         background: #0c0d0e;
     }
 
+    .top-bar {
+        display: none;
+    }
+
     .mobile-collection-sidebar-hidden {
         display: none !important;
     }
 
     main {
         padding-left: 0;
+        padding-top: 0;
     }
 
     .mobile-collection-app {
@@ -1600,6 +1609,14 @@ code {
         color: var(--mobile-muted);
         font-size: 0.98rem;
         font-weight: 700;
+    }
+
+    .mobile-stats-saved {
+        margin-top: 0.2rem;
+        color: #8cc84b;
+        font-size: 0.98rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
     }
 
     .mobile-section-tabs {
@@ -1798,6 +1815,18 @@ code {
         padding: 0 0.95rem 0.95rem;
     }
 
+    .mobile-filter-sheet .collection-sort-section {
+        padding: 0.75rem 0.95rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .mobile-filter-sheet .collection-sort-btn-group {
+        flex-wrap: wrap;
+    }
+
     .mobile-card-grid .card-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 0.55rem;
@@ -1860,17 +1889,10 @@ code {
         font-weight: 800;
     }
 
-    .mobile-card-grid .search-card-action-rail {
-        width: 2.15rem;
-        border-radius: 6px;
-        opacity: 0;
-        transform: translateY(-50%) translateX(0.35rem);
-    }
-
-    .mobile-card-grid .search-card:hover .search-card-action-rail,
-    .mobile-card-grid .search-card:focus-within .search-card-action-rail {
-        opacity: 1;
-        transform: translateY(-50%);
+    /* Hide the action overlay entirely in the mobile grid — controls are
+       available in the bottom sheet that opens when a card is tapped. */
+    .mobile-card-grid .search-card-overlay {
+        display: none;
     }
 
     .mobile-card-grid .pagination {
@@ -2011,11 +2033,12 @@ code {
         display: flex;
         overflow-x: scroll;
         scroll-snap-type: x mandatory;
-        scroll-behavior: smooth;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
         align-items: center;
         z-index: 1005;
+        /* 9vw padding lets adjacent cards peek in from both sides */
+        padding-inline: 9vw;
     }
 
     .mobile-sheet-carousel::-webkit-scrollbar {
@@ -2023,15 +2046,24 @@ code {
     }
 
     .mobile-sheet-carousel-slide {
-        min-width: 100vw;
+        flex: 0 0 82vw;
+        min-width: 82vw;
         scroll-snap-align: center;
         display: flex;
         justify-content: center;
         align-items: center;
+        transition: transform 0.25s ease, opacity 0.25s ease;
+        transform: scale(0.86);
+        opacity: 0.55;
+    }
+
+    .mobile-sheet-carousel-slide.active {
+        transform: scale(1);
+        opacity: 1;
     }
 
     .mobile-sheet-carousel-slide img {
-        max-width: 75vw;
+        max-width: 100%;
         max-height: 100%;
         border-radius: 12px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
