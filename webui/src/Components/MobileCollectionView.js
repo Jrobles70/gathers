@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import CardList from "./CardList";
-import CardDetails from "./CardDetails";
 import CollectionFilterBar from "./CollectionFilterBar";
 import {
   collectionDisplayName,
@@ -12,9 +11,10 @@ import {
 } from "./CollectionContext";
 import { useOperations } from "../OperationsContext";
 import { useQuickSearch } from "./QuickSearchContext";
-import { formatCents, formatPercent, priceTrend, unitPriceCents } from "./priceUtils";
-import { useCards } from "./CardListContexts/CardsContext";
+import { formatCents, formatPercent, parseCents, priceTrend, unitPriceCents } from "./priceUtils";
+import { useCards, useCardsDispatch } from "./CardListContexts/CardsContext";
 import { useCardLoader } from "./CardListContexts/CardLoaderContext";
+import { useRefreshCardList } from "./CardListContexts/RefreshCardListContext";
 
 const ACCENT_COLORS = ["#ec1f66", "#8cc84b", "#ffbe1b", "#ff4133", "#ff7b22"];
 
@@ -136,19 +136,56 @@ function MobileStatsHeader({ stats }) {
   );
 }
 
+function centsToInput(cents) {
+  if (cents == null) return "";
+  return (Number(cents) / 100).toFixed(2);
+}
+
 // B2: Card bottom sheet component
 function MobileCardSheet({ cards, initialIndex, onClose }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const carouselRef = useRef(null);
   const touchStartY = useRef(null);
   const touchStartX = useRef(null);
+  const carouselTouchStartY = useRef(null);
+  const carouselTouchStartX = useRef(null);
   const scrollTimeout = useRef(null);
+
+  // Inline action state
+  const ops = useOperations();
+  const cardsDispatch = useCardsDispatch();
+  const triggerRefresh = useRefreshCardList();
+  const [foilMode, setFoilMode] = useState(false);
+  const [quantitiesByPrinting, setQuantitiesByPrinting] = useState({});
+  const [purchasePriceInput, setPurchasePriceInput] = useState("");
+
+  // Fix 1: Prevent background scroll while sheet is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   // Load card metadata for a window of cards around the active index
   const loader = useCardLoader();
   const cardDataCache = useRef(new Map()); // index → card data
   const [cacheVersion, setCacheVersion] = useState(0); // bumped when active card loads
   const activeDetails = cards[activeIndex]; // flat details object IS the item
+
+  // Reset per-card state when the active card changes
+  useEffect(() => {
+    setFoilMode(false);
+    if (activeDetails) {
+      setQuantitiesByPrinting((prev) => ({
+        ...prev,
+        [activeDetails.id]: {
+          quantity: activeDetails.quantity ?? 0,
+          foilQuantity: activeDetails.foilQuantity ?? 0,
+        },
+      }));
+      setPurchasePriceInput(centsToInput(activeDetails.purchasePrice?.usdCents));
+    }
+  }, [activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!loader || cards.length === 0) return;
@@ -226,6 +263,100 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     }
   }
 
+  // Fix 2: Swipe-down on carousel dismisses the sheet
+  function handleCarouselTouchStart(e) {
+    carouselTouchStartY.current = e.touches[0].clientY;
+    carouselTouchStartX.current = e.touches[0].clientX;
+  }
+
+  function handleCarouselTouchEnd(e) {
+    if (carouselTouchStartY.current == null) return;
+    const deltaY = e.changedTouches[0].clientY - carouselTouchStartY.current;
+    const deltaX = e.changedTouches[0].clientX - carouselTouchStartX.current;
+    carouselTouchStartY.current = null;
+    carouselTouchStartX.current = null;
+    if (deltaY > 60 && deltaY > Math.abs(deltaX) * 1.5) {
+      onClose();
+    }
+  }
+
+  // Inline action handlers
+  const updateQuantity = useCallback((delta, deltaFoil) => {
+    if (!activeDetails) return;
+    const collectionId = activeDetails.collectionId;
+    const id = activeDetails.id;
+    const add = parseInt(delta) >= 0 && parseInt(deltaFoil) >= 0;
+    const url = `/collection/cards/${encodeURIComponent(collectionId)}/${add ? "add" : "delete"}`;
+    const body = {
+      id,
+      collectionId,
+      quantity: Math.abs(parseInt(delta)),
+      foilQuantity: Math.abs(parseInt(deltaFoil)),
+    };
+
+    // Optimistic update
+    setQuantitiesByPrinting((prev) => {
+      const current = prev[id] ?? { quantity: activeDetails.quantity ?? 0, foilQuantity: activeDetails.foilQuantity ?? 0 };
+      return {
+        ...prev,
+        [id]: {
+          quantity: Math.max(0, current.quantity + parseInt(delta)),
+          foilQuantity: Math.max(0, current.foilQuantity + parseInt(deltaFoil)),
+        },
+      };
+    });
+
+    ops.fetch("Updating quantities for card " + id, {}, url, {
+      method: "post",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((data) => {
+      const updatedCard = Array.isArray(data) ? data[0] : data;
+      if (cardsDispatch && updatedCard != null) {
+        cardsDispatch({ type: "added", card: updatedCard });
+      }
+      if (triggerRefresh && updatedCard != null && updatedCard.quantity === 0 && updatedCard.foilQuantity === 0) {
+        triggerRefresh(true);
+      }
+    });
+  }, [activeDetails, ops, cardsDispatch, triggerRefresh]);
+
+  const savePurchasePrice = useCallback(() => {
+    if (!activeDetails) return;
+    const id = activeDetails.id;
+    const collectionId = activeDetails.collectionId;
+    const purchasePriceCents = purchasePriceInput.trim() === "" ? null : parseCents(purchasePriceInput);
+
+    ops.fetch("Updating purchase price for card " + id, {}, `/collection/cards/${encodeURIComponent(collectionId)}/purchase-price`, {
+      method: "post",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ id, purchasePriceCents }),
+    }).then((updatedCard) => {
+      if (cardsDispatch && updatedCard != null) {
+        cardsDispatch({ type: "added", card: updatedCard });
+      }
+    });
+  }, [activeDetails, purchasePriceInput, ops, cardsDispatch]);
+
+  const setCardProxy = useCallback((isProxy) => {
+    if (!activeDetails) return;
+    const id = activeDetails.id;
+    const collectionId = activeDetails.collectionId;
+
+    ops.fetch("Updating proxy status for card " + id, {}, `/collection/cards/${encodeURIComponent(collectionId)}/proxy`, {
+      method: "post",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ id, isProxy }),
+    }).then((updatedCard) => {
+      if (cardsDispatch && updatedCard != null) {
+        cardsDispatch({ type: "added", card: updatedCard });
+      }
+      if (triggerRefresh) {
+        triggerRefresh(true);
+      }
+    });
+  }, [activeDetails, ops, cardsDispatch, triggerRefresh]);
+
   // Bug 1: Price / trend info now comes from loaded card data and flat details
   const trend = activeCardData?.price != null
     ? priceTrend(activeCardData.price, activeDetails)
@@ -234,7 +365,11 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     ? unitPriceCents(activeCardData.price, activeDetails)
     : null;
 
-  const qty = (activeDetails?.quantity ?? 0) + (activeDetails?.foilQuantity ?? 0);
+  const activeQuantities = activeDetails
+    ? (quantitiesByPrinting[activeDetails.id] ?? { quantity: activeDetails.quantity ?? 0, foilQuantity: activeDetails.foilQuantity ?? 0 })
+    : { quantity: 0, foilQuantity: 0 };
+  const activeQuantity = foilMode ? activeQuantities.foilQuantity : activeQuantities.quantity;
+  const qty = activeQuantities.quantity + activeQuantities.foilQuantity;
 
   return (
     <>
@@ -246,6 +381,8 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
         ref={carouselRef}
         className="mobile-sheet-carousel"
         onScroll={handleCarouselScroll}
+        onTouchStart={handleCarouselTouchStart}
+        onTouchEnd={handleCarouselTouchEnd}
       >
         {cards.map((card, index) => {
           const cachedData = cardDataCache.current.get(index);
@@ -307,13 +444,59 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
             </div>
           )}
           <div className="mobile-sheet-actions">
-            {activeDetails && (
-              <CardDetails
-                id={activeDetails.id}
-                details={activeDetails}
-                showCollectionSelect={false}
-                targetCollection={activeDetails?.collectionId ?? null}
+            {/* Quantity row */}
+            <div className="mobile-sheet-qty-row">
+              <button
+                type="button"
+                onClick={() => updateQuantity(foilMode ? 0 : -1, foilMode ? -1 : 0)}
+                disabled={activeQuantity <= 0}
+                aria-label={foilMode ? "Decrease foil quantity" : "Decrease quantity"}
+              >
+                −
+              </button>
+              <span aria-label={foilMode ? "Foil quantity" : "Quantity"}>{activeQuantity}</span>
+              <button
+                type="button"
+                onClick={() => updateQuantity(foilMode ? 0 : 1, foilMode ? 1 : 0)}
+                aria-label={foilMode ? "Increase foil quantity" : "Increase quantity"}
+              >
+                +
+              </button>
+            </div>
+            {/* Foil toggle */}
+            <label className="mobile-sheet-toggle">
+              <input
+                type="checkbox"
+                checked={foilMode}
+                onChange={(e) => setFoilMode(e.target.checked)}
               />
+              Foil
+            </label>
+            {/* Proxy toggle */}
+            {activeDetails && (
+              <label className="mobile-sheet-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(activeDetails.isProxy)}
+                  onChange={(e) => setCardProxy(e.target.checked)}
+                />
+                Proxy
+              </label>
+            )}
+            {/* Purchase price */}
+            {activeDetails && (
+              <div className="mobile-sheet-price-edit">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={purchasePriceInput}
+                  onChange={(e) => setPurchasePriceInput(e.target.value)}
+                  placeholder="Purchase price"
+                />
+                <button type="button" onClick={savePurchasePrice}>Save</button>
+              </div>
             )}
           </div>
         </div>
