@@ -207,11 +207,9 @@ export default function CardShell({
                 )}
               </>
             )}
-            {activeDetails?.isProxy ? (
-              <span className="search-card-price proxy-saved">Saved {priceText}</span>
-            ) : (
-              <span className={priceClass}>{priceText}</span>
-            )}
+            <span className={activeDetails?.isProxy ? "search-card-price" : priceClass}>
+              {activeDetails?.isProxy ? formatCents(activeUnitPrice) : priceText}
+            </span>
           </>
         )}
       </div>
@@ -317,12 +315,8 @@ export default function CardShell({
             )}
           </div>
           <div className="search-card-footer">
-            {activeDetails?.isProxy ? (
-              <span className="search-card-price proxy-saved">Saved {formatCents(activeUnitPrice)}</span>
-            ) : (
-              <span className="search-card-price">{formatCents(activeUnitPrice)}</span>
-            )}
-            {activeTrend && activeTrend.direction !== "flat" && (
+            <span className="search-card-price">{formatCents(activeUnitPrice)}</span>
+            {!activeDetails?.isProxy && activeTrend && activeTrend.direction !== "flat" && (
               <span className={["search-card-price-delta", activeTrend.direction === "up" ? "price-up" : "price-down"].join(" ")}>
                 {(activeTrend.changeCents >= 0 ? "+" : "") + formatCents(activeTrend.changeCents)} ({formatPercent(activeTrend.changePercent)})
               </span>

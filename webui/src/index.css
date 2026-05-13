@@ -2038,8 +2038,8 @@ code {
         touch-action: pan-x;
         align-items: center;
         z-index: 1005;
-        /* 9vw padding lets adjacent cards peek in from both sides */
-        padding-inline: 9vw;
+        /* 15vw padding lets adjacent cards peek in from both sides */
+        padding-inline: 15vw;
     }
 
     .mobile-sheet-carousel::-webkit-scrollbar {
@@ -2047,15 +2047,15 @@ code {
     }
 
     .mobile-sheet-carousel-slide {
-        flex: 0 0 82vw;
-        min-width: 82vw;
+        flex: 0 0 70vw;
+        min-width: 70vw;
         scroll-snap-align: center;
         display: flex;
         justify-content: center;
         align-items: center;
         transition: transform 0.25s ease, opacity 0.25s ease;
-        transform: scale(0.86);
-        opacity: 0.55;
+        transform: scale(0.93);
+        opacity: 1;
     }
 
     .mobile-sheet-carousel-slide.active {
@@ -2205,6 +2205,13 @@ code {
         color: var(--mobile-text);
         padding: 0.3rem 0.75rem;
         cursor: pointer;
+    }
+
+    .mobile-sheet-field-label {
+        color: var(--mobile-muted);
+        font-size: 0.78rem;
+        margin-bottom: 0.25rem;
+        margin-top: 0.35rem;
     }
 
     /* Mobile Search View */

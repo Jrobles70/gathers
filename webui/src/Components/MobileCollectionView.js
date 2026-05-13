@@ -219,19 +219,19 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
   useEffect(() => {
     const carousel = carouselRef.current;
     if (!carousel) return;
-    const slideWidth = window.innerWidth * 0.82;
+    const slideWidth = window.innerWidth * 0.70;
     carousel.style.scrollBehavior = "auto";
     carousel.scrollLeft = initialIndex * slideWidth;
     carousel.style.scrollBehavior = "";
   }, [initialIndex]);
 
-  // Update activeIndex as user swipes — slide width is 82vw, not full carousel width
+  // Update activeIndex as user swipes — slide width is 70vw, not full carousel width
   const handleCarouselScroll = useCallback(() => {
     if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
     scrollTimeout.current = setTimeout(() => {
       const carousel = carouselRef.current;
       if (!carousel) return;
-      const slideWidth = window.innerWidth * 0.82;
+      const slideWidth = window.innerWidth * 0.70;
       const newIndex = Math.round(carousel.scrollLeft / slideWidth);
       setActiveIndex((prev) =>
         newIndex >= 0 && newIndex < cards.length ? newIndex : prev
@@ -263,10 +263,26 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     }
   }
 
-  // Fix 2: Swipe-down on carousel dismisses the sheet
+  // Swipe-down on carousel dismisses the sheet with visual drag feedback
   function handleCarouselTouchStart(e) {
     carouselTouchStartY.current = e.touches[0].clientY;
     carouselTouchStartX.current = e.touches[0].clientX;
+    const carousel = carouselRef.current;
+    if (carousel) carousel.style.transition = "none";
+  }
+
+  function handleCarouselTouchMove(e) {
+    if (carouselTouchStartY.current == null) return;
+    const deltaY = e.touches[0].clientY - carouselTouchStartY.current;
+    const deltaX = e.touches[0].clientX - carouselTouchStartX.current;
+    if (deltaY > 0 && deltaY > Math.abs(deltaX)) {
+      const carousel = carouselRef.current;
+      if (carousel) {
+        const translateY = deltaY * 0.65;
+        carousel.style.transform = `translateY(${translateY}px)`;
+        carousel.style.opacity = String(Math.max(0.2, 1 - deltaY / 250));
+      }
+    }
   }
 
   function handleCarouselTouchEnd(e) {
@@ -275,8 +291,13 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
     const deltaX = e.changedTouches[0].clientX - carouselTouchStartX.current;
     carouselTouchStartY.current = null;
     carouselTouchStartX.current = null;
-    if (deltaY > 60 && deltaY > Math.abs(deltaX) * 1.5) {
+    const carousel = carouselRef.current;
+    if (deltaY > 80 && deltaY > Math.abs(deltaX) * 1.5) {
       onClose();
+    } else if (carousel) {
+      carousel.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+      carousel.style.transform = "";
+      carousel.style.opacity = "";
     }
   }
 
@@ -382,6 +403,7 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
         className="mobile-sheet-carousel"
         onScroll={handleCarouselScroll}
         onTouchStart={handleCarouselTouchStart}
+        onTouchMove={handleCarouselTouchMove}
         onTouchEnd={handleCarouselTouchEnd}
       >
         {cards.map((card, index) => {
@@ -432,7 +454,7 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
           {unitPrice != null && (
             <div className="mobile-sheet-price-row">
               <span className="mobile-sheet-price">{formatCents(unitPrice)}</span>
-              {trend && trend.direction !== "flat" && (
+              {!activeDetails?.isProxy && trend && trend.direction !== "flat" && (
                 <span className={[
                   "mobile-sheet-price-delta",
                   trend.direction === "up" ? "price-up" : "price-down",
@@ -485,17 +507,20 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
             )}
             {/* Purchase price */}
             {activeDetails && (
-              <div className="mobile-sheet-price-edit">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={purchasePriceInput}
-                  onChange={(e) => setPurchasePriceInput(e.target.value)}
-                  placeholder="Purchase price"
-                />
-                <button type="button" onClick={savePurchasePrice}>Save</button>
+              <div>
+                <div className="mobile-sheet-field-label">Purchase price</div>
+                <div className="mobile-sheet-price-edit">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={purchasePriceInput}
+                    onChange={(e) => setPurchasePriceInput(e.target.value)}
+                    placeholder="Purchase price"
+                  />
+                  <button type="button" onClick={savePurchasePrice}>Save</button>
+                </div>
               </div>
             )}
           </div>
@@ -563,12 +588,8 @@ function MobileCollectionOverview() {
       <main className="mobile-overview-content">
         <Link className="mobile-large-option" to="/collections/1">
           <span aria-hidden="true">▣</span>
-          All collection
+          All collections
         </Link>
-        <button type="button" className="mobile-large-option">
-          <span aria-hidden="true">◩</span>
-          Decks
-        </button>
         <label className="mobile-search-field">
           <span aria-hidden="true">⌕</span>
           <input
