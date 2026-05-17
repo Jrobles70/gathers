@@ -7,8 +7,10 @@ import {
   isAllCollections,
   useCollection,
   useCollections,
+  useCollectionsDispatch,
   usePageNumber,
 } from "./CollectionContext";
+import { buildNewCollectionImportFormData } from "./AddCollectionForm";
 import { useOperations } from "../OperationsContext";
 import { useQuickSearch } from "./QuickSearchContext";
 import { formatCents, formatPercent, parseCents, priceTrend, unitPriceCents } from "./priceUtils";
@@ -530,15 +532,153 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
   );
 }
 
+function MobileNewCollectionSheet({ onClose }) {
+  const [name, setName] = useState("");
+  const [importText, setImportText] = useState("");
+  const [isProxy, setIsProxy] = useState(false);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const touchStartY = useRef(null);
+  const collectionsDispatch = useCollectionsDispatch();
+  const ops = useOperations();
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  function handleTouchStart(e) {
+    touchStartY.current = e.touches[0].clientY;
+  }
+
+  function handleTouchEnd(e) {
+    if (touchStartY.current == null) return;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (deltaY > 80) onClose();
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const trimmedName = name.trim();
+    const trimmedText = importText.trim();
+    if (!trimmedName) return;
+    setError(null);
+    setSubmitting(true);
+
+    const save = trimmedText.length > 0
+      ? ops.fetch("Importing new collection", {}, "/collection/import", {
+          method: "POST",
+          body: buildNewCollectionImportFormData({ name: trimmedName, text: importText }),
+        })
+      : ops.fetch("Adding new collection", {}, "/collection/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: trimmedName, isProxy }),
+        });
+
+    save
+      .then(() =>
+        trimmedText.length > 0 && isProxy
+          ? ops.fetch("Marking collection as proxy", {}, `/collection/proxy/${encodeURIComponent(trimmedName)}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ isProxy: true }),
+            })
+          : null
+      )
+      .then(() => {
+        collectionsDispatch({ type: "added", item: { id: trimmedName, isProxy, canRemove: true } });
+        onClose();
+      })
+      .catch((err) => {
+        setError(err.message);
+        setSubmitting(false);
+      });
+  }
+
+  return (
+    <>
+      <div className="mobile-card-sheet-backdrop" onClick={onClose} />
+      <div
+        className="mobile-new-collection-sheet"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        role="dialog"
+        aria-label="New collection"
+        aria-modal="true"
+      >
+        <div className="mobile-sheet-handle" aria-hidden="true" />
+        <form className="mobile-new-collection-form" onSubmit={handleSubmit}>
+          <h2>New Collection</h2>
+          <input
+            type="text"
+            className="mobile-new-collection-name"
+            placeholder="Collection name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+          {error && <div className="mobile-new-collection-error">{error}</div>}
+          <div>
+            <div className="mobile-sheet-field-label">Import cards (optional)</div>
+            <textarea
+              className="mobile-new-collection-import"
+              placeholder="Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,..."
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <label className="mobile-sheet-toggle">
+            <input
+              type="checkbox"
+              checked={isProxy}
+              onChange={(e) => setIsProxy(e.target.checked)}
+            />
+            Proxy collection
+          </label>
+          <div className="mobile-new-collection-actions">
+            <button
+              type="submit"
+              disabled={!name.trim() || submitting}
+              className="mobile-new-collection-submit"
+            >
+              {submitting ? "Creating…" : "Create"}
+            </button>
+            <button type="button" onClick={onClose} className="mobile-new-collection-cancel">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+
 function MobileCollectionOverview() {
   const { fetch: opsFetch, quietFetch } = useOperations();
   const collections = useCollections();
   const [query, setQuery] = useState("");
+  const [newCollectionOpen, setNewCollectionOpen] = useState(false);
   const [allStats, setAllStats] = useState(null);
   const [collectionStats, setCollectionStats] = useState({});
+
+  const { childrenByParent, topLevel } = useMemo(() => {
+    const childrenByParent = {};
+    collections.forEach((c) => {
+      if (c.parent) {
+        if (!childrenByParent[c.parent]) childrenByParent[c.parent] = [];
+        childrenByParent[c.parent].push(c);
+      }
+    });
+    return { childrenByParent, topLevel: collections.filter((c) => !c.parent) };
+  }, [collections]);
+
   const filteredCollections = useMemo(
-    () => collections.filter((c) => c.id.toLowerCase().includes(query.trim().toLowerCase())),
-    [collections, query],
+    () => topLevel.filter((c) => c.id.toLowerCase().includes(query.trim().toLowerCase())),
+    [topLevel, query],
   );
   const visibleCollectionIds = filteredCollections.slice(0, 20).map((c) => c.id).join("\n");
 
@@ -603,6 +743,7 @@ function MobileCollectionOverview() {
         <div className="mobile-binder-list">
           {filteredCollections.map((collection, index) => {
             const stats = collectionStats[collection.id];
+            const children = childrenByParent[collection.id] ?? [];
             return (
               <Link
                 className="mobile-binder-card"
@@ -612,7 +753,11 @@ function MobileCollectionOverview() {
               >
                 <span className="mobile-binder-copy">
                   <strong>{collection.id}</strong>
-                  <span>{stats?.copyCount ?? 0} cards</span>
+                  {children.length > 0 ? (
+                    <span>{children.length} sub-collection{children.length !== 1 ? "s" : ""}</span>
+                  ) : (
+                    <span>{stats?.copyCount ?? 0} cards</span>
+                  )}
                 </span>
                 <span className="mobile-binder-value">
                   <strong>{formatMobileCents((stats?.totalValueCents ?? 0) - (stats?.proxyTotalValueCents ?? 0))}</strong>
@@ -623,12 +768,21 @@ function MobileCollectionOverview() {
           })}
         </div>
       </main>
+      <div className="mobile-overview-fab">
+        <button type="button" onClick={() => setNewCollectionOpen(true)} aria-label="New collection">
+          +
+        </button>
+      </div>
+      {newCollectionOpen && (
+        <MobileNewCollectionSheet onClose={() => setNewCollectionOpen(false)} />
+      )}
     </>
   );
 }
 
 function MobileCollectionDetail() {
   const collection = useCollection();
+  const allCollections = useCollections();
   const pageNumber = usePageNumber();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -636,6 +790,32 @@ function MobileCollectionDetail() {
   const { openQuickSearch } = useQuickSearch();
   const searchValue = searchParams.get("cf_name") ?? "";
   const cards = useCards();
+
+  const chipData = useMemo(() => {
+    const currentColl = allCollections.find((c) => c.id === collection);
+    const parentId = currentColl?.parent ?? null;
+    const children = allCollections.filter((c) => c.parent === collection);
+
+    if (children.length > 0) {
+      // This is a parent: show All (active) + each child
+      return {
+        allLink: `/c/${encodeURIComponent(collection)}/1`,
+        allActive: true,
+        parentLink: null,
+        chips: children.map((c) => ({ id: c.id, active: false })),
+      };
+    } else if (parentId) {
+      // This is a child: show All (→ parent) + siblings
+      const siblings = allCollections.filter((c) => c.parent === parentId);
+      return {
+        allLink: `/c/${encodeURIComponent(parentId)}/1`,
+        allActive: false,
+        parentLink: parentId,
+        chips: siblings.map((c) => ({ id: c.id, active: c.id === collection })),
+      };
+    }
+    return null;
+  }, [allCollections, collection]);
 
   // B2: Bottom sheet state
   const [sheetCardIndex, setSheetCardIndex] = useState(null);
@@ -668,9 +848,34 @@ function MobileCollectionDetail() {
     setSheetCardIndex(domIndex);
   }, [cards]);
 
+  const backTo = chipData?.parentLink
+    ? `/c/${encodeURIComponent(chipData.parentLink)}/1`
+    : "/collections/1";
+
   return (
     <>
-      <MobileTopBar title={collectionDisplayName(collection)} backTo="/collections/1" />
+      <MobileTopBar title={collectionDisplayName(collection)} backTo={backTo} />
+      {chipData && (
+        <div className="mobile-child-filter-chips" role="tablist" aria-label="Filter by sub-collection">
+          <Link
+            to={chipData.allLink}
+            className={"mobile-chip" + (chipData.allActive ? " active" : "")}
+            replace
+          >
+            All
+          </Link>
+          {chipData.chips.map((chip) => (
+            <Link
+              key={chip.id}
+              to={`/c/${encodeURIComponent(chip.id)}/1`}
+              className={"mobile-chip" + (chip.active ? " active" : "")}
+              replace
+            >
+              {chip.id}
+            </Link>
+          ))}
+        </div>
+      )}
       <main className="mobile-detail-content">
         <div className="mobile-detail-search-row">
           <label className="mobile-search-field mobile-card-search">

@@ -1656,6 +1656,38 @@ code {
         padding: 0.72rem 0.65rem 0;
     }
 
+    .mobile-child-filter-chips {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.5rem 0.65rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .mobile-child-filter-chips::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mobile-chip {
+        flex-shrink: 0;
+        padding: 0.3rem 0.85rem;
+        border-radius: 999px;
+        background: var(--mobile-panel);
+        color: var(--mobile-muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid var(--mobile-border);
+        white-space: nowrap;
+    }
+
+    .mobile-chip.active {
+        background: var(--mobile-accent);
+        color: #0c0d0e;
+        border-color: var(--mobile-accent);
+    }
+
     .mobile-large-option {
         display: flex;
         min-height: 4.35rem;
@@ -2212,6 +2244,141 @@ code {
         font-size: 0.78rem;
         margin-bottom: 0.25rem;
         margin-top: 0.35rem;
+    }
+
+    /* New collection bottom sheet */
+    .mobile-overview-fab {
+        position: fixed;
+        right: 1rem;
+        bottom: calc(6.7rem + env(safe-area-inset-bottom));
+        z-index: 920;
+    }
+
+    .mobile-overview-fab button {
+        display: grid;
+        width: 5.35rem;
+        height: 5.35rem;
+        place-items: center;
+        border: 0;
+        border-radius: 1.45rem;
+        background: var(--mobile-accent);
+        color: #111;
+        font-size: 2.35rem;
+        font-weight: 900;
+        line-height: 1;
+        box-shadow: 0 0.7rem 1.6rem rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+    }
+
+    .mobile-new-collection-sheet {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1010;
+        max-height: 85vh;
+        overflow-y: auto;
+        border-radius: 1.1rem 1.1rem 0 0;
+        background: var(--mobile-panel);
+        box-shadow: 0 -0.5rem 2.5rem rgba(0, 0, 0, 0.55);
+        animation: sheet-slide-up 0.28s ease-out;
+    }
+
+    .mobile-new-collection-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        padding: 0.5rem 1.1rem calc(2rem + env(safe-area-inset-bottom));
+    }
+
+    .mobile-new-collection-form h2 {
+        margin: 0;
+        color: var(--mobile-text);
+        font-size: 1.35rem;
+        font-weight: 900;
+    }
+
+    .mobile-new-collection-name {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 0.6rem;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--mobile-text);
+        font: inherit;
+        font-size: 1.1rem;
+        font-weight: 700;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .mobile-new-collection-name:focus {
+        border-color: var(--mobile-accent);
+    }
+
+    .mobile-new-collection-import {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--mobile-text);
+        font: inherit;
+        font-size: 0.92rem;
+        resize: vertical;
+        min-height: 6rem;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .mobile-new-collection-import:focus {
+        border-color: rgba(255, 164, 10, 0.5);
+    }
+
+    .mobile-new-collection-import::placeholder {
+        color: var(--mobile-muted);
+        opacity: 1;
+    }
+
+    .mobile-new-collection-error {
+        color: #e05c5c;
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+
+    .mobile-new-collection-actions {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.65rem;
+    }
+
+    .mobile-new-collection-submit {
+        padding: 0.8rem 1.2rem;
+        border: 0;
+        border-radius: 0.7rem;
+        background: var(--mobile-accent);
+        color: #111;
+        font: inherit;
+        font-size: 1.05rem;
+        font-weight: 900;
+        cursor: pointer;
+    }
+
+    .mobile-new-collection-submit:disabled {
+        opacity: 0.4;
+        cursor: default;
+    }
+
+    .mobile-new-collection-cancel {
+        padding: 0.8rem 1.2rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 0.7rem;
+        background: transparent;
+        color: var(--mobile-muted);
+        font: inherit;
+        font-size: 1.05rem;
+        font-weight: 800;
+        cursor: pointer;
     }
 
     /* Mobile Search View */
