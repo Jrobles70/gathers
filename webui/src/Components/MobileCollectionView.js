@@ -176,16 +176,17 @@ function MobileCardSheet({ cards, initialIndex, onClose }) {
 
   // Reset per-card state when the active card changes
   useEffect(() => {
-    setFoilMode(false);
     if (activeDetails) {
+      const q = activeDetails.quantity ?? 0;
+      const fq = activeDetails.foilQuantity ?? 0;
+      setFoilMode(fq > 0 && q === 0);
       setQuantitiesByPrinting((prev) => ({
         ...prev,
-        [activeDetails.id]: {
-          quantity: activeDetails.quantity ?? 0,
-          foilQuantity: activeDetails.foilQuantity ?? 0,
-        },
+        [activeDetails.id]: { quantity: q, foilQuantity: fq },
       }));
       setPurchasePriceInput(centsToInput(activeDetails.purchasePrice?.usdCents));
+    } else {
+      setFoilMode(false);
     }
   }, [activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 

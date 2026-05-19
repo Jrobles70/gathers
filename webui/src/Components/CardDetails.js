@@ -57,7 +57,7 @@ const CardDetails = forwardRef(function CardDetails({
   const detailsQuantity = details?.quantity ?? 0;
   const detailsFoilQuantity = details?.foilQuantity ?? 0;
   const [selectedCollection, setSelectedCollection] = useState(null);
-  const [foilMode, setFoilMode] = useState(false);
+  const [foilMode, setFoilMode] = useState(() => detailsFoilQuantity > 0 && detailsQuantity === 0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAlign, setMenuAlign] = useState("left");
   const railRef = useRef(null);

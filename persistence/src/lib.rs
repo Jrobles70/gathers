@@ -390,6 +390,12 @@ impl PersistenceSystem {
                 resolved.extend(system.bulk_search_cards(chunk.to_vec()).await?);
             }
 
+            // Multi-faced cards (adventure, split, DFC) have one DB row per face but
+            // share the same (setCode, number). Deduplicate so each CSV row maps to
+            // exactly one collection entry.
+            let mut seen_keys = std::collections::HashSet::new();
+            resolved.retain(|(set, num, _)| seen_keys.insert((set.clone(), num.clone())));
+
             for (set_code, collector_number, uuid) in resolved {
                 if let Some(c) = group
                     .iter()
