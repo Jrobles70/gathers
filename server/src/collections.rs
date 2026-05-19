@@ -212,6 +212,7 @@ fn card_rarity_order(card: &Card) -> u8 {
 fn sort_collection_cards(
     cards: &mut Vec<&models::CollectionCard>,
     card_data: &HashMap<String, Card>,
+    price_cache: &HashMap<String, persistence::CardPrice>,
     sort_by: &Option<crate::collections::collections_models::APISortField>,
     sort_order: &Option<crate::collections::collections_models::APISortOrder>,
 ) {
@@ -255,8 +256,22 @@ fn sort_collection_cards(
             }
             APISortField::TimeAdded => a.time_added.cmp(&b.time_added),
             APISortField::PurchasePrice => {
-                let pa = a.purchase_price_cents.unwrap_or(0);
-                let pb = b.purchase_price_cents.unwrap_or(0);
+                let scryfall_id_a = match card_a {
+                    Some(Card::Magic(m)) => Some(m.card_identifiers.scryfall_id.as_str()),
+                    _ => None,
+                };
+                let scryfall_id_b = match card_b {
+                    Some(Card::Magic(m)) => Some(m.card_identifiers.scryfall_id.as_str()),
+                    _ => None,
+                };
+                let pa = scryfall_id_a
+                    .and_then(|id| price_cache.get(id))
+                    .and_then(|p| p.usd_cents.or(p.usd_foil_cents))
+                    .unwrap_or(0);
+                let pb = scryfall_id_b
+                    .and_then(|id| price_cache.get(id))
+                    .and_then(|p| p.usd_cents.or(p.usd_foil_cents))
+                    .unwrap_or(0);
                 pa.cmp(&pb)
             }
         };
@@ -610,9 +625,30 @@ async fn search_owned_magic_cards(
         })
         .collect();
 
+    // Fetch prices for all matched cards before sorting so price-based sort
+    // uses current market price rather than the stored purchase price.
+    let sort_price_cache = if matches!(
+        filters.sort_by,
+        Some(crate::collections::collections_models::APISortField::PurchasePrice)
+    ) {
+        cached_prices_for_scryfall_ids(
+            state,
+            matched.iter().filter_map(|cc| match card_data.get(&cc.uuid) {
+                Some(Card::Magic(card)) => Some(card.card_identifiers.scryfall_id.clone()),
+                _ => None,
+            }),
+            1,
+        )
+        .await
+        .unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
     sort_collection_cards(
         &mut matched,
         &card_data,
+        &sort_price_cache,
         &filters.sort_by,
         &filters.sort_order,
     );
@@ -1535,6 +1571,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         sort_collection_cards(
             &mut matched,
             &card_data,
+            &HashMap::new(),
             &Some(crate::collections::collections_models::APISortField::Name),
             &Some(crate::collections::collections_models::APISortOrder::Asc),
         );
@@ -1819,6 +1856,7 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
         sort_collection_cards(
             &mut matched,
             &card_data,
+            &HashMap::new(),
             &filters.sort_by,
             &filters.sort_order,
         );
