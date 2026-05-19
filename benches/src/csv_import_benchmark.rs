@@ -20,7 +20,9 @@ fn bench_csv_import(c: &mut Criterion) {
             let result = persistence
                 .import_csv(
                     black_box("../data/pokemon_test.csv".to_string()),
-                    &retrieval,
+                    black_box("Benchmark".to_string()),
+                    &[retrieval.clone()],
+                    None,
                     None,
                 )
                 .await;

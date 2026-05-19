@@ -1765,9 +1765,15 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
             .collect()
         };
 
+        let import_log: persistence::ImportLog =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+
         let mut storage = state.1.lock().await;
-        match (file_bytes, csv_text) {
+        let result = match (file_bytes, csv_text) {
             (Some(bytes), _) => {
+                let csv_content = String::from_utf8_lossy(&bytes).into_owned();
+                crate::save_import_csv(&collection_name, &csv_content);
+
                 let mut tmp = tempfile::NamedTempFile::new().map_err(|e| {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -1788,18 +1794,23 @@ pub fn collection_routes() -> ApiRouter<GathersState> {
 
                 storage
                     .storage
-                    .import_csv(tmp_path, collection_name, &retrievals, None)
+                    .import_csv(tmp_path, collection_name, &retrievals, None, Some(import_log.clone()))
                     .await
             }
             (None, Some(text)) => {
+                crate::save_import_csv(&collection_name, &text);
                 storage
                     .storage
-                    .import_csv_text(&text, collection_name, &retrievals, None)
+                    .import_csv_text(&text, collection_name, &retrievals, None, Some(import_log.clone()))
                     .await
             }
             (None, None) => unreachable!("validated import source above"),
-        }
-        .map_err(|e| {
+        };
+
+        let log_msgs = import_log.lock().map(|v| v.clone()).unwrap_or_default();
+        crate::push_debug_logs(log_msgs);
+
+        result.map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorPayload {

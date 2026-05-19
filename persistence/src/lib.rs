@@ -235,6 +235,7 @@ fn csv_cards_from_manabox_records<R: std::io::Read>(
     let collector_number_index = manabox_header_index(headers, "Collector number")?;
     let foil_index = manabox_header_index(headers, "Foil")?;
     let quantity_index = manabox_header_index(headers, "Quantity")?;
+    let name_index = manabox_header_index(headers, "Name").ok();
 
     rdr.records()
         .map(|result| {
@@ -250,6 +251,11 @@ fn csv_cards_from_manabox_records<R: std::io::Read>(
                 .trim()
                 .parse::<u32>()?;
             let is_foil = manabox_is_foil(manabox_field(&record, foil_index, "Foil")?);
+            let name = name_index
+                .and_then(|i| record.get(i))
+                .unwrap_or("")
+                .trim()
+                .to_string();
 
             Ok(CSVCard {
                 set_code,
@@ -257,6 +263,7 @@ fn csv_cards_from_manabox_records<R: std::io::Read>(
                 quantity: if is_foil { 0 } else { quantity },
                 foil_quantity: if is_foil { quantity } else { 0 },
                 provider: String::new(),
+                name,
             })
         })
         .collect()
@@ -303,6 +310,16 @@ fn manabox_is_foil(foil: &str) -> bool {
     !matches!(foil.as_str(), "" | "normal" | "nonfoil" | "regular")
 }
 
+pub type ImportLog = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+fn ilog(log: &Option<ImportLog>, msg: String) {
+    if let Some(log) = log {
+        if let Ok(mut v) = log.lock() {
+            v.push(msg);
+        }
+    }
+}
+
 impl PersistenceSystem {
     pub async fn import_csv(
         &mut self,
@@ -310,9 +327,10 @@ impl PersistenceSystem {
         collection_name: String,
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+        import_log: Option<ImportLog>,
     ) -> eyre::Result<()> {
         let rdr = csv::Reader::from_path(filename)?;
-        self.import_csv_reader(rdr, collection_name, retrievals, progress_sender)
+        self.import_csv_reader(rdr, collection_name, retrievals, progress_sender, import_log)
             .await
     }
 
@@ -322,9 +340,10 @@ impl PersistenceSystem {
         collection_name: String,
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+        import_log: Option<ImportLog>,
     ) -> eyre::Result<()> {
         let cards = csv_cards_from_text(csv_text)?;
-        self.import_csv_cards(cards, collection_name, retrievals, progress_sender)
+        self.import_csv_cards(cards, collection_name, retrievals, progress_sender, import_log)
             .await
     }
 
@@ -334,13 +353,14 @@ impl PersistenceSystem {
         collection_name: String,
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+        import_log: Option<ImportLog>,
     ) -> eyre::Result<()> {
         let mut cards: Vec<csv_models::CSVCard> = vec![];
         for result in rdr.deserialize() {
             cards.push(result?);
         }
 
-        self.import_csv_cards(cards, collection_name, retrievals, progress_sender)
+        self.import_csv_cards(cards, collection_name, retrievals, progress_sender, import_log)
             .await
     }
 
@@ -350,9 +370,12 @@ impl PersistenceSystem {
         collection_name: String,
         retrievals: &[RetrievalSystem],
         progress_sender: Option<tokio::sync::watch::Sender<f32>>,
+        import_log: Option<ImportLog>,
     ) -> eyre::Result<()> {
         const DEFAULT_PROVIDER: &str = "MagicSQLite";
         const BULK_CHUNK_SIZE: usize = 500;
+
+        ilog(&import_log, format!("=== Import started: collection=\"{collection_name}\" csv_rows={} ===", cards.len()));
 
         let systems_by_name: std::collections::HashMap<&str, &RetrievalSystem> =
             retrievals.iter().map(|r| (r.name(), r)).collect();
@@ -367,6 +390,10 @@ impl PersistenceSystem {
                 card.provider.as_str()
             };
             groups.entry(provider).or_default().push(card);
+        }
+
+        for (provider, group) in &groups {
+            ilog(&import_log, format!("  Provider group: provider=\"{provider}\" rows={}", group.len()));
         }
 
         // Resolve each group against its retrieval system, falling back to the
@@ -396,6 +423,48 @@ impl PersistenceSystem {
             let mut seen_keys = std::collections::HashSet::new();
             resolved.retain(|(set, num, _)| seen_keys.insert((set.clone(), num.clone())));
 
+            // Build a lookup of resolved (set_code, collector_number) for NOT FOUND reporting.
+            let resolved_keys: std::collections::HashSet<(String, String)> = resolved
+                .iter()
+                .map(|(s, n, _)| (s.clone(), n.clone()))
+                .collect();
+
+            // Log each CSV row with its outcome.
+            // Collect unique (set, num) pairs from the group to report per-card outcomes.
+            let mut seen_csv_keys: std::collections::HashSet<(String, String)> = Default::default();
+            for csv_card in group.iter() {
+                let key = (csv_card.set_code.clone(), csv_card.collector_number.clone());
+                if !seen_csv_keys.insert(key.clone()) {
+                    continue; // already reported this set+num combination
+                }
+                let matching_rows: Vec<&&csv_models::CSVCard> = group
+                    .iter()
+                    .filter(|c| c.set_code == key.0 && c.collector_number == key.1)
+                    .collect();
+                let total_qty: u32 = matching_rows.iter().map(|c| c.quantity).sum();
+                let total_foil: u32 = matching_rows.iter().map(|c| c.foil_quantity).sum();
+                let row_count = matching_rows.len();
+                let set = &csv_card.set_code;
+                let num = &csv_card.collector_number;
+                let label = if csv_card.name.is_empty() {
+                    format!("[{set} #{num}]")
+                } else {
+                    format!("{} [{set} #{num}]", csv_card.name)
+                };
+
+                if resolved_keys.contains(&key) {
+                    let qty_str = match (total_qty, total_foil) {
+                        (q, 0) => format!("{q} regular"),
+                        (0, f) => format!("{f} foil"),
+                        (q, f) => format!("{q} regular + {f} foil"),
+                    };
+                    let dupes = if row_count > 1 { format!(" (merged {row_count} rows)") } else { String::new() };
+                    ilog(&import_log, format!("  FOUND     {label} -> added {qty_str}{dupes}"));
+                } else {
+                    ilog(&import_log, format!("  NOT FOUND {label} qty={total_qty} foil={total_foil} (not in DB, skipped)"));
+                }
+            }
+
             for (set_code, collector_number, uuid) in resolved {
                 let (total_qty, total_foil_qty) = group
                     .iter()
@@ -406,6 +475,8 @@ impl PersistenceSystem {
                 }
             }
         }
+
+        ilog(&import_log, format!("=== Resolved: {}/{} unique cards will be added to collection ===", cta.len(), cards.len()));
 
         let now = chrono::Utc::now();
         let time_added = now.to_rfc3339();
@@ -436,6 +507,8 @@ impl PersistenceSystem {
                 sender.send(i / total)?;
             }
         }
+
+        ilog(&import_log, format!("=== Import complete: {} cards added to collection_id=\"{collection_id}\" ===", cta.len()));
 
         Ok(())
     }
@@ -510,6 +583,7 @@ impl PersistenceSystem {
                         quantity: card.quantity as u32,
                         foil_quantity: card.foil_quantity as u32,
                         provider: provider.clone(),
+                        name: String::new(),
                     })?;
                 }
             }
@@ -548,6 +622,7 @@ mod tests {
             "New Collection".to_string(),
             &[r.clone()],
             Some(sender),
+            None,
         )
         .await
         .unwrap();
@@ -614,7 +689,7 @@ mod tests {
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
 
-        s.import_csv_text(csv, "Pasted Collection".to_string(), &[r], None)
+        s.import_csv_text(csv, "Pasted Collection".to_string(), &[r], None, None)
             .await
             .unwrap();
 
@@ -642,7 +717,7 @@ mod tests {
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
 
-        s.import_csv_text(csv, "ManaBox Collection".to_string(), &[r], None)
+        s.import_csv_text(csv, "ManaBox Collection".to_string(), &[r], None, None)
             .await
             .unwrap();
 
@@ -680,7 +755,7 @@ mod tests {
             MagicSQLiteRetrievalSystem::new(None).unwrap(),
         );
 
-        s.import_csv_text(csv, "Normalized ManaBox".to_string(), &[r], None)
+        s.import_csv_text(csv, "Normalized ManaBox".to_string(), &[r], None, None)
             .await
             .unwrap();
 

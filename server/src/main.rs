@@ -2,18 +2,55 @@ use aide::axum::{ApiRouter, routing::get};
 use aide::openapi::{Info, OpenApi};
 use aide::swagger::Swagger;
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::{Extension, Json, error_handling::HandleErrorLayer, extract::State};
 use clap::{Parser, ValueEnum};
 use persistence::PersistenceSystem;
 use retrieval::{DownloadProgress, NamedRetrievalSystem as _, RetrievalSystem, RetrievalSystemTrait};
 use schemars::JsonSchema;
 use serde::Serialize;
+use std::collections::VecDeque;
+use std::sync::OnceLock;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::debug;
+
+static DEBUG_LOG: OnceLock<std::sync::Mutex<VecDeque<String>>> = OnceLock::new();
+static IMPORTS_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+fn debug_log_store() -> &'static std::sync::Mutex<VecDeque<String>> {
+    DEBUG_LOG.get_or_init(|| std::sync::Mutex::new(VecDeque::with_capacity(2000)))
+}
+
+pub fn push_debug_logs(msgs: Vec<String>) {
+    if let Ok(mut log) = debug_log_store().lock() {
+        for msg in msgs {
+            if log.len() >= 2000 {
+                log.pop_front();
+            }
+            log.push_back(format!("[{}] {}", chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"), msg));
+        }
+    }
+}
+
+pub fn save_import_csv(collection_name: &str, csv_content: &str) {
+    let Some(dir) = IMPORTS_DIR.get() else { return };
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("Failed to create imports dir: {e}");
+        return;
+    }
+    let safe_name: String = collection_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
+        .collect();
+    let filename = dir.join(format!("{safe_name}.csv"));
+    if let Err(e) = std::fs::write(&filename, csv_content) {
+        eprintln!("Failed to save import CSV to {}: {e}", filename.display());
+    }
+}
 
 use crate::collections::collection_routes;
 use crate::mtg_api::mtg_routes;
@@ -339,6 +376,19 @@ async fn serve_api(Extension(api): Extension<OpenApi>) -> impl axum::response::I
     Json(api)
 }
 
+async fn debug_logs_handler() -> impl IntoResponse {
+    let log = debug_log_store().lock().unwrap();
+    let body = if log.is_empty() {
+        "No import logs yet. Run an import to populate.".to_string()
+    } else {
+        log.iter().cloned().collect::<Vec<_>>().join("\n")
+    };
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        body,
+    )
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let args = Args::parse();
@@ -510,6 +560,8 @@ async fn main() -> eyre::Result<()> {
             }
         }
     }
+    let _ = IMPORTS_DIR.set(gathers_dir.join("imports"));
+
     let storage = Arc::new(Mutex::new(StorageState::new(storage_db_path)?));
     prices::spawn_scryfall_price_worker(storage.clone());
 
@@ -530,6 +582,7 @@ async fn main() -> eyre::Result<()> {
         .nest("/collection", collection_routes())
         .api_route("/system", get(get_system_info))
         .route("/api.json", axum::routing::get(serve_api))
+        .route("/debug-logs", axum::routing::get(debug_logs_handler))
         .route("/swagger", Swagger::new("/api.json").axum_route())
         .finish_api(&mut api)
         .layer(

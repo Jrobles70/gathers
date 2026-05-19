@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CSVCard {
     #[serde(rename = "Set")]
     pub set_code: String,
@@ -12,4 +12,6 @@ pub struct CSVCard {
     pub foil_quantity: u32,
     #[serde(rename = "Provider", default)]
     pub provider: String,
+    #[serde(skip)]
+    pub name: String,
 }
