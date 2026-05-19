@@ -1,38 +1,101 @@
 # GatheRs
 
-Collection of Rust crates and binaries to help one search for and manage Magic: the Gathering (TM) cards.
-And Riftbound, apparently.
-And Pokemon, it seems.
-I really do like my modular code.
+A card collection management system supporting Magic: The Gathering, Riftbound, and Pokemon. Built with a Rust backend and React web UI.
 
-![Example of the UI](https://codeberg.org/morosanmihail/hometg/raw/branch/main/images/ui20230628.jpg)
+## Features
 
-![Example of the UI, Riftbound](https://codeberg.org/morosanmihail/gathers/raw/branch/main/images/riftbound1.png)
+- **Multi-game support** — MTG (via Scryfall API or local SQLite), Riftbound, and Pokemon
+- **Collection management** — Create and organize multiple collections with subcollection support
+- **Quantity tracking** — Track regular and foil quantities per card
+- **Price tracking** — Current market prices via Scryfall integration
+- **Purchase history** — Record purchase prices and sources
+- **Proxy support** — Link alternative printings to cards in your collection
+- **CSV import/export** — Bulk import and export collections
+- **OpenAPI/Swagger** — Auto-generated API docs at `/swagger`
 
-![Example of the CLI Tool](https://codeberg.org/morosanmihail/gathers/raw/branch/main/images/cli1.png)
+## Tech Stack
 
-![Prototype Riftbound support](https://codeberg.org/morosanmihail/gathers/raw/branch/riftbound/images/cli2.png)
+- **Backend**: Rust (Axum, Tokio, SQLite via rusqlite)
+- **Frontend**: React 18, React Bootstrap, React Router
+- **Database**: SQLite (collections + local card databases)
+- **Containerization**: Docker / Docker Compose
 
-# Codeberg vs Github
+## Project Structure
 
-This repo is both on Codeberg and on Github.
+```
+gathers/        CLI binary for card searching
+server/         REST API backend
+models/         Shared data models (MTG, Pokemon, Riftbound)
+retrieval/      Card data retrieval (Scryfall, SQLite, Pokemon, Riftbound)
+persistence/    Collection storage and CSV import/export
+webui/          React frontend
+```
 
-I will read issues from Github, but Github is only a mirror.
-Main development happens on Codeberg.
-Support small tech!
+## Getting Started
 
-# Installation and Setup
+### Docker (recommended)
 
-[Docker and Docker Compose](https://codeberg.org/morosanmihail/gathers/wiki/Docker-Setup)
+```bash
+docker-compose up
+```
 
-# Info and Instructions and Ideas
+- API: `http://localhost:5234`
+- Web UI: `http://localhost:3000`
 
-[Can be found on the Wiki!](https://codeberg.org/morosanmihail/gathers/wiki/Home)
+### Local Development
 
-# Acknowledgements
+```bash
+# Start both server and web UI
+npm run start
 
-Pokemon database scraper thanks to [pokedata](https://github.com/poketrax/pokedata).
-GatheRs version is a Rust rewrite.
+# Or separately
+npm run start-webui
+cargo run --bin server -- --system sql --port 5234
+```
 
-Riftbound database scraper thanks to [vikkumar2021](https://github.com/vikkumar2021/RiftboundCardDatabase). 
-GatheRs version is a rust rewrite.
+### CLI
+
+```bash
+# Search cards via Scryfall
+cargo run --bin gathers -- --system scryfall --name "Black Lotus" --limit 5
+
+# Download/update local MTG database
+cargo run --bin gathers -- --system sql --download
+```
+
+## Configuration
+
+The server reads from `~/.local/share/gathers/server.toml` on first run:
+
+```toml
+system = ["sql"]   # Options: "scryfall", "sql", "riftbound-sql", "pokemon-sql"
+port = 5234
+mtg_db_path = "~/.local/share/gathers/DB/AllPrintings.db"
+riftbound_db_path = "~/.local/share/gathers/DB/riftbound.db"
+pokemon_db_path = "~/.local/share/gathers/DB/pokemon.db"
+storage_db_path = "~/.local/share/gathers/DB/storage.db"
+```
+
+Databases are downloaded automatically on startup. Set `GATHERS_NO_AUTO_UPDATE=1` to skip this.
+
+### Environment Variable Overrides
+
+| Variable | Description |
+|---|---|
+| `MTG_DB_PATH` | Path to MTG SQLite database |
+| `RIFTBOUND_DB_PATH` | Path to Riftbound database |
+| `POKEMON_DB_PATH` | Path to Pokemon database |
+| `STORAGE_DB_PATH` | Path to collections database |
+| `GATHERS_NO_AUTO_UPDATE` | Skip automatic DB downloads |
+
+## API Overview
+
+| Prefix | Description |
+|---|---|
+| `POST /mtg/cards/search` | Search MTG cards |
+| `POST /pokemon/cards/search` | Search Pokemon cards |
+| `POST /riftbound/cards/search` | Search Riftbound cards |
+| `/collection/*` | Full collection CRUD, import/export, price stats |
+| `GET /system` | Active systems and download progress |
+| `GET /swagger` | Interactive API documentation |
+| `GET /api.json` | OpenAPI spec |
