@@ -397,11 +397,12 @@ impl PersistenceSystem {
             resolved.retain(|(set, num, _)| seen_keys.insert((set.clone(), num.clone())));
 
             for (set_code, collector_number, uuid) in resolved {
-                if let Some(c) = group
+                let (total_qty, total_foil_qty) = group
                     .iter()
-                    .find(|c| c.set_code == set_code && c.collector_number == collector_number)
-                {
-                    cta.push((uuid, c.quantity, c.foil_quantity, system.name().to_string()));
+                    .filter(|c| c.set_code == set_code && c.collector_number == collector_number)
+                    .fold((0u32, 0u32), |(q, fq), c| (q + c.quantity, fq + c.foil_quantity));
+                if total_qty > 0 || total_foil_qty > 0 {
+                    cta.push((uuid, total_qty, total_foil_qty, system.name().to_string()));
                 }
             }
         }
